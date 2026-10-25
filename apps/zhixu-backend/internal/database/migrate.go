@@ -118,9 +118,14 @@ func Migrate() error {
 		&model.OperationLogModel{},
 		&model.KnowledgeItem{},
 		&model.KnowledgeImportTask{},
+		&model.KnowledgeChunk{},
+		&model.VectorizeTask{},
+		&model.VectorCleanupTask{},
 		&model.ModelProvider{},
 		&model.ProviderModel{},
 		&model.UserAISettings{},
+		&model.ChatTurnSource{},
+		&model.ChatConversationState{},
 	); err != nil {
 		return err
 	}

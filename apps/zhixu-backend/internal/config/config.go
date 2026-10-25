@@ -31,6 +31,9 @@ type Config struct {
 	ChatAIURL                    string `mapstructure:"CHAT_AI_URL"`
 	ChatBackendURL               string `mapstructure:"CHAT_BACKEND_URL"`
 	ModelAllowedPrivateEndpoints string `mapstructure:"MODEL_ALLOWED_PRIVATE_ENDPOINTS"`
+	InternalAPISecret            string `mapstructure:"INTERNAL_API_SECRET"`
+	QdrantURL                    string `mapstructure:"QDRANT_URL"`
+	QdrantAPIKey                 string `mapstructure:"QDRANT_API_KEY"`
 
 	// CORS 配置
 	CORSAllowedOrigins string `mapstructure:"CORS_ALLOWED_ORIGINS"`
@@ -89,6 +92,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("PORT", "9000")
 	v.SetDefault("CHAT_AI_URL", "http://127.0.0.1:4111")
 	v.SetDefault("CHAT_BACKEND_URL", "http://127.0.0.1:9000")
+	v.SetDefault("QDRANT_URL", "http://127.0.0.1:6333")
 	v.SetDefault("DB_USER", "root")
 	v.SetDefault("DB_PASSWORD", "123456123456")
 	v.SetDefault("DB_HOST", "127.0.0.1")
@@ -138,7 +142,8 @@ func bindEnvVariables(v *viper.Viper) {
 		"DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT", "DB_NAME",
 		"JWT_SECRET",
 		"MODEL_CONFIG_ENCRYPTION_KEY",
-		"CHAT_AI_URL", "CHAT_BACKEND_URL", "MODEL_ALLOWED_PRIVATE_ENDPOINTS",
+		"CHAT_AI_URL", "CHAT_BACKEND_URL", "MODEL_ALLOWED_PRIVATE_ENDPOINTS", "INTERNAL_API_SECRET",
+		"QDRANT_URL", "QDRANT_API_KEY",
 		"CORS_ALLOWED_ORIGINS",
 		"CHUNK_STORAGE_PATH", "FILE_STORAGE_PATH",
 		"LOG_LEVEL", "APP_ENV",

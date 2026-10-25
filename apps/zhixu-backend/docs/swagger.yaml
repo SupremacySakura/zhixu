@@ -169,12 +169,30 @@ definitions:
       expected_version:
         type: integer
     type: object
+  handler.conversationRenameInput:
+    properties:
+      title:
+        maxLength: 200
+        type: string
+    required:
+    - title
+    type: object
   model.KnowledgeItem:
     properties:
+      chunks_failed:
+        type: integer
+      chunks_ready:
+        type: integer
+      chunks_total:
+        type: integer
       content:
         type: string
       created_at:
         type: string
+      embedding_model:
+        type: string
+      embedding_version:
+        type: integer
       error_code:
         type: string
       error_message:
@@ -199,6 +217,10 @@ definitions:
         type: string
       updated_at:
         type: string
+      vector_error:
+        type: string
+      vector_state:
+        $ref: '#/definitions/model.VectorState'
     type: object
   model.KnowledgeStatus:
     enum:
@@ -332,6 +354,18 @@ definitions:
       updated_at:
         type: string
     type: object
+  model.VectorState:
+    enum:
+    - pending
+    - running
+    - ready
+    - partial
+    type: string
+    x-enum-varnames:
+    - VectorPending
+    - VectorRunning
+    - VectorReady
+    - VectorPartial
   response.Response:
     properties:
       code:
@@ -367,12 +401,23 @@ definitions:
     type: object
   service.ChatInput:
     properties:
+      conversation_id:
+        description: |-
+          ConversationID, when set, continues an existing Mastra thread; when empty the
+          backend starts a new thread and returns its id in the meta event. Title seeds the
+          new thread (first user message, truncated) so the AI service never spends a model
+          call on title generation.
+        type: string
       messages:
         items:
           $ref: '#/definitions/service.ChatMessage'
         type: array
       model_id:
         type: integer
+      rag:
+        type: boolean
+      title:
+        type: string
     type: object
   service.ChatMessage:
     properties:
@@ -637,6 +682,86 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: 临时无工具多轮对话，返回 NDJSON 流
+      tags:
+      - chat
+  /chat/conversations:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 会话列表
+      tags:
+      - chat
+  /chat/conversations/{id}:
+    delete:
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 删除会话
+      tags:
+      - chat
+    get:
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 会话详情（含消息与知识来源）
+      tags:
+      - chat
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 新标题
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/handler.conversationRenameInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 重命名会话
       tags:
       - chat
   /file/chunk:
@@ -1490,6 +1615,10 @@ paths:
         in: query
         name: status
         type: string
+      - description: pending/running/ready/partial
+        in: query
+        name: vector
+        type: string
       produces:
       - application/json
       responses:
@@ -1615,6 +1744,26 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: 知识详情及入库状态
+      tags:
+      - knowledge
+  /knowledge/{id}/chunks:
+    get:
+      parameters:
+      - description: 知识ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 按序查询知识分块与向量状态
       tags:
       - knowledge
   /knowledge/{id}/retry:

@@ -23,14 +23,60 @@ type ChatMessage struct {
 type ChatInput struct {
 	ModelID  uint          `json:"model_id"`
 	Messages []ChatMessage `json:"messages"`
+	RAG      bool          `json:"rag"`
+	// ConversationID, when set, continues an existing Mastra thread; when empty the
+	// backend starts a new thread and returns its id in the meta event. Title seeds the
+	// new thread (first user message, truncated) so the AI service never spends a model
+	// call on title generation.
+	ConversationID string `json:"conversation_id"`
+	Title          string `json:"title"`
 }
 type ChatCapability struct {
 	Model    model.ProviderModel
 	Provider model.ModelProvider
 	Key      string
 	Context  context.Context
-	claimed  bool
+	Texts    []string
+	RagQuery *RagQuery
+	// multiStep allows one chat turn to claim the same token for several model
+	// calls (RAG rewrite + final answer). The token still dies with the request
+	// context and is never reusable across turns.
+	MultiStep bool
+	claimed   bool
 }
+
+func (s *ChatService) ResolveEmbedding(ctx context.Context, user uint) (*ChatCapability, uint64, uint64, error) {
+	state, err := s.Store.Read(ctx, user)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	for _, m := range state.Models {
+		if m.ID != state.Settings.EmbeddingModelID || m.Kind != "embedding" || m.Dimension == 0 {
+			continue
+		}
+		for _, p := range state.Providers {
+			if p.ID != m.ProviderID {
+				continue
+			}
+			if err := validateModelURL(p.BaseURL); err != nil {
+				return nil, 0, 0, err
+			}
+			cap := &ChatCapability{Model: m, Provider: p, Context: ctx}
+			if p.AuthType == "key" {
+				if p.Ciphertext == "" {
+					return nil, 0, 0, configInvalid("供应商未配置 API Key")
+				}
+				cap.Key, err = s.Credentials.Decrypt(user, p.ProviderID, p.Ciphertext)
+				if err != nil {
+					return nil, 0, 0, ErrModelKeyUnavailable
+				}
+			}
+			return cap, state.Settings.EmbeddingVersion, state.Settings.ConfigVersion, nil
+		}
+	}
+	return nil, 0, 0, configInvalid("未配置可用的 Embedding 模型，请前往模型设置")
+}
+
 type ChatService struct {
 	Store                   AIConfigStore
 	Credentials             *ModelCredentials
@@ -128,10 +174,27 @@ func (s *ChatService) ClaimCapability(token string) *ChatCapability {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cap := s.capabilities[token]
-	if cap == nil || cap.claimed || cap.Context.Err() != nil {
+	if cap == nil || cap.Context.Err() != nil {
+		return nil
+	}
+	// One-shot by default; multi-step tokens serve several model calls in one turn.
+	if cap.claimed && !cap.MultiStep {
 		return nil
 	}
 	cap.claimed = true
+	return cap
+}
+
+// ClaimRagCapability hands a retrieval token to the RAG search gateway. Unlike model
+// capabilities it may be claimed several times within one chat turn, because the agent
+// can search more than once; it still expires with the request context.
+func (s *ChatService) ClaimRagCapability(token string) *ChatCapability {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cap := s.capabilities[token]
+	if cap == nil || cap.RagQuery == nil || cap.Context.Err() != nil {
+		return nil
+	}
 	return cap
 }
 

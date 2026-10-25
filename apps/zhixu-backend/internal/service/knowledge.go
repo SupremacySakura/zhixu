@@ -43,6 +43,44 @@ type KnowledgeStore interface {
 type KnowledgeService struct {
 	store       KnowledgeStore
 	storagePath string
+	Vectors     VectorizeStore
+}
+
+func (s *KnowledgeService) Chunks(ctx context.Context, user, id uint) ([]model.KnowledgeChunk, error) {
+	if _, err := s.Get(ctx, user, id); err != nil {
+		return nil, err
+	}
+	if s.Vectors == nil {
+		return []model.KnowledgeChunk{}, nil
+	}
+	return s.Vectors.Chunks(ctx, user, id)
+}
+
+func (s *KnowledgeService) ListFiltered(ctx context.Context, user uint, page, size int, q string, status model.KnowledgeStatus, vector model.VectorState) ([]model.KnowledgeItem, int64, error) {
+	switch vector {
+	case "", model.VectorPending, model.VectorRunning, model.VectorReady, model.VectorPartial:
+	default:
+		return nil, 0, ErrKnowledgeInvalid
+	}
+	// Retain the original store contract for import-only consumers and test doubles.
+	if vector == "" {
+		return s.List(ctx, user, page, size, q, status)
+	}
+	if page < 1 || page > 1000000 || size < 1 || size > 100 || utf8.RuneCountInString(q) > 200 {
+		return nil, 0, ErrKnowledgeInvalid
+	}
+	switch status {
+	case "", model.KnowledgePending, model.KnowledgeRunning, model.KnowledgeReady, model.KnowledgeFailed:
+	default:
+		return nil, 0, ErrKnowledgeInvalid
+	}
+	store, ok := s.store.(interface {
+		ListVector(context.Context, uint, int, int, string, model.KnowledgeStatus, model.VectorState) ([]model.KnowledgeItem, int64, error)
+	})
+	if !ok {
+		return nil, 0, ErrKnowledgeInvalid
+	}
+	return store.ListVector(ctx, user, page, size, strings.TrimSpace(q), status, vector)
 }
 
 func NewKnowledgeService(store KnowledgeStore, storagePath string) *KnowledgeService {

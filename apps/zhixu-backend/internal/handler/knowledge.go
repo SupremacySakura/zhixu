@@ -121,6 +121,7 @@ func (h *KnowledgeHandler) Add(c *gin.Context) {
 // @Param page_size query int false "每页数量，默认20，最大100"
 // @Param q query string false "标题包含匹配"
 // @Param status query string false "pending/running/ready/failed"
+// @Param vector query string false "pending/running/ready/partial"
 // @Success 200 {object} response.Response
 // @Failure 400 {object} response.Response
 // @Failure 401 {object} response.Response
@@ -142,12 +143,37 @@ func (h *KnowledgeHandler) List(c *gin.Context) {
 		h.fail(c, service.ErrKnowledgeInvalid)
 		return
 	}
-	items, total, err := h.Service.List(c.Request.Context(), userID, page, size, c.Query("q"), model.KnowledgeStatus(c.Query("status")))
+	items, total, err := h.Service.ListFiltered(c.Request.Context(), userID, page, size, c.Query("q"), model.KnowledgeStatus(c.Query("status")), model.VectorState(c.Query("vector")))
 	if err != nil {
 		h.fail(c, err)
 		return
 	}
 	response.Success(c, gin.H{"items": items, "total": total, "page": page, "page_size": size})
+}
+
+// Chunks godoc
+// @Summary 按序查询知识分块与向量状态
+// @Tags knowledge
+// @Produce json
+// @Param id path int true "知识ID"
+// @Success 200 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/chunks [get]
+func (h *KnowledgeHandler) Chunks(c *gin.Context) {
+	user, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	chunks, err := h.Service.Chunks(c.Request.Context(), user, id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, gin.H{"items": chunks, "total": len(chunks)})
 }
 
 // Get godoc

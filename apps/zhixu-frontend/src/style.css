@@ -44,6 +44,8 @@
   --color-pink-tint: rgb(255 55 95 / 0.1);
   --color-teal: #0a9fce;
   --color-teal-tint: rgb(90 200 250 / 0.16);
+  /* 向量化分块重叠高亮的字形色（design/VectorKnowledge.css --ov-ink），与 teal-tint 底配对 */
+  --color-teal-strong: #0e7490;
 
   /* —— 旧令牌（源自 tailwind.config.js），为兼容存量页面暂时保留 ——
      新代码禁止使用，逐步替换为上方语义令牌，见 DESIGN.md §7 路线图 */

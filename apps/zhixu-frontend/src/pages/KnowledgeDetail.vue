@@ -2,9 +2,15 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getKnowledge, type KnowledgeItem } from '../services/apis/knowledge'
-import { isKnowledgeActive, knowledgeDate, knowledgeError } from '../utils/knowledge'
+import {
+  isKnowledgeActive,
+  isKnowledgeVectorActive,
+  knowledgeDate,
+  knowledgeError,
+} from '../utils/knowledge'
 import { renderMarkdown } from '../utils/markdown'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
+import KnowledgeVectorPanel from '../components/knowledge/KnowledgeVectorPanel.vue'
 const route = useRoute()
 const item = ref<KnowledgeItem | null>(null)
 const error = ref('')
@@ -26,7 +32,8 @@ async function load(background = false) {
     const data = await getKnowledge(Number(route.params.id), current.signal)
     if (current.signal.aborted) return
     item.value = data
-    if (isKnowledgeActive(data.status)) timer = setTimeout(() => load(true), 3000)
+    if (isKnowledgeActive(data.status) || isKnowledgeVectorActive(data.vector_state))
+      timer = setTimeout(() => load(true), 3000)
   } catch (e) {
     if (!current.signal.aborted) error.value = knowledgeError(e)
   } finally {
@@ -98,32 +105,35 @@ onScopeDispose(() => {
               >返回知识库重试</RouterLink
             >
           </article>
-          <aside class="rounded-lg border border-hairline bg-surface p-5">
-            <h2 class="mb-5 text-body font-semibold">来源信息</h2>
-            <dl class="space-y-5">
-              <div>
-                <dt class="text-caption text-label-secondary">原文件</dt>
-                <dd class="mt-1.5 break-all text-subhead">{{ item.source_file_name }}</dd>
-              </div>
-              <div>
-                <dt class="text-caption text-label-secondary">来源目录（加入时）</dt>
-                <dd class="mt-1.5 text-subhead">{{ item.source_folder_name }}</dd>
-              </div>
-              <div>
-                <dt class="text-caption text-label-secondary">来源类型</dt>
-                <dd class="mt-1.5 text-subhead">Markdown 文件</dd>
-              </div>
-              <div>
-                <dt class="text-caption text-label-secondary">加入时间</dt>
-                <dd class="mt-1.5 text-subhead">{{ knowledgeDate(item.imported_at) }}</dd>
-              </div>
-            </dl>
-            <p
-              class="mt-6 border-t border-hairline pt-4 text-caption leading-6 text-label-secondary"
-            >
-              来源信息为加入时的快照。原文件改名、移动或删除不影响已保存正文。
-            </p>
-          </aside>
+          <div class="space-y-5">
+            <KnowledgeVectorPanel :item="item" />
+            <aside class="rounded-lg border border-hairline bg-surface p-5">
+              <h2 class="mb-5 text-body font-semibold">来源信息</h2>
+              <dl class="space-y-5">
+                <div>
+                  <dt class="text-caption text-label-secondary">原文件</dt>
+                  <dd class="mt-1.5 break-all text-subhead">{{ item.source_file_name }}</dd>
+                </div>
+                <div>
+                  <dt class="text-caption text-label-secondary">来源目录（加入时）</dt>
+                  <dd class="mt-1.5 text-subhead">{{ item.source_folder_name }}</dd>
+                </div>
+                <div>
+                  <dt class="text-caption text-label-secondary">来源类型</dt>
+                  <dd class="mt-1.5 text-subhead">Markdown 文件</dd>
+                </div>
+                <div>
+                  <dt class="text-caption text-label-secondary">加入时间</dt>
+                  <dd class="mt-1.5 text-subhead">{{ knowledgeDate(item.imported_at) }}</dd>
+                </div>
+              </dl>
+              <p
+                class="mt-6 border-t border-hairline pt-4 text-caption leading-6 text-label-secondary"
+              >
+                来源信息为加入时的快照。原文件改名、移动或删除不影响已保存正文。
+              </p>
+            </aside>
+          </div>
         </div>
       </template>
     </div>

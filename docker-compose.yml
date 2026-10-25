@@ -22,6 +22,19 @@ services:
       retries: 10
       start_period: 30s
 
+  qdrant:
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.15.5}
+    profiles: ["infra", "backend", "frontend", "full"]
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
+    ports:
+      - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - zhixu-network
+    restart: unless-stopped
+
   backend:
     image: ${BACKEND_IMAGE:-zhixu-backend}:${IMAGE_TAG:-latest}
     build:
@@ -38,6 +51,12 @@ services:
       DB_NAME: ${DB_NAME:-${MYSQL_DATABASE:-zhixu}}
       JWT_SECRET: ${JWT_SECRET:-your_secret_key}
       MODEL_CONFIG_ENCRYPTION_KEY: ${MODEL_CONFIG_ENCRYPTION_KEY:-}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      CHAT_AI_URL: ${CHAT_AI_URL:-http://host.docker.internal:4111}
+      CHAT_BACKEND_URL: ${CHAT_BACKEND_URL:-http://127.0.0.1:9001}
+      MODEL_ALLOWED_PRIVATE_ENDPOINTS: ${MODEL_ALLOWED_PRIVATE_ENDPOINTS:-}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-}
       CHUNK_STORAGE_PATH: ${CHUNK_STORAGE_PATH:-/app/data}
       FILE_STORAGE_PATH: ${FILE_STORAGE_PATH:-/app/data}
     ports:
@@ -49,6 +68,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:${BACKEND_CONTAINER_PORT:-9000}/healthz || exit 1"]
       interval: 10s
@@ -90,3 +111,5 @@ networks:
 volumes:
   backend-data:
     name: ${BACKEND_VOLUME_NAME:-backend-data}
+  qdrant-data:
+    name: ${QDRANT_VOLUME_NAME:-zhixu-qdrant-data}

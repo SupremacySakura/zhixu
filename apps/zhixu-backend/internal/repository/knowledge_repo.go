@@ -24,6 +24,27 @@ func DeleteKnowledgeRows(tx *gorm.DB, userID uint, query *gorm.DB) error {
 		Delete(&model.KnowledgeImportTask{}).Error; err != nil {
 		return err
 	}
+	// Lock vector tasks before knowledge rows, matching fenced upserts. Capture
+	// deletion tombstones before removing tasks; commit them atomically with deletion.
+	var tasks []model.VectorizeTask
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND knowledge_id IN (?)", userID, query.Select("id")).Find(&tasks).Error; err != nil {
+		return err
+	}
+	var items []model.KnowledgeItem
+	if err := query.Clauses(clause.Locking{Strength: "UPDATE"}).Find(&items).Error; err != nil {
+		return err
+	}
+	for _, item := range items {
+		tombstone := model.VectorCleanupTask{UserID: userID, KnowledgeID: item.ID, NextAttemptAt: time.Now()}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&tombstone).Error; err != nil {
+			return err
+		}
+	}
+	for _, row := range []any{&model.VectorizeTask{}, &model.KnowledgeChunk{}} {
+		if err := tx.Where("user_id = ? AND knowledge_id IN (?)", userID, query.Select("id")).Delete(row).Error; err != nil {
+			return err
+		}
+	}
 	return query.Delete(&model.KnowledgeItem{}).Error
 }
 
@@ -86,12 +107,19 @@ func (r *KnowledgeRepository) Create(ctx context.Context, item *model.KnowledgeI
 }
 
 func (r *KnowledgeRepository) List(ctx context.Context, userID uint, page, size int, query string, status model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error) {
+	return r.ListVector(ctx, userID, page, size, query, status, "")
+}
+
+func (r *KnowledgeRepository) ListVector(ctx context.Context, userID uint, page, size int, query string, status model.KnowledgeStatus, vector model.VectorState) ([]model.KnowledgeItem, int64, error) {
 	db := r.DB.WithContext(ctx).Model(&model.KnowledgeItem{}).Where("user_id = ?", userID)
 	if query != "" {
 		db = db.Where("LOCATE(?, title) > 0", query)
 	}
 	if status != "" {
 		db = db.Where("status = ?", status)
+	}
+	if vector != "" {
+		db = db.Where("vector_state = ?", vector)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
@@ -161,6 +189,12 @@ func (r *KnowledgeRepository) Finish(ctx context.Context, task *model.KnowledgeI
 		if code == "" {
 			values["content"], values["imported_at"] = content, time.Now()
 		}
-		return tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", task.KnowledgeID, task.UserID).Updates(values).Error
+		if err := tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", task.KnowledgeID, task.UserID).Updates(values).Error; err != nil {
+			return err
+		}
+		if code == "" {
+			return EnqueueVectorization(tx, task.UserID, task.KnowledgeID)
+		}
+		return nil
 	})
 }

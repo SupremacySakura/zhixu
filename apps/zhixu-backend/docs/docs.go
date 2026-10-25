@@ -191,6 +191,137 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/conversations": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "会话列表",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/conversations/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "会话详情（含消息与知识来源）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "删除会话",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "重命名会话",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "新标题",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.conversationRenameInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/file/chunk": {
             "post": {
                 "security": [
@@ -1583,6 +1714,12 @@ const docTemplate = `{
                         "description": "pending/running/ready/failed",
                         "name": "status",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "pending/running/ready/partial",
+                        "name": "vector",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1828,6 +1965,39 @@ const docTemplate = `{
                     "knowledge"
                 ],
                 "summary": "删除知识条目，保留原文件",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "知识ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/knowledge/{id}/chunks": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "knowledge"
+                ],
+                "summary": "按序查询知识分块与向量状态",
                 "parameters": [
                     {
                         "type": "integer",
@@ -2426,14 +2596,41 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.conversationRenameInput": {
+            "type": "object",
+            "required": [
+                "title"
+            ],
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "maxLength": 200
+                }
+            }
+        },
         "model.KnowledgeItem": {
             "type": "object",
             "properties": {
+                "chunks_failed": {
+                    "type": "integer"
+                },
+                "chunks_ready": {
+                    "type": "integer"
+                },
+                "chunks_total": {
+                    "type": "integer"
+                },
                 "content": {
                     "type": "string"
                 },
                 "created_at": {
                     "type": "string"
+                },
+                "embedding_model": {
+                    "type": "string"
+                },
+                "embedding_version": {
+                    "type": "integer"
                 },
                 "error_code": {
                     "type": "string"
@@ -2470,6 +2667,12 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "vector_error": {
+                    "type": "string"
+                },
+                "vector_state": {
+                    "$ref": "#/definitions/model.VectorState"
                 }
             }
         },
@@ -2642,6 +2845,21 @@ const docTemplate = `{
                 }
             }
         },
+        "model.VectorState": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "running",
+                "ready",
+                "partial"
+            ],
+            "x-enum-varnames": [
+                "VectorPending",
+                "VectorRunning",
+                "VectorReady",
+                "VectorPartial"
+            ]
+        },
         "response.Response": {
             "type": "object",
             "properties": {
@@ -2690,6 +2908,10 @@ const docTemplate = `{
         "service.ChatInput": {
             "type": "object",
             "properties": {
+                "conversation_id": {
+                    "description": "ConversationID, when set, continues an existing Mastra thread; when empty the\nbackend starts a new thread and returns its id in the meta event. Title seeds the\nnew thread (first user message, truncated) so the AI service never spends a model\ncall on title generation.",
+                    "type": "string"
+                },
                 "messages": {
                     "type": "array",
                     "items": {
@@ -2698,6 +2920,12 @@ const docTemplate = `{
                 },
                 "model_id": {
                     "type": "integer"
+                },
+                "rag": {
+                    "type": "boolean"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },

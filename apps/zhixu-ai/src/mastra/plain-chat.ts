@@ -1,6 +1,10 @@
 import { Agent } from "@mastra/core/agent";
 import { registerApiRoute } from "@mastra/core/server";
 import { z } from "zod";
+import { chatMemory, memoryStore } from "../lib/chat-history";
+import { authorized } from "../lib/internal-auth";
+import { persistedAssistantId } from "../lib/conversation-storage";
+import { conversationRuns } from "../lib/conversation-runs";
 
 const inputSchema = z
   .object({
@@ -17,12 +21,24 @@ const inputSchema = z
       )
       .min(1)
       .max(79),
+    // Optional conversation identity. When present, turns are persisted to MySQL and
+    // prior history is loaded automatically. Absent = ephemeral single-shot chat.
+    conversation: z
+      .object({
+        id: z.string().min(1).max(64),
+        resource: z.string().min(1).max(64),
+        title: z.string().max(200).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
 export const plainChatRoute = registerApiRoute("/plain-chat", {
   method: "POST",
   handler: async (c) => {
+    if (!authorized(c)) return c.json({ error: "Forbidden" }, 403);
     const parsed = inputSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Invalid chat input" }, 400);
     const input = parsed.data;
@@ -42,16 +58,21 @@ export const plainChatRoute = registerApiRoute("/plain-chat", {
       return c.json({ error: "Invalid gateway" }, 403);
     }
     const controller = new AbortController();
+    const finishRun = conversationRuns.register(input.conversation, controller);
+    if (!finishRun) return c.json({ error: "Conversation deleted" }, 410);
     const abort = () => controller.abort();
     c.req.raw.signal.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(abort, 115_000);
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       async start(output) {
-        const send = (event: object) =>
-          output.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+        const send = (event: object) => {
+          try { output.enqueue(encoder.encode(JSON.stringify(event) + "\n")); }
+          catch { abort(); } // Keep draining SDK completion after client cancellation.
+        };
         try {
-          // Standalone agent: no registered tools, workspace, memory, or observability storage.
+          // Standalone agent wired to MySQL memory: persists turns and reloads history
+          // when a conversation id is provided by the Go backend.
           const agent = new Agent({
             id: "plain-chat",
             name: "普通对话",
@@ -64,8 +85,13 @@ export const plainChatRoute = registerApiRoute("/plain-chat", {
               apiKey: input.capability,
               api: input.protocol,
             },
+            memory: chatMemory,
           });
-          const messages = input.messages.map((m) =>
+          const convo = input.conversation;
+          // In conversation mode Memory injects prior history; send only the latest turn.
+          const messages = (
+            convo ? input.messages.slice(-1) : input.messages
+          ).map((m) =>
             m.role === "user"
               ? { role: "user" as const, content: m.content }
               : { role: "assistant" as const, content: m.content },
@@ -74,6 +100,18 @@ export const plainChatRoute = registerApiRoute("/plain-chat", {
             maxSteps: 1,
             abortSignal: controller.signal,
             modelSettings: { maxRetries: 0 },
+            ...(convo
+              ? {
+                  memory: {
+                    thread: {
+                      id: convo.id,
+                      title: convo.title ?? "新对话",
+                      metadata: convo.metadata,
+                    },
+                    resource: convo.resource,
+                  },
+                }
+              : {}),
           });
           let failed = false;
           const reader = result.fullStream.getReader();
@@ -85,7 +123,7 @@ export const plainChatRoute = registerApiRoute("/plain-chat", {
                 send({ type: "delta", text: value.payload.text });
               if (value.type === "error") {
                 failed = true;
-                break;
+                abort();
               }
             }
           } finally {
@@ -98,7 +136,14 @@ export const plainChatRoute = registerApiRoute("/plain-chat", {
                 ? "模型响应超时或请求已停止"
                 : "模型调用失败，请检查密钥、地址、模型 ID 和额度；可手动重试",
             });
-          } else send({ type: "done" });
+          } else {
+            // Drain fullStream before this read: SDK awaits memory/onFinish before close.
+            // response alone resolves earlier and is not proof of successful persistence.
+            const messageId = convo
+              ? await persistedAssistantId(await result.response, convo, memoryStore)
+              : undefined;
+            send({ type: "done", ...(messageId ? { message_id: messageId } : {}) });
+          }
         } catch {
           if (!controller.signal.aborted)
             send({
@@ -106,6 +151,7 @@ export const plainChatRoute = registerApiRoute("/plain-chat", {
               message: "模型调用失败，请检查服务与模型配置后手动重试",
             });
         } finally {
+          finishRun();
           clearTimeout(timeout);
           c.req.raw.signal.removeEventListener("abort", abort);
           try {

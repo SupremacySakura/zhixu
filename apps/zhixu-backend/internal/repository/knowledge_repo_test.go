@@ -89,6 +89,13 @@ func TestKnowledgeDeleteAtomicAndScoped(t *testing.T) {
 			mock.ExpectExec("DELETE FROM `knowledge_import_tasks` WHERE user_id = .*knowledge_id IN .*user_id").
 				WithArgs(uint(2), uint(10), uint(2)).
 				WillReturnResult(sqlmock.NewResult(0, 1))
+			mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(20))
+			mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(10))
+			mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(1, 1))
+			for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+				mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN .*user_id").
+					WithArgs(uint(2), uint(10), uint(2)).WillReturnResult(sqlmock.NewResult(0, 1))
+			}
 			query := mock.ExpectExec("DELETE FROM `knowledge_items` WHERE id = .*user_id").
 				WithArgs(uint(10), uint(2))
 			if fail {
@@ -191,6 +198,8 @@ func TestKnowledgeFinishFencing(t *testing.T) {
 				mock.ExpectRollback()
 			} else {
 				mock.ExpectExec("UPDATE `knowledge_items`").WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectExec("INSERT INTO `vectorize_tasks`").WillReturnResult(sqlmock.NewResult(30, 1))
+				mock.ExpectExec("UPDATE `knowledge_items`.*vector_state").WillReturnResult(sqlmock.NewResult(0, 1))
 				mock.ExpectCommit()
 			}
 			err := NewKnowledgeRepository(db).Finish(context.Background(), &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2, LeaseToken: "token"}, "# text", "", "")

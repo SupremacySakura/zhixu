@@ -35,17 +35,60 @@ func main() {
 	})
 	chat := &handler.ChatHandler{
 		Service: &service.ChatService{Store: &repository.AIConfigRepository{DB: database.DB}, Credentials: credentials, AllowedPrivateEndpoints: cfg.ModelAllowedPrivateEndpoints},
-		AIURL:   cfg.ChatAIURL, InternalBackendURL: cfg.ChatBackendURL,
+		AIURL:   cfg.ChatAIURL, InternalBackendURL: cfg.ChatBackendURL, InternalAPISecret: cfg.InternalAPISecret,
+	}
+	chatSourceRepo := repository.NewChatSourceRepository(database.DB)
+	conversations := &service.ConversationService{
+		AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret, Sources: chatSourceRepo,
+	}
+	chat.Conversations = conversations
+	conversationHandler := &handler.ConversationHandler{Conversations: conversations}
+	qdrant := &service.QdrantClient{URL: cfg.QdrantURL, APIKey: cfg.QdrantAPIKey}
+	chat.Rag = &service.RagSearcher{
+		Chat:     chat.Service,
+		Embedder: &service.MastraEmbedder{Chat: chat.Service, AIURL: cfg.ChatAIURL, BackendURL: cfg.ChatBackendURL},
+		Vectors:  qdrant, Chunks: &repository.RagRepository{DB: database.DB},
 	}
 	r.POST("/chat", middleware.AuthMiddleware(), chat.Send)
+	r.GET("/chat/conversations", middleware.AuthMiddleware(), conversationHandler.List)
+	r.GET("/chat/conversations/:id", middleware.AuthMiddleware(), conversationHandler.Detail)
+	r.PATCH("/chat/conversations/:id", middleware.AuthMiddleware(), conversationHandler.Rename)
+	r.DELETE("/chat/conversations/:id", middleware.AuthMiddleware(), conversationHandler.Delete)
 	r.POST("/internal/chat/v1/*endpoint", chat.Gateway)
+	r.POST("/internal/rag/v1/search", chat.RagSearch)
 	knowledgeService := service.NewKnowledgeService(repository.NewKnowledgeRepository(database.DB), cfg.FileStoragePath)
+	vectorStore := &repository.VectorizeRepository{DB: database.DB}
+	knowledgeService.Vectors = vectorStore
+	vectorService := &service.VectorizeService{
+		Store: vectorStore, Knowledge: repository.NewKnowledgeRepository(database.DB), Chat: chat.Service,
+		Embedder: &service.MastraEmbedder{Chat: chat.Service, AIURL: cfg.ChatAIURL, BackendURL: cfg.ChatBackendURL},
+		Vectors:  qdrant,
+	}
+	vectorCleanup := &service.VectorCleanupService{
+		Store: &repository.VectorCleanupRepository{DB: database.DB}, Vectors: qdrant,
+	}
 	router.RegisterKnowledgeRouter(r, knowledgeService)
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
 		knowledgeService.Run(workerCtx)
+	}()
+	vectorDone := make(chan struct{})
+	go func() {
+		defer close(vectorDone)
+		vectorService.Run(workerCtx)
+	}()
+
+	vectorCleanupDone := make(chan struct{})
+	go func() {
+		defer close(vectorCleanupDone)
+		vectorCleanup.Run(workerCtx)
+	}()
+	conversationCleanupDone := make(chan struct{})
+	go func() {
+		defer close(conversationCleanupDone)
+		conversations.Run(workerCtx)
 	}()
 
 	port := cfg.Port
@@ -90,6 +133,21 @@ func main() {
 	case <-workerDone:
 	case <-ctx.Done():
 		log.Warn().Msg("知识导入任务将在下次启动恢复")
+	}
+	select {
+	case <-vectorDone:
+	case <-ctx.Done():
+		log.Warn().Msg("向量化任务将在下次启动恢复")
+	}
+	select {
+	case <-vectorCleanupDone:
+	case <-ctx.Done():
+		log.Warn().Msg("向量清理任务将在下次启动恢复")
+	}
+	select {
+	case <-conversationCleanupDone:
+	case <-ctx.Done():
+		log.Warn().Msg("会话清理任务将在下次启动恢复")
 	}
 	log.Info().Msg("服务器已退出")
 }

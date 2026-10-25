@@ -11,9 +11,20 @@ import {
 import { agent } from "./agents/agent";
 import { startScheduleTool, stopScheduleTool } from "./tools/schedule-tools";
 import { plainChatRoute } from "./plain-chat";
+import { ragChatRoute } from "./rag-chat";
+import { vectorizeRoute } from "./vectorize";
+import { conversationRoutes } from "./conversations";
 
 export const mastra = new Mastra({
-  server: { host: "127.0.0.1", apiRoutes: [plainChatRoute] },
+  server: {
+    host: "127.0.0.1",
+    apiRoutes: [
+      plainChatRoute,
+      ragChatRoute,
+      vectorizeRoute,
+      ...conversationRoutes,
+    ],
+  },
   bundler: {
     externals: ["@duckdb/node-bindings"],
   },

@@ -26,6 +26,13 @@ type KnowledgeItem struct {
 	Status           KnowledgeStatus `gorm:"type:varchar(16);not null;index" json:"status"`
 	ErrorCode        string          `gorm:"type:varchar(64);not null" json:"error_code"`
 	ErrorMessage     string          `gorm:"type:text;not null" json:"error_message"`
+	VectorState      VectorState     `gorm:"size:16;not null;default:'';index" json:"vector_state"`
+	ChunksTotal      int             `gorm:"not null;default:0" json:"chunks_total"`
+	ChunksReady      int             `gorm:"not null;default:0" json:"chunks_ready"`
+	ChunksFailed     int             `gorm:"not null;default:0" json:"chunks_failed"`
+	EmbeddingModel   string          `gorm:"size:200;not null;default:''" json:"embedding_model"`
+	EmbeddingVersion uint64          `gorm:"not null;default:0" json:"embedding_version"`
+	VectorError      string          `gorm:"type:text" json:"vector_error"`
 	ImportedAt       *time.Time      `json:"imported_at"`
 	CreatedAt        time.Time       `gorm:"index:idx_knowledge_user_created" json:"created_at"`
 	UpdatedAt        time.Time       `json:"updated_at"`

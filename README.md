@@ -59,7 +59,7 @@ zhixu/
 
 ### 方式一：本地开发（Run dev）
 
-前置要求：Node.js 22.12+、pnpm 9、Go 1.25、本机 MySQL 8.4。**此模式不依赖 Docker，所有服务均在本机运行。**
+前置要求：Node.js 22.12+、pnpm 9、Go 1.25、本机 MySQL 8.4、Qdrant。**此模式不依赖 Docker，前后端与 Mastra 均在本机运行。**
 
 macOS 可使用 Homebrew 安装并启动 MySQL（已有本机服务则跳过）：
 
@@ -73,13 +73,33 @@ mysql -h 127.0.0.1 -P 3306 -u root -p \
   -e 'CREATE DATABASE IF NOT EXISTS zhixu CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
 ```
 
+Qdrant 需要单独启动。`pnpm dev` 不会代管它，也不会自动启动容器；可以使用官方镜像（仅此一个容器，与全栈 Docker 模式无关）：
+
+```bash
+docker run -d --name zhixu-qdrant \
+  -p 127.0.0.1:6333:6333 \
+  -v zhixu-qdrant-data:/qdrant/storage \
+  qdrant/qdrant:v1.15.5
+```
+
 首次准备：
 
 ```bash
 pnpm install
 cp .env.development.example .env.development
 # 编辑 .env.development：设置本机 DB_USER / DB_PASSWORD / DB_PORT
+# QDRANT_URL 默认 http://127.0.0.1:6333；Qdrant 开启鉴权时再填 QDRANT_API_KEY
 ```
+
+知识入库后的自动向量化由 Mastra 完成，需在另一个终端启动 AI 服务：
+
+```bash
+pnpm dev:ai
+```
+
+Mastra 默认监听 http://127.0.0.1:4111。首次使用还需登录后在「模型设置」配置可用的 Embedding 模型与凭据，否则任务会停在待向量化并提示配置缺失。
+
+会话历史由 Mastra Memory 直存 MySQL（与业务同库），需在 `apps/zhixu-ai/.env` 配置 `MYSQL_*` 连接信息；会话管理接口（列表/详情/改名/删除）由 Go 后端鉴权后转发 Mastra 内网路由，两端通过 `INTERNAL_API_SECRET` 共享密钥认证（`.env.development` 与 `apps/zhixu-ai/.env` 必须填同一值，可用 `openssl rand -hex 32` 生成），为空时内网路由拒绝服务。
 
 日常启动，在 IDE 中运行根 `package.json` 的 `dev` 脚本，或执行：
 

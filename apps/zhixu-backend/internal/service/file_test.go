@@ -307,6 +307,15 @@ func TestDeleteFileWithKnowledgeIsAtomic(t *testing.T) {
 				mock.ExpectRollback()
 			} else {
 				query.WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").
+					WithArgs(uint(7), uint(7), uint(5)).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+				mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").
+					WithArgs(uint(7), uint(5)).WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(9, 7))
+				mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(1, 1))
+				for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+					mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN").
+						WithArgs(uint(7), uint(7), uint(5)).WillReturnResult(sqlmock.NewResult(0, 1))
+				}
 				mock.ExpectExec("DELETE FROM `knowledge_items` WHERE user_id = .*source_file_id").
 					WithArgs(uint(7), uint(5)).WillReturnResult(sqlmock.NewResult(0, 1))
 				mock.ExpectCommit()
@@ -337,6 +346,16 @@ func TestDeleteFolderWithKnowledgeIncludesDescendants(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("DELETE FROM `knowledge_import_tasks` .*source_file_id IN .*folder_id IN").
 		WithArgs(uint(7), uint(7), uint(7), uint(3), uint(4)).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").
+		WithArgs(uint(7), uint(7), uint(7), uint(3), uint(4)).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").
+		WithArgs(uint(7), uint(7), uint(3), uint(4)).WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(9, 7).AddRow(10, 7))
+	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(2, 1))
+	for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+		mock.ExpectExec("DELETE FROM `"+table+"` .*source_file_id IN .*folder_id IN").
+			WithArgs(uint(7), uint(7), uint(7), uint(3), uint(4)).WillReturnResult(sqlmock.NewResult(0, 2))
+	}
 	mock.ExpectExec("DELETE FROM `knowledge_items` .*source_file_id IN .*folder_id IN").
 		WithArgs(uint(7), uint(7), uint(3), uint(4)).WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("UPDATE `folder_models`").WithArgs(sqlmock.AnyArg(), uint(3), uint(4), uint(7)).

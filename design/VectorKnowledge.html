@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知序 · 知识向量化与分块设计稿</title>
+    <link rel="stylesheet" href="./VectorKnowledge.css">
+    <script src="./VectorKnowledge.js" defer></script>
+</head>
+
+<body>
+    <svg hidden aria-hidden="true">
+        <symbol id="i-file" viewBox="0 0 24 24">
+            <path d="M14 3H6v18h12V7zM14 3v5h4M9 12h6M9 16h6" />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 24 24">
+            <path d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1zM12 5v15" />
+        </symbol>
+        <symbol id="i-home" viewBox="0 0 24 24">
+            <path d="m3 11 9-8 9 8M5 9v12h14V9M9 21v-7h6v7" />
+        </symbol>
+        <symbol id="i-key" viewBox="0 0 24 24">
+            <circle cx="8" cy="9" r="5" />
+            <path d="m12 13 8 8M16 17l3-3M18 19l3-3" />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+            <circle cx="10" cy="10" r="6" />
+            <path d="m15 15 6 6" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24">
+            <path d="m6 6 12 12M6 18 18 6" />
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24">
+            <path d="M4 12h16m-6-6 6 6-6 6" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v6M12 7v1" />
+        </symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24">
+            <path d="M12 3 3 8l9 5 9-5-9-5zM3 13l9 5 9-5" />
+        </symbol>
+    </svg>
+    <header class="prototype-bar">
+        <span>设计预览 · 知识向量化与分块 / 第一版 <span class="t-secondary"> · 数据与处理均为演示</span></span>
+        <a href="./index.html">返回设计索引</a>
+    </header>
+    <div class="app">
+        <aside class="sidebar material">
+            <div class="brand">
+                <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                    <path d="m4 8 12 20L28 8M4 8c8 5 16 5 24 0M8 5c5-2 11-2 16 0" stroke="currentColor"
+                        stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                知序
+            </div>
+            <nav aria-label="主导航">
+                <a class="nav-link" href="./DashboardPage.html"><svg class="icon">
+                        <use href="#i-home" />
+                    </svg>仪表盘</a>
+                <a class="nav-link" href="./FileManagement.html"><svg class="icon">
+                        <use href="#i-file" />
+                    </svg>文件管理</a>
+                <a class="nav-link" href="#library" data-page="library"><svg class="icon">
+                        <use href="#i-book" />
+                    </svg>知识库</a>
+                <a class="nav-link" href="./PickupCodes.html"><svg class="icon">
+                        <use href="#i-key" />
+                    </svg>取件码</a>
+            </nav>
+            <div class="sidebar-foot">正文入库后自动分块。<br>分块结构可阅读、可核对。<br><br><a href="#states"
+                    data-page="states">查看状态与交互说明</a>
+            </div>
+        </aside>
+        <main class="main">
+            <div class="page-content">
+                <section id="view-library" hidden>
+                    <div class="breadcrumb">知识库 <span>/</span> 全部知识</div>
+                    <div class="page-head">
+                        <div>
+                            <h1 class="title-1">知识库</h1>
+                            <p>正文入库后自动分块并写入向量库，每个知识的处理状态在这里一目了然。</p>
+                        </div>
+                        <a class="btn btn-secondary" href="./MarkdownKnowledge.html#files"><svg class="icon">
+                                <use href="#i-file" />
+                            </svg>从文件加入</a>
+                    </div>
+                    <div class="note"><svg class="icon">
+                            <use href="#i-layers" />
+                        </svg><span>向量化在<strong>正文入库后自动触发</strong>，无需手动操作。第一批只做自动触发与状态展示：失败原因如实呈现，重试与重建在第二批提供。</span></div>
+                    <div class="toolbar">
+                        <div class="searchbox"><svg class="icon">
+                                <use href="#i-search" />
+                            </svg><input id="knowledge-search" class="input" placeholder="搜索知识标题" aria-label="搜索知识标题">
+                        </div>
+                        <select class="filter" id="knowledge-filter" aria-label="筛选向量状态">
+                            <option value="all">全部向量状态</option>
+                            <option value="ready">已向量化</option>
+                            <option value="running">向量化中</option>
+                            <option value="partial">部分失败</option>
+                            <option value="pending">待向量化</option>
+                        </select>
+                    </div>
+                    <div class="library-list" id="knowledge-list"></div>
+                    <div class="empty" id="library-empty" hidden>
+                        <div class="md-icon">MD</div>
+                        <h2 class="title-3">让第一份资料成为知识</h2>
+                        <p>选择已经上传的 Markdown 文件。正文入库后会自动分块并转向量库。</p>
+                        <a href="./MarkdownKnowledge.html#files" class="btn btn-primary">去文件管理选择</a>
+                    </div>
+                    <p class="scope-note">向量状态与入库状态分开展示：入库失败的条目不出现向量信息。分块大小、重叠与所用嵌入模型可在「分块结构」视图中核对。</p>
+                </section>
+
+                <section id="view-detail" hidden>
+                    <div class="breadcrumb"><a href="#library">知识库</a><span>/</span><span id="detail-crumb">知识详情</span>
+                    </div>
+                    <div class="page-head">
+                        <div>
+                            <h1 class="title-1" id="detail-title"></h1>
+                            <p>来源于 Markdown 文件 · 原始正文</p>
+                        </div>
+                        <div class="actions" id="detail-actions"></div>
+                    </div>
+                    <div class="reader-grid">
+                        <article class="article" aria-label="知识正文">
+                            <div class="article-top"><span>正文 · Markdown 渲染</span><span
+                                    class="status ready">已加入知识库</span></div>
+                            <div id="detail-content"></div>
+                        </article>
+                        <div class="aside-col">
+                            <div class="source-panel">
+                                <h2>来源信息</h2>
+                                <dl>
+                                    <dt>原文件</dt>
+                                    <dd id="detail-file"></dd>
+                                    <dt>所在目录</dt>
+                                    <dd>文件管理 / 学习资料</dd>
+                                    <dt>来源类型</dt>
+                                    <dd>Markdown 文件</dd>
+                                    <dt>加入时间</dt>
+                                    <dd id="detail-joined"></dd>
+                                </dl><a class="text-action" href="./MarkdownKnowledge.html#files">在文件管理中查看 <svg
+                                        class="icon">
+                                        <use href="#i-arrow" />
+                                    </svg></a>
+                            </div>
+                            <div id="vec-panel"></div>
+                        </div>
+                    </div>
+                    <p class="scope-note">向量化使用用户在模型设置中配置的嵌入模型，经 Mastra 调用后由后端写入向量库。第一批不提供手动重建或单块重试。</p>
+                </section>
+
+                <section id="view-chunks" hidden>
+                    <div class="breadcrumb"><a href="#library">知识库</a><span>/</span><a href="#detail/rag"
+                            id="chunks-crumb-link">知识详情</a><span>/</span>分块结构</div>
+                    <div class="page-head">
+                        <div>
+                            <h1 class="title-1" id="chunks-title">分块结构</h1>
+                            <p>按标题边界切分 · 目标 512 字符 · 相邻块重叠 64 字符 · 嵌入模型 bge-m3</p>
+                        </div><a class="btn btn-secondary" href="#detail/rag" id="chunks-back">返回知识详情 <svg
+                                class="icon">
+                                <use href="#i-arrow" />
+                            </svg></a>
+                    </div>
+                    <div class="chunks-toolbar">
+                        <span class="chunks-summary" id="chunks-summary"></span>
+                        <select class="filter" id="chunk-filter" aria-label="筛选分块状态">
+                            <option value="all">全部分块</option>
+                            <option value="failed">只看失败</option>
+                        </select>
+                        <div class="legend">
+                            <span class="legend-item"><span class="legend-mark">高亮</span>与上一块重叠的上下文</span>
+                            <span class="legend-item"><span class="status ready">已向量化</span></span>
+                            <span class="legend-item"><span class="status failed">失败</span></span>
+                        </div>
+                    </div>
+                    <div class="chunks-grid">
+                        <nav class="outline-rail" id="outline-rail" aria-label="文档大纲"></nav>
+                        <div class="chunk-list" id="chunk-list"></div>
+                    </div>
+                    <p class="scope-note">分块结构为只读视图，用于核对文档如何被切分：序号即写入顺序，重叠区域保证边界处语义连贯。第一批不提供服务端重切分；失败块原因如实展示，重试在第二批提供。</p>
+                </section>
+
+                <section id="view-states" hidden>
+                    <div class="breadcrumb"><a href="#library">知识向量化</a><span>/</span> 状态与交互说明</div>
+                    <div class="page-head">
+                        <div>
+                            <h1 class="title-1">自动触发，状态可见</h1>
+                            <p>向量化在正文入库后自动进行；第一批只做自动触发与状态展示，不承诺智能检索。</p>
+                        </div><a class="btn btn-secondary" href="#library">体验完整流程</a>
+                    </div>
+                    <div class="review-grid">
+                        <div class="review-card"><span class="status">待向量化</span>
+                            <h2>正文入库后自动排队，无需手动操作</h2>
+                            <p>知识条目一旦可用，分块与向量化任务自动进入队列。列表与详情同步显示“待向量化”，不提供手动触发入口。</p>
+                            <div class="actions"><a class="btn btn-secondary" href="#detail/raft">预览待向量化详情</a></div>
+                        </div>
+                        <div class="review-card"><span class="status running">向量化中</span>
+                            <h2>按块推进，不使用虚构百分比</h2>
+                            <p>进度以“已入库 N/M 块”如实呈现。右下角面板展示切分正文、调用嵌入模型、写入向量库三个步骤；关闭面板不取消任务。</p>
+                            <div class="actions"><button class="btn btn-secondary" data-action="task"
+                                    data-id="go">预览向量化面板</button></div>
+                        </div>
+                        <div class="review-card"><span class="status ready">已向量化</span>
+                            <h2>全部分块入库，可核对切分结果</h2>
+                            <p>详情页展示分块统计与嵌入模型；「分块结构」视图按文档大纲逐块呈现内容、字符数与重叠区域，清楚看到文档是如何被切分的。</p>
+                            <div class="actions"><a class="btn btn-tint" href="#chunks/react">预览分块结构</a></div>
+                        </div>
+                        <div class="review-card"><span class="status partial">部分失败</span>
+                            <h2>失败原因具体到块，原件不受影响</h2>
+                            <p>成功块正常入库，失败块在分块视图中标记原因（如供应商限流、写入超时）。第一批仅展示，重试与重建在第二批提供。</p>
+                            <div class="actions"><a class="btn btn-secondary" href="#chunks/rag">预览部分失败</a></div>
+                        </div>
+                        <div class="review-card"><span class="status">入库失败</span>
+                            <h2>没有正文，就没有向量化</h2>
+                            <p>入库失败的条目只显示入库状态与原因，不出现向量信息，也不会产生向量任务。修复原文后可重新加入。</p>
+                            <div class="actions"><a class="btn btn-secondary" href="#library">回到知识库列表</a></div>
+                        </div>
+                        <div class="review-card"><span class="status">边界</span>
+                            <h2>状态与数据口径</h2>
+                            <p>向量状态完全由后端任务驱动，前端不本地推算；嵌入模型使用用户自己的模型配置；错误原因来自服务端，不做模糊化文案。</p>
+                        </div>
+                    </div>
+                    <div class="rules">
+                        <h2>交互边界 · 待确认后再实现</h2>
+                        <ul>
+                            <li>第一批只做自动触发与状态展示：不提供手动向量化、单块重试或重建索引入口。</li>
+                            <li>进度只显示“N/M 块”，不使用虚构百分比或假速度估算。</li>
+                            <li>分块结构为只读视图：展示序号、所属章节、字符数、重叠区域与逐块状态。</li>
+                            <li>嵌入模型来自用户在模型设置中的配置；密钥由后端持有，Mastra 仅经一次性授权调用。</li>
+                            <li>入库失败（无正文）的条目不展示向量状态；删除知识与清理向量的一致性在后续批次处理。</li>
+                            <li>所有内容是演示数据，不调用后端、Mastra、嵌入模型或向量数据库。</li>
+                        </ul>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <aside class="progress-panel material-thick" id="progress-panel" aria-labelledby="progress-title" hidden>
+        <div class="progress-head"><strong id="progress-title">向量化</strong><button class="icon-btn" id="close-panel"
+                aria-label="关闭面板，任务继续处理"><svg class="icon">
+                    <use href="#i-close" />
+                </svg></button></div>
+        <p id="progress-filename"></p>
+        <div class="progress-steps" id="progress-steps"></div>
+        <p class="caption t-secondary" id="progress-message" role="status" aria-live="polite"></p>
+        <div class="panel-actions" id="panel-actions"></div>
+    </aside>
+    <div class="toast-wrap" id="toast-wrap" hidden>
+        <div class="toast material-thick" id="toast-message" role="status" aria-live="polite"></div>
+    </div>
+</body>
+
+</html>

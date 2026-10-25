@@ -6,18 +6,20 @@ import {
   deleteKnowledge,
   type KnowledgeItem,
   type KnowledgeStatus,
+  type KnowledgeVectorState,
 } from '../services/apis/knowledge'
-import { knowledgeError } from '../utils/knowledge'
+import { hasKnowledgeVector, knowledgeDescription, knowledgeError } from '../utils/knowledge'
 import { Icon } from '@iconify/vue'
 import { useKnowledgeLibrary } from '../composables/useKnowledgeLibrary'
 import { useKnowledgeImport } from '../composables/useKnowledgeImport'
 import { useToast } from '../composables/useToast'
 import { knowledgeDate } from '../utils/knowledge'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
+import KnowledgeVectorBadge from '../components/knowledge/KnowledgeVectorBadge.vue'
 import KnowledgeTaskPanel from '../components/knowledge/KnowledgeTaskPanel.vue'
 import FilePagination from '../components/file-management/FilePagination.vue'
 import ToastNotice from '../components/file-management/ToastNotice.vue'
-const { items, total, page, search, status, loading, error, load, changePage } =
+const { items, total, page, search, status, vector, loading, error, load, changePage } =
   useKnowledgeLibrary()
 const { displayToast, showToast, toastMessage, toastType } = useToast()
 const { item, panelOpen, panelError, busy, track, retry, poll } = useKnowledgeImport(displayToast)
@@ -27,6 +29,13 @@ const statusOptions = [
   { key: 'pending', label: '排队中' },
   { key: 'running', label: '处理中' },
   { key: 'failed', label: '加入失败' },
+]
+const vectorOptions = [
+  { key: '', label: '全部向量状态' },
+  { key: 'ready', label: '已向量化' },
+  { key: 'running', label: '向量化中' },
+  { key: 'partial', label: '部分失败' },
+  { key: 'pending', label: '待向量化' },
 ]
 const deleteTarget = ref<KnowledgeItem | null>(null)
 const deleting = ref(false)
@@ -99,6 +108,12 @@ onMounted(() => {
           label="筛选处理状态"
           @update:model-value="status = $event as KnowledgeStatus | ''"
         />
+        <FilterMenu
+          :model-value="vector"
+          :options="vectorOptions"
+          label="筛选向量状态"
+          @update:model-value="vector = $event as KnowledgeVectorState"
+        />
       </div>
       <div
         v-if="error"
@@ -119,12 +134,12 @@ onMounted(() => {
           >MD</span
         >
         <h2 class="text-title-3">
-          {{ search || status ? '没有匹配的知识' : '让第一份资料成为知识' }}
+          {{ search || status || vector ? '没有匹配的知识' : '让第一份资料成为知识' }}
         </h2>
         <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
           {{
-            search || status
-              ? '试试其他关键词或切换处理状态。'
+            search || status || vector
+              ? '试试其他关键词或切换筛选状态。'
               : '选择已经上传的 Markdown 文件，保留原件，同时获得清晰可读的知识正文。'
           }}
         </p>
@@ -139,31 +154,39 @@ onMounted(() => {
           class="flex flex-col justify-between gap-4 rounded-lg border border-hairline bg-surface p-5 sm:flex-row sm:items-center sm:p-6"
         >
           <div class="min-w-0">
-            <KnowledgeBadge :status="entry.status" />
+            <div class="flex flex-wrap items-center gap-2">
+              <KnowledgeBadge :status="entry.status" />
+              <KnowledgeVectorBadge
+                v-if="hasKnowledgeVector(entry)"
+                :state="entry.vector_state as Exclude<KnowledgeVectorState, ''>"
+              />
+            </div>
             <h2 class="mb-2 mt-3 break-all text-headline">{{ entry.title }}</h2>
             <p class="text-subhead leading-6 text-label-secondary">
-              {{
-                entry.status === 'failed'
-                  ? entry.error_message
-                  : entry.status === 'ready'
-                    ? '正文已提取并保存，原始 Markdown 文件保持不变。'
-                    : '正在准备知识正文，完成后即可阅读。'
-              }}
+              {{ knowledgeDescription(entry) }}
             </p>
             <div class="mt-3 flex flex-wrap gap-3 text-caption text-label-secondary">
               <span>Markdown 文件</span><span class="break-all">{{ entry.source_file_name }}</span
               ><time>{{ knowledgeDate(entry.created_at) }}</time>
             </div>
           </div>
-          <RouterLink
-            v-if="entry.status === 'ready'"
-            :to="`/home/knowledge/${entry.id}`"
-            class="knowledge-text-action shrink-0"
-            >查看知识 →</RouterLink
-          >
-          <button v-else class="knowledge-text-action shrink-0" type="button" @click="track(entry)">
-            {{ entry.status === 'failed' ? '查看失败原因' : '查看进度' }}
-          </button>
+          <div class="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+            <RouterLink
+              v-if="entry.status === 'ready'"
+              :to="`/home/knowledge/${entry.id}`"
+              class="knowledge-text-action"
+              >查看知识 →</RouterLink
+            >
+            <button v-else class="knowledge-text-action" type="button" @click="track(entry)">
+              {{ entry.status === 'failed' ? '查看失败原因' : '查看进度' }}
+            </button>
+            <RouterLink
+              v-if="entry.chunks_total > 0"
+              :to="`/home/knowledge/${entry.id}/chunks`"
+              class="knowledge-text-action text-label-secondary"
+              >分块结构</RouterLink
+            >
+          </div>
           <button
             class="knowledge-text-action shrink-0 text-danger"
             type="button"

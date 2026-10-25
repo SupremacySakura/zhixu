@@ -1,6 +1,11 @@
 import { onScopeDispose, ref, watch } from 'vue'
-import { listKnowledge, type KnowledgeItem, type KnowledgeStatus } from '../services/apis/knowledge'
-import { isKnowledgeActive, knowledgeError } from '../utils/knowledge'
+import {
+  listKnowledge,
+  type KnowledgeItem,
+  type KnowledgeStatus,
+  type KnowledgeVectorState,
+} from '../services/apis/knowledge'
+import { isKnowledgeActive, isKnowledgeVectorActive, knowledgeError } from '../utils/knowledge'
 
 export function useKnowledgeLibrary() {
   const items = ref<KnowledgeItem[]>([])
@@ -8,6 +13,7 @@ export function useKnowledgeLibrary() {
   const page = ref(1)
   const search = ref('')
   const status = ref<KnowledgeStatus | ''>('')
+  const vector = ref<KnowledgeVectorState>('')
   const loading = ref(false)
   const error = ref('')
   let controller: AbortController | null = null
@@ -22,7 +28,13 @@ export function useKnowledgeLibrary() {
     if (!background) loading.value = true
     error.value = ''
     try {
-      const result = await listKnowledge(page.value, query, status.value, current.signal)
+      const result = await listKnowledge(
+        page.value,
+        query,
+        status.value,
+        vector.value,
+        current.signal,
+      )
       if (current.signal.aborted) return
       const lastPage = Math.max(1, Math.ceil(result.total / 20))
       if (page.value > lastPage) {
@@ -33,9 +45,13 @@ export function useKnowledgeLibrary() {
       items.value = result.items
       total.value = result.total
       if (
-        items.value.some(item => isKnowledgeActive(item.status)) ||
+        items.value.some(
+          item => isKnowledgeActive(item.status) || isKnowledgeVectorActive(item.vector_state),
+        ) ||
         status.value === 'pending' ||
-        status.value === 'running'
+        status.value === 'running' ||
+        vector.value === 'pending' ||
+        vector.value === 'running'
       )
         timer = setTimeout(() => load(true), 3000)
     } catch (e) {
@@ -58,6 +74,10 @@ export function useKnowledgeLibrary() {
     page.value = 1
     void load()
   })
+  watch(vector, () => {
+    page.value = 1
+    void load()
+  })
   function changePage(value: number) {
     page.value = value
     void load()
@@ -67,5 +87,5 @@ export function useKnowledgeLibrary() {
     clearTimeout(debounce)
     clearTimeout(timer)
   })
-  return { items, total, page, search, status, loading, error, load, changePage }
+  return { items, total, page, search, status, vector, loading, error, load, changePage }
 }
