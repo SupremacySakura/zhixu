@@ -95,15 +95,62 @@ function describe(item) {
     return `已向量化（${item.chunksTotal} 个分块），可打开分块结构核对切分结果。`
 }
 
+function menuIcon(name) {
+    return `<svg class="icon" aria-hidden="true"><use href="#i-${name}" /></svg>`
+}
+
 function rowActions(item) {
-    if (item.importState === 'failed') return '<button class="text-action" disabled>正文未入库</button>'
-    const main = `<a class="text-action" href="#detail/${item.id}">查看知识</a>`
-    if (item.vectorState === 'running') return `${main}<button class="text-action sub" data-action="task" data-id="${item.id}">查看进度</button>`
-    if (chunks[item.id]) return `${main}<a class="text-action sub" href="#chunks/${item.id}">分块结构</a>`
-    return main
+    const first = item.importState === 'ready'
+        ? `<a class="knowledge-menu-item" role="menuitem" tabindex="-1" href="#detail/${item.id}">${menuIcon('book')}查看知识</a>`
+        : `<button class="knowledge-menu-item" role="menuitem" tabindex="-1" data-action="import-status" data-id="${item.id}">${menuIcon('info')}${item.importState === 'failed' ? '查看失败原因' : '查看进度'}</button>`
+    const chunkLink = chunks[item.id]
+        ? `<a class="knowledge-menu-item" role="menuitem" tabindex="-1" href="#chunks/${item.id}">${menuIcon('layers')}分块结构</a>` : ''
+    return `<button class="more-button" type="button" id="more-${item.id}" data-action="more" data-id="${item.id}" aria-label="更多操作：${escapeHtml(item.title)}" title="更多操作" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-${item.id}">${menuIcon('more')}</button>
+    <div class="knowledge-menu" id="menu-${item.id}" role="menu" aria-labelledby="more-${item.id}" hidden>
+        ${first}${chunkLink}<div class="knowledge-menu-divider" role="separator"></div>
+        <button class="knowledge-menu-item danger" role="menuitem" tabindex="-1" data-action="delete" data-id="${item.id}">${menuIcon('trash')}删除知识</button>
+    </div>`
+}
+
+let activeMenu = null
+let activeTrigger = null
+let deleteTarget = null
+
+function closeMenu(restoreFocus = false) {
+    if (!activeMenu) return
+    activeMenu.hidden = true
+    activeTrigger.setAttribute('aria-expanded', 'false')
+    if (restoreFocus) activeTrigger.focus()
+    activeMenu = null
+    activeTrigger = null
+}
+
+function positionMenu() {
+    if (!activeMenu) return
+    const rect = activeTrigger.getBoundingClientRect()
+    const height = activeMenu.offsetHeight
+    const above = rect.bottom + 8 + height > window.innerHeight - 12
+    activeMenu.style.left = `${Math.max(12, Math.min(rect.right - activeMenu.offsetWidth, window.innerWidth - activeMenu.offsetWidth - 12))}px`
+    activeMenu.style.top = `${Math.max(12, above ? rect.top - height - 8 : rect.bottom + 8)}px`
+    activeMenu.style.transformOrigin = above ? 'bottom right' : 'top right'
+}
+
+function openMenu(trigger, keyboard = false, last = false) {
+    if (activeTrigger === trigger) { closeMenu(true); return }
+    closeMenu()
+    activeTrigger = trigger
+    activeMenu = $(trigger.getAttribute('aria-controls'))
+    activeMenu.hidden = false
+    trigger.setAttribute('aria-expanded', 'true')
+    positionMenu()
+    if (keyboard) {
+        const entries = activeMenu.querySelectorAll('[role="menuitem"]')
+        entries[last ? entries.length - 1 : 0].focus()
+    }
 }
 
 function renderLibrary() {
+    closeMenu()
     const query = $('knowledge-search').value.trim().toLowerCase()
     const filter = $('knowledge-filter').value
     const visible = items.filter((item) => {
@@ -112,7 +159,7 @@ function renderLibrary() {
         if (item.importState === 'failed') return false
         return item.vectorState === filter
     })
-    $('knowledge-list').innerHTML = visible.map((item) => `<div class="knowledge-row"><div>
+    $('knowledge-list').innerHTML = visible.map((item) => `<div class="knowledge-row"><div class="knowledge-copy">
     <div class="badge-line">${importBadge(item)}${vectorBadge(item)}</div>
     <h2>${escapeHtml(item.title)}</h2><p>${describe(item)}</p>
     <div class="knowledge-meta"><span>Markdown 文件</span><span>${escapeHtml(item.name)}</span>${item.chunksTotal ? `<span>分块 ${item.chunksTotal}</span>` : '<span>自动触发</span>'}<span>更新于 ${item.updated}</span></div>
@@ -261,7 +308,49 @@ function navigate() {
     window.scrollTo(0, 0)
 }
 
+document.addEventListener('pointerdown', (event) => {
+    if (activeMenu && !activeMenu.contains(event.target) && !activeTrigger.contains(event.target)) closeMenu()
+})
+
+window.addEventListener('resize', () => closeMenu())
+window.addEventListener('scroll', (event) => {
+    if (activeMenu && !activeMenu.contains(event.target)) closeMenu()
+}, true)
+
+document.addEventListener('keydown', (event) => {
+    const trigger = event.target.closest('.more-button')
+    if (trigger && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+        event.preventDefault()
+        if (activeTrigger !== trigger) openMenu(trigger, true, event.key === 'ArrowUp')
+        else activeMenu.querySelector('[role="menuitem"]').focus()
+        return
+    }
+    if (!activeMenu) return
+    if (event.key === 'Escape') { event.preventDefault(); closeMenu(true); return }
+    if (event.key === 'Tab') { closeMenu(true); return }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const entries = [...activeMenu.querySelectorAll('[role="menuitem"]')]
+    const current = entries.indexOf(document.activeElement)
+    const index = event.key === 'Home' ? 0 : event.key === 'End' ? entries.length - 1
+        : (current + (event.key === 'ArrowDown' ? 1 : -1) + entries.length) % entries.length
+    entries[index].focus()
+})
+
+$('cancel-delete').addEventListener('click', () => $('delete-dialog').close())
+$('confirm-delete').addEventListener('click', () => {
+    if (!deleteTarget) return
+    const index = items.findIndex((item) => item.id === deleteTarget.id)
+    if (index !== -1) items.splice(index, 1)
+    $('delete-dialog').close()
+    renderLibrary()
+    $('knowledge-search').focus()
+    showToast('演示：知识已删除，原文件保持不变；刷新设计稿可恢复')
+})
+$('delete-dialog').addEventListener('close', () => { deleteTarget = null })
+
 document.addEventListener('click', (event) => {
+    if (event.target.closest('.knowledge-menu-item')) closeMenu(true)
     const outlineTrigger = event.target.closest('.outline-item')
     if (outlineTrigger) {
         document.getElementById(outlineTrigger.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -271,6 +360,21 @@ document.addEventListener('click', (event) => {
     if (!trigger) return
     const item = items.find((entry) => entry.id === trigger.dataset.id)
     if (!item) return
+    if (trigger.dataset.action === 'more') {
+        openMenu(trigger, event.detail === 0)
+        return
+    }
+    if (trigger.dataset.action === 'delete') {
+        deleteTarget = item
+        $('delete-message').textContent = `将删除「${item.title}」及其处理任务，原文件保持不变。此操作不可撤销。（当前仅为设计演示）`
+        $('delete-dialog').showModal()
+        $('cancel-delete').focus()
+        return
+    }
+    if (trigger.dataset.action === 'import-status') {
+        showToast(item.importError || '正文处理中，请稍后查看。')
+        return
+    }
     if (trigger.dataset.action === 'simulate') {
         if (item.vectorState !== 'running') return
         item.chunksDone = Math.min(item.chunksDone + 1, item.chunksTotal)

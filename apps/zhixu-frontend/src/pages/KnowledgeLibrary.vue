@@ -14,6 +14,7 @@ import { useKnowledgeLibrary } from '../composables/useKnowledgeLibrary'
 import { useKnowledgeImport } from '../composables/useKnowledgeImport'
 import { useToast } from '../composables/useToast'
 import { knowledgeDate } from '../utils/knowledge'
+import KnowledgeActionMenu from '../components/knowledge/KnowledgeActionMenu.vue'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
 import KnowledgeVectorBadge from '../components/knowledge/KnowledgeVectorBadge.vue'
 import KnowledgeTaskPanel from '../components/knowledge/KnowledgeTaskPanel.vue'
@@ -151,9 +152,9 @@ onMounted(() => {
         <article
           v-for="entry in items"
           :key="entry.id"
-          class="flex flex-col justify-between gap-4 rounded-lg border border-hairline bg-surface p-5 sm:flex-row sm:items-center sm:p-6"
+          class="flex items-start justify-between gap-3 rounded-lg border border-hairline bg-surface p-5 sm:items-center sm:gap-4 sm:p-6"
         >
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
               <KnowledgeBadge :status="entry.status" />
               <KnowledgeVectorBadge
@@ -170,31 +171,7 @@ onMounted(() => {
               ><time>{{ knowledgeDate(entry.created_at) }}</time>
             </div>
           </div>
-          <div class="flex shrink-0 flex-col items-start gap-1 sm:items-end">
-            <RouterLink
-              v-if="entry.status === 'ready'"
-              :to="`/home/knowledge/${entry.id}`"
-              class="knowledge-text-action"
-              >查看知识 →</RouterLink
-            >
-            <button v-else class="knowledge-text-action" type="button" @click="track(entry)">
-              {{ entry.status === 'failed' ? '查看失败原因' : '查看进度' }}
-            </button>
-            <RouterLink
-              v-if="entry.chunks_total > 0"
-              :to="`/home/knowledge/${entry.id}/chunks`"
-              class="knowledge-text-action text-label-secondary"
-              >分块结构</RouterLink
-            >
-          </div>
-          <button
-            class="knowledge-text-action shrink-0 text-danger"
-            type="button"
-            :aria-label="`删除知识 ${entry.title}`"
-            @click="selectDelete(entry)"
-          >
-            删除知识
-          </button>
+          <KnowledgeActionMenu :item="entry" @track="track" @delete="selectDelete" />
         </article>
       </div>
       <FilePagination

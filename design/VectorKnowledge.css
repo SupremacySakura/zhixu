@@ -376,27 +376,138 @@ select:focus-visible {
     flex-wrap: wrap;
 }
 
+.knowledge-copy {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .row-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 4px;
+    position: relative;
     flex: none;
 }
 
-.row-actions .text-action {
-    padding: 6px 4px;
-    min-height: 36px;
-}
-
-.row-actions .text-action.sub {
-    font-weight: 500;
+.more-button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
     color: var(--label-secondary);
-    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--duration-micro) var(--ease-out), transform var(--duration-micro) var(--ease-out);
 }
 
-.row-actions .text-action.sub:hover {
-    color: var(--vector-ink);
+.more-button[aria-expanded="true"] {
+    background: var(--surface-secondary);
+    color: var(--label);
+}
+
+.more-button:active {
+    transform: scale(.97);
+}
+
+.knowledge-menu {
+    position: fixed;
+    width: 200px;
+    max-width: calc(100vw - 24px);
+    padding: 6px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    background: var(--material-thick);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: var(--shadow-popover);
+    z-index: 40;
+}
+
+.knowledge-menu-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--label);
+    text-align: left;
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.knowledge-menu-item .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.knowledge-menu-item:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+    background: var(--surface-secondary);
+}
+
+.knowledge-menu-item:active {
+    background: var(--surface-tertiary);
+}
+
+.knowledge-menu-item.danger {
+    color: var(--danger);
+}
+
+.knowledge-menu-divider {
+    height: 1px;
+    margin: 5px 6px;
+    background: var(--hairline);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .more-button:hover,
+    .knowledge-menu-item:hover {
+        background: var(--surface-secondary);
+        color: var(--label);
+    }
+
+    .knowledge-menu-item.danger:hover {
+        color: var(--danger);
+        background: var(--danger-tint);
+    }
+}
+
+.delete-dialog {
+    width: min(420px, calc(100vw - 32px));
+    margin: auto;
+    padding: 28px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-xl);
+    color: var(--label);
+    background: var(--surface);
+    box-shadow: var(--shadow-popover);
+}
+
+.delete-dialog::backdrop {
+    background: var(--scrim);
+}
+
+.delete-dialog p {
+    margin: 16px 0 24px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--label-secondary);
+}
+
+.delete-dialog .actions {
+    justify-content: flex-end;
+}
+
+.delete-confirm {
+    background: var(--danger);
+    color: var(--surface);
 }
 
 .badge-line {
@@ -987,13 +1098,8 @@ mark.ov {
 
     .knowledge-row {
         align-items: flex-start;
-        flex-direction: column;
         padding: 20px;
-    }
-
-    .row-actions {
-        flex-direction: row;
-        align-items: center;
+        gap: 12px;
     }
 
     .review-grid {
@@ -1037,7 +1143,8 @@ mark.ov {
 @media (prefers-reduced-transparency: reduce) {
 
     .material,
-    .material-thick {
+    .material-thick,
+    .knowledge-menu {
         background: var(--surface);
         backdrop-filter: none;
         -webkit-backdrop-filter: none;

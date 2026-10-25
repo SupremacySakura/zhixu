@@ -48,7 +48,11 @@ describe('KnowledgeLibrary', () => {
     expect(wrapper.find('select').exists()).toBe(false)
     await wrapper.get('[aria-label="筛选处理状态"]').trigger('click')
     expect(wrapper.find('[role="menu"]').exists()).toBe(true)
-    await wrapper.get('[aria-label="删除知识 笔记"]').trigger('click')
+    await wrapper.get('[aria-label="更多操作 笔记"]').trigger('click')
+    await flushPromises()
+    const deleteAction = document.querySelector<HTMLButtonElement>('[aria-label="删除知识 笔记"]')!
+    expect(deleteKnowledge).not.toHaveBeenCalled()
+    deleteAction.click()
     await flushPromises()
     expect(document.body.textContent).toContain('原文件保持不变')
     const dialog = document.querySelector('[role="dialog"]')!
@@ -86,7 +90,11 @@ describe('KnowledgeLibrary', () => {
     })
     const wrapper = await render()
     expect(wrapper.text()).toContain('原文件为空')
-    expect(wrapper.text()).toContain('查看失败原因')
+    await wrapper.get('[aria-label="更多操作 空笔记"]').trigger('click')
+    await flushPromises()
+    expect(
+      document.querySelector('[role="menu"][aria-label="知识操作 空笔记"]')?.textContent,
+    ).toContain('查看失败原因')
     wrapper.unmount()
   })
 })

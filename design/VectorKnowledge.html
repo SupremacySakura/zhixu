@@ -41,9 +41,15 @@
         <symbol id="i-layers" viewBox="0 0 24 24">
             <path d="M12 3 3 8l9 5 9-5-9-5zM3 13l9 5 9-5" />
         </symbol>
+        <symbol id="i-more" viewBox="0 0 24 24">
+            <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
+        </symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24">
+            <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" />
+        </symbol>
     </svg>
     <header class="prototype-bar">
-        <span>设计预览 · 知识向量化与分块 / 第一版 <span class="t-secondary"> · 数据与处理均为演示</span></span>
+        <span>设计预览 · 知识库操作菜单 / 待确认 <span class="t-secondary"> · 数据与处理均为演示</span></span>
         <a href="./index.html">返回设计索引</a>
     </header>
     <div class="app">
@@ -230,6 +236,9 @@
                             <li>分块结构为只读视图：展示序号、所属章节、字符数、重叠区域与逐块状态。</li>
                             <li>嵌入模型来自用户在模型设置中的配置；密钥由后端持有，Mastra 仅经一次性授权调用。</li>
                             <li>入库失败（无正文）的条目不展示向量状态；删除知识与清理向量的一致性在后续批次处理。</li>
+                            <li>卡片最右侧固定一个 44px「更多操作」按钮，点击展开右对齐菜单，不挤动卡片内容；靠近视口底部时向上展开。</li>
+                            <li>菜单依次显示「查看知识」「分块结构」，分隔线下方为红色「删除知识」。无分块时不显示分块入口；入库未完成时首项为查看进度或失败原因。</li>
+                            <li>菜单支持点击外部、Escape 关闭，方向键选择；删除需要二次确认，原文件保持不变。本设计稿删除仅改变内存演示数据，刷新恢复。</li>
                             <li>所有内容是演示数据，不调用后端、Mastra、嵌入模型或向量数据库。</li>
                         </ul>
                     </div>
@@ -247,6 +256,14 @@
         <p class="caption t-secondary" id="progress-message" role="status" aria-live="polite"></p>
         <div class="panel-actions" id="panel-actions"></div>
     </aside>
+    <dialog class="delete-dialog" id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-message">
+        <h2 class="title-3" id="delete-title">删除知识条目</h2>
+        <p id="delete-message"></p>
+        <div class="actions">
+            <button class="btn btn-secondary" id="cancel-delete" type="button">取消</button>
+            <button class="btn delete-confirm" id="confirm-delete" type="button">删除知识</button>
+        </div>
+    </dialog>
     <div class="toast-wrap" id="toast-wrap" hidden>
         <div class="toast material-thick" id="toast-message" role="status" aria-live="polite"></div>
     </div>
