@@ -30,6 +30,7 @@ AI 工具进入项目时应优先读取的必读层。
 - [markdown-knowledge-frontend.md](./markdown-knowledge-frontend.md) — 文件加入、知识阅读与前端验收边界
 - [model-settings-backend.md](./model-settings-backend.md) — 用户模型配置、加密凭据与默认模型接口
 - [model-settings-frontend.md](./model-settings-frontend.md) — 设置页、供应商表单与真实接口接入
+- [service-status.md](./service-status.md) — 设置页基础服务检测、鉴权、缓存与状态边界
 - [plain-chat.md](./plain-chat.md) — 临时无工具对话、Mastra 网关与启动方式
 
 ## 2. 推荐阅读顺序

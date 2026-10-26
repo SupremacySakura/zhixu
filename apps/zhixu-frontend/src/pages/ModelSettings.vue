@@ -4,6 +4,8 @@ import { Icon } from '@iconify/vue'
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import SettingsModal from '../components/ui/SettingsModal.vue'
 import ProviderEditor from '../components/ui/ProviderEditor.vue'
+import ServiceStatusPanel from '../components/ui/ServiceStatusPanel.vue'
+import { useServiceStatus } from '../composables/useServiceStatus'
 import ToastNotice from '../components/file-management/ToastNotice.vue'
 import { useAISettings } from '../composables/useAISettings'
 import { useToast } from '../composables/useToast'
@@ -29,6 +31,13 @@ const {
 } = useAISettings()
 const { displayToast, showToast, toastMessage, toastType } = useToast()
 const tab = ref<'models' | 'services'>('models')
+const {
+  report: serviceReport,
+  loading: serviceLoading,
+  error: serviceError,
+  stale: serviceStale,
+  refresh: refreshServices,
+} = useServiceStatus(computed(() => tab.value === 'services'))
 const catalogOpen = ref(false)
 const editorOpen = ref(false)
 const editorRef = ref<InstanceType<typeof ProviderEditor> | null>(null)
@@ -170,32 +179,14 @@ function reloadConfirmation() {
           {{ entry.label }}
         </button>
       </nav>
-      <section v-if="tab === 'services'" class="rounded-lg bg-surface p-6 shadow-card">
-        <h2 class="text-title-3">基础服务</h2>
-        <p class="mb-5 mt-2 text-subhead text-label-secondary">
-          这些连接由部署配置管理，不属于模型供应商设置。
-        </p>
-        <article
-          v-for="entry in [
-            { name: 'Mastra AI 服务', description: '模型调用、分块与向量化工作流' },
-            { name: 'Qdrant 向量库', description: '向量存储与检索，知识正文仍保留在 MySQL' },
-          ]"
-          :key="entry.name"
-          class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline py-5"
-        >
-          <div>
-            <h3 class="text-headline">{{ entry.name }}</h3>
-            <p class="mt-2 text-subhead text-label-secondary">{{ entry.description }}</p>
-          </div>
-          <span
-            class="rounded-full bg-surface-secondary px-3 py-1 text-caption text-label-secondary"
-            >状态检测尚未接入</span
-          >
-        </article>
-        <p class="text-caption leading-6 text-label-secondary">
-          当前页面不检测服务连通性。文件管理和知识阅读不依赖这些 AI 服务。
-        </p>
-      </section>
+      <ServiceStatusPanel
+        v-if="tab === 'services'"
+        :report="serviceReport"
+        :loading="serviceLoading"
+        :error="serviceError"
+        :stale="serviceStale"
+        @refresh="refreshServices"
+      />
       <section v-else>
         <p v-if="loading" role="status" class="py-8 text-subhead text-label-secondary">
           正在加载模型设置…

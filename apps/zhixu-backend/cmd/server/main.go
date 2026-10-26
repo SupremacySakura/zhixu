@@ -26,6 +26,7 @@ func main() {
 	database.InitDB(cfg)
 	utils.InitJWT(cfg)
 	r := router.SetUpRouter(cfg)
+	router.RegisterServiceStatusRouter(r, service.NewServiceStatusService(cfg))
 	credentials, err := service.NewModelCredentials(cfg.ModelConfigEncryptionKey)
 	if err != nil {
 		log.Fatal().Msg("模型密钥加密配置无效")

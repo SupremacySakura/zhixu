@@ -14,6 +14,7 @@ import { plainChatRoute } from "./plain-chat";
 import { ragChatRoute } from "./rag-chat";
 import { vectorizeRoute } from "./vectorize";
 import { conversationRoutes } from "./conversations";
+import { healthRoute } from "./health";
 
 export const mastra = new Mastra({
   server: {
@@ -22,6 +23,7 @@ export const mastra = new Mastra({
       plainChatRoute,
       ragChatRoute,
       vectorizeRoute,
+      healthRoute,
       ...conversationRoutes,
     ],
   },

@@ -9,6 +9,9 @@ import {
   saveAIDefaults,
 } from '../../services/apis/aiSettings'
 import type { AIConfiguration } from '../../services/apis/aiSettings'
+import { getServiceStatus } from '../../services/apis/serviceStatus'
+
+vi.mock('../../services/apis/serviceStatus', () => ({ getServiceStatus: vi.fn() }))
 
 vi.mock('../../services/apis/aiSettings', () => ({
   getAIConfiguration: vi.fn(),
@@ -47,21 +50,43 @@ const fixture = (): AIConfiguration => ({
 beforeEach(() => {
   vi.mocked(getAIConfiguration).mockResolvedValue(fixture())
   vi.mocked(getAIProviderCatalog).mockResolvedValue([])
+  vi.mocked(getServiceStatus).mockResolvedValue({
+    checked_at: '2026-10-26T08:00:00Z',
+    services: [
+      { id: 'mastra', status: 'healthy', latency_ms: 10, message: '连接正常' },
+      { id: 'qdrant', status: 'unconfigured', latency_ms: null, message: '未配置向量库' },
+    ],
+  })
 })
 afterEach(() => {
   vi.clearAllMocks()
   document.body.innerHTML = ''
 })
 describe('ModelSettings', () => {
-  it('loads real configuration and does not show simulated service success', async () => {
+  it('loads configuration and checks real service reports only on tab entry or refresh', async () => {
     const wrapper = mount(ModelSettings, { global: { stubs: { teleport: true } } })
     await flushPromises()
     expect(wrapper.text()).toContain('模型网关')
     expect(wrapper.find('select').exists()).toBe(false)
+    expect(getServiceStatus).not.toHaveBeenCalled()
     const tab = wrapper.findAll('nav button').find(b => b.text() === '服务状态')!
     await tab.trigger('click')
-    expect(wrapper.text()).toContain('状态检测尚未接入')
-    expect(wrapper.text()).not.toContain('可连接')
+    await flushPromises()
+    expect(wrapper.text()).toContain('运行正常')
+    expect(wrapper.text()).toContain('未配置向量库')
+    expect(getServiceStatus).toHaveBeenCalledTimes(1)
+    await tab.trigger('click')
+    expect(getServiceStatus).toHaveBeenCalledTimes(1)
+    vi.mocked(getServiceStatus).mockRejectedValueOnce(new Error('刷新失败'))
+    await wrapper
+      .findAll('button')
+      .find(b => b.text() === '刷新状态')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('旧结果')
+    expect(wrapper.text()).toContain('运行正常')
+    expect(wrapper.get('time').attributes('datetime')).toBe('2026-10-26T08:00:00Z')
+    expect(getServiceStatus).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
   it('confirms same-dimension embedding changes before submitting', async () => {
