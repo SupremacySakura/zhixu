@@ -173,12 +173,13 @@ func (q *QdrantClient) DeleteKnowledge(ctx context.Context, collection string, u
 
 // Search returns chunk matches scoped to one user's collection. The caller must ensure
 // the collection name embeds that user id; the payload filter is defense in depth.
-func (q *QdrantClient) Search(ctx context.Context, collection string, user uint, vector []float64, topK int) ([]VectorMatch, error) {
+// minScore maps to Qdrant score_threshold so weak matches never leave the vector store.
+func (q *QdrantClient) Search(ctx context.Context, collection string, user uint, vector []float64, topK int, minScore float64) ([]VectorMatch, error) {
 	if topK < 1 || topK > RagMaxCandidates {
 		return nil, errors.New("检索数量超出允许范围")
 	}
 	data, status, err := q.request(ctx, "POST", "/collections/"+collection+"/points/search", map[string]any{
-		"vector": vector, "limit": topK, "with_payload": true,
+		"vector": vector, "limit": topK, "with_payload": true, "score_threshold": minScore,
 		"filter": map[string]any{"must": []any{
 			map[string]any{"key": "user_id", "match": map[string]any{"value": user}},
 		}},

@@ -92,7 +92,7 @@ func TestQdrantSearchFiltersUserAndReadsMatches(t *testing.T) {
 	}))
 	defer server.Close()
 	client := &QdrantClient{URL: server.URL}
-	matches, err := client.Search(context.Background(), "zhixu_u7_v3_c5", 7, []float64{1, 0}, 5)
+	matches, err := client.Search(context.Background(), "zhixu_u7_v3_c5", 7, []float64{1, 0}, 5, 0.5)
 	require.NoError(t, err)
 	require.Len(t, matches, 2)
 	require.Equal(t, uint(11), matches[0].ChunkID)
@@ -102,6 +102,7 @@ func TestQdrantSearchFiltersUserAndReadsMatches(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, true, body["with_payload"])
 	require.Equal(t, float64(5), body["limit"])
+	require.Equal(t, 0.5, body["score_threshold"])
 }
 
 func TestQdrantCleanupFiltersUserKnowledgeAndAcknowledges(t *testing.T) {
@@ -150,7 +151,7 @@ func TestQdrantSearchMissingCollectionIsEmpty(t *testing.T) {
 	}))
 	defer server.Close()
 	client := &QdrantClient{URL: server.URL}
-	matches, err := client.Search(context.Background(), "missing", 7, []float64{1}, 5)
+	matches, err := client.Search(context.Background(), "missing", 7, []float64{1}, 5, 0.5)
 	require.NoError(t, err)
 	require.Empty(t, matches)
 }

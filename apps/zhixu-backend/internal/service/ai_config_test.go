@@ -214,4 +214,36 @@ func TestAIConfigConcurrentExpectedVersion(t *testing.T) {
 	require.Equal(t, 1, conflicts)
 }
 
+func TestSaveDefaultsRagSettings(t *testing.T) {
+	ctx := context.Background()
+	s := newAIConfigTestService(t)
+	view, err := s.SaveProvider(ctx, 7, 0, testProviderInput())
+	require.NoError(t, err)
+	chat, embed := view.Providers[0].Models[0].ID, view.Providers[0].Models[1].ID
+
+	topK, score := 0, 0.01
+	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, RagTopK: &topK, ExpectedVersion: 1})
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+	topK = RagMaxTopK + 1
+	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, RagTopK: &topK, ExpectedVersion: 1})
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, RagMinScore: &score, ExpectedVersion: 1})
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+	score = 1.5
+	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, RagMinScore: &score, ExpectedVersion: 1})
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+
+	topK, score = 20, 0.7
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, RagTopK: &topK, RagMinScore: &score, ExpectedVersion: 1})
+	require.NoError(t, err)
+	require.Equal(t, 20, view.Settings.RagTopK)
+	require.InDelta(t, 0.7, view.Settings.RagMinScore, 1e-9)
+
+	// A save without retrieval fields keeps the stored values.
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, ExpectedVersion: 2})
+	require.NoError(t, err)
+	require.Equal(t, 20, view.Settings.RagTopK)
+	require.InDelta(t, 0.7, view.Settings.RagMinScore, 1e-9)
+}
+
 func errorsIsConflict(err error) bool { return errors.Is(err, ErrAIConfigConflict) }

@@ -12,7 +12,9 @@ import (
 
 type ragSearchRequest struct {
 	Query string `json:"query"`
-	TopK  int    `json:"topK"`
+	// TopK is accepted for AI-service contract compatibility but ignored:
+	// retrieval breadth and the similarity threshold come from the user's settings.
+	TopK int `json:"topK"`
 }
 
 // RagSearch is the internal retrieval gateway called only by the AI service with a
@@ -30,14 +32,9 @@ func (h *ChatHandler) RagSearch(c *gin.Context) {
 		c.Status(400)
 		return
 	}
-	topK := input.TopK
-	if topK < 1 || topK > service.RagMaxTopK {
-		topK = service.RagDefaultTopK
-	}
 	result, err := h.Rag.Search(cap.Context, service.RagQuery{
 		UserID: cap.RagQuery.UserID,
 		Query:  strings.TrimSpace(input.Query),
-		TopK:   topK,
 	})
 	if err != nil {
 		// Never echo embedding, database, or Qdrant failures back to the AI service.

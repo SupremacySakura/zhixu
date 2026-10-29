@@ -52,10 +52,14 @@ type ProviderInput struct {
 }
 
 type DefaultsInput struct {
-	ChatModelID      uint   `json:"chat_model_id"`
-	EmbeddingModelID uint   `json:"embedding_model_id"`
-	ExpectedVersion  uint64 `json:"expected_version"`
-	ConfirmReindex   bool   `json:"confirm_reindex"`
+	ChatModelID      uint     `json:"chat_model_id"`
+	EmbeddingModelID uint     `json:"embedding_model_id"`
+	// Nil RagTopK/RagMinScore keeps the stored retrieval settings, so clients
+	// predating them can still save model defaults without resetting retrieval.
+	RagTopK         *int     `json:"rag_top_k"`
+	RagMinScore     *float64 `json:"rag_min_score"`
+	ExpectedVersion uint64   `json:"expected_version"`
+	ConfirmReindex  bool     `json:"confirm_reindex"`
 }
 
 type ProviderView struct {
@@ -378,12 +382,24 @@ func (s *AIConfigService) DeleteProvider(ctx context.Context, user, id uint, ver
 }
 
 func (s *AIConfigService) SaveDefaults(ctx context.Context, user uint, input DefaultsInput) (*AIConfigView, error) {
+	if input.RagTopK != nil && (*input.RagTopK < 1 || *input.RagTopK > RagMaxTopK) {
+		return nil, configInvalid(fmt.Sprintf("检索条数需在 1–%d 之间", RagMaxTopK))
+	}
+	if input.RagMinScore != nil && (*input.RagMinScore < RagMinScoreFloor || *input.RagMinScore > 1) {
+		return nil, configInvalid(fmt.Sprintf("相似度阈值需在 %g–1 之间", RagMinScoreFloor))
+	}
 	state, err := s.Store.Mutate(ctx, user, func(state *repository.AIConfigState) error {
 		if input.ExpectedVersion != state.Settings.ConfigVersion {
 			return configConflict("配置已变更，请刷新后重试")
 		}
 		previous := embeddingFingerprint(state)
 		state.Settings.ChatModelID, state.Settings.EmbeddingModelID = input.ChatModelID, input.EmbeddingModelID
+		if input.RagTopK != nil {
+			state.Settings.RagTopK = *input.RagTopK
+		}
+		if input.RagMinScore != nil {
+			state.Settings.RagMinScore = *input.RagMinScore
+		}
 		if err := checkDefaults(state, true); err != nil {
 			return err
 		}

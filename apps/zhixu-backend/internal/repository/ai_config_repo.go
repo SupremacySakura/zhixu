@@ -121,7 +121,7 @@ func (r *AIConfigRepository) Mutate(ctx context.Context, user uint, change func(
 		state.Settings.ConfigVersion++
 		return tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "user_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"chat_model_id", "embedding_model_id", "config_version", "embedding_version", "needs_reindex", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"chat_model_id", "embedding_model_id", "rag_top_k", "rag_min_score", "config_version", "embedding_version", "needs_reindex", "updated_at"}),
 		}).Create(&state.Settings).Error
 	})
 	if err != nil {

@@ -149,6 +149,14 @@ func (h *ChatHandler) Send(c *gin.Context) {
 			return
 		}
 		defer ragRevoke()
+		// The AI service echoes top_k back to the search gateway; the gateway itself
+		// re-reads the user's settings, so this value is informational consistency
+		// rather than the authority.
+		ragTopK, _, ragSettingsErr := h.Service.RagSettings(ctx, user)
+		if ragSettingsErr != nil {
+			response.FailWithStatus(c, 500, response.CodeServerError, "对话服务不可用")
+			return
+		}
 		payload, _ = json.Marshal(gin.H{
 			"messages": input.Messages, "model": cap.Model.ModelID, "protocol": cap.Provider.Protocol,
 			"gateway":    strings.TrimRight(h.InternalBackendURL, "/") + "/internal/chat/v1",
@@ -156,7 +164,7 @@ func (h *ChatHandler) Send(c *gin.Context) {
 			"rag": gin.H{
 				"capability": ragToken,
 				"search_url": strings.TrimRight(h.InternalBackendURL, "/") + "/internal/rag/v1/search",
-				"top_k":      service.RagDefaultTopK,
+				"top_k":      ragTopK,
 			},
 			"conversation": conversation,
 		})

@@ -46,11 +46,16 @@ const editingPreset = ref<ProviderPreset | null>(null)
 const deleteTarget = ref<AIProvider | null>(null)
 const chat = ref('0')
 const embedding = ref('0')
+const ragTopK = ref(5)
+const ragMinScore = ref(0.5)
 const confirmDefaults = ref(false)
 watch(configuration, value => {
   if (!value) return
   chat.value = String(value.settings.chat_model_id)
   embedding.value = String(value.settings.embedding_model_id)
+  // Settings rows predating the retrieval columns report zero; mirror the backend defaults.
+  ragTopK.value = value.settings.rag_top_k || 5
+  ragMinScore.value = value.settings.rag_min_score || 0.5
 })
 function options(kind: ModelKind) {
   return [
@@ -72,7 +77,10 @@ const dirty = computed(
   () =>
     configuration.value &&
     (Number(chat.value) !== configuration.value.settings.chat_model_id ||
-      Number(embedding.value) !== configuration.value.settings.embedding_model_id),
+      Number(embedding.value) !== configuration.value.settings.embedding_model_id ||
+      Math.round(ragTopK.value) !== (configuration.value.settings.rag_top_k || 5) ||
+      Math.round(ragMinScore.value * 100) / 100 !==
+        (configuration.value.settings.rag_min_score || 0.5)),
 )
 function openEditor(provider: AIProvider | null = null, preset: ProviderPreset | null = null) {
   clearError()
@@ -107,10 +115,22 @@ function requestDefaults() {
 }
 async function submitDefaults(confirmed: boolean) {
   if (!configuration.value) return
+  const topK = Math.round(ragTopK.value)
+  const score = Math.round(ragMinScore.value * 100) / 100
+  if (!Number.isFinite(topK) || topK < 1 || topK > 50) {
+    displayToast('参考条数需为 1–50 的整数', 'error')
+    return
+  }
+  if (!Number.isFinite(score) || score < 0.05 || score > 1) {
+    displayToast('相似度阈值需在 0.05–1 之间', 'error')
+    return
+  }
   if (
     await saveDefaults({
       chat_model_id: Number(chat.value),
       embedding_model_id: Number(embedding.value),
+      rag_top_k: topK,
+      rag_min_score: score,
       expected_version: configuration.value.settings.config_version,
       confirm_reindex: confirmed,
     })
@@ -243,6 +263,38 @@ function reloadConfirmation() {
                         ? `${embeddingModel.dimension} 维 · 尚未经实际调用验证`
                         : '尚未选择，暂不可执行向量化。'
                     }}
+                  </p>
+                  <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label for="rag-top-k" class="mb-2 block text-caption font-semibold"
+                        >参考条数 TopK</label
+                      ><input
+                        id="rag-top-k"
+                        v-model.number="ragTopK"
+                        class="knowledge-input w-full"
+                        type="number"
+                        min="1"
+                        max="50"
+                        step="1"
+                      />
+                    </div>
+                    <div>
+                      <label for="rag-min-score" class="mb-2 block text-caption font-semibold"
+                        >相似度阈值</label
+                      ><input
+                        id="rag-min-score"
+                        v-model.number="ragMinScore"
+                        class="knowledge-input w-full"
+                        type="number"
+                        min="0.05"
+                        max="1"
+                        step="0.05"
+                      />
+                    </div>
+                  </div>
+                  <p class="mt-3 text-caption text-label-secondary">
+                    相似度低于阈值的片段不会作为参考；与知识库无关的问题将视为未找到相关内容。条数越大上下文越长（每片约
+                    1024 字符），按需调高。
                   </p>
                 </div>
               </div>

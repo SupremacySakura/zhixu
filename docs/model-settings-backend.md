@@ -8,7 +8,7 @@
 | --- | --- |
 | `model_providers` | 用户、稳定 Provider ID、目录归属、显示名称、地址、协议、认证方式、加密凭据 |
 | `provider_models` | 用户、所属供应商数据库 ID、模型 ID、用途、向量维度 |
-| `user_ai_settings` | 用户默认模型、配置版本、Embedding 版本、需要重建标记 |
+| `user_ai_settings` | 用户默认模型、检索条数与相似度阈值、配置版本、Embedding 版本、需要重建标记 |
 
 供应商 `(user_id, provider_id)` 唯一，模型 `(provider_id, model_id)` 唯一。均为物理删除。Provider ID 和目录归属保存后不可修改；同名模型在更新时保留数据库 ID。模型清单随供应商 PUT 整体替换，不另设重复的模型 CRUD 接口。
 
@@ -59,12 +59,16 @@
 {
   "chat_model_id": 1,
   "embedding_model_id": 2,
+  "rag_top_k": 5,
+  "rag_min_score": 0.5,
   "expected_version": 1,
   "confirm_reindex": false
 }
 ```
 
 ID 是 `provider_models.id`，不是供应商 Provider ID 或模型名称。允许 0 表示清除/未配置，支持分步设置；非 0 必须属于当前用户且用途匹配。删除或修改默认模型的用途前须先切换默认值。跨用户默认 ID 无效，不开放他人配置。
+
+`rag_top_k`（检索条数，1–50，默认 5）与 `rag_min_score`（相似度阈值，0.05–1，默认 0.5）随默认模型保存；省略字段则保留已存值，便于旧客户端只更新默认模型。检索时阈值先作为 Qdrant `score_threshold` 下推，Go 组装结果时再兜底过滤一次；全部低于阈值时返回空参考，AI 侧按"知识库中没有找到相关内容"拒答，不再强行凑满条数。存量行由 AutoMigrate 列默认值补齐；读取时遇到越界值（如未迁移的零值）回退默认值。检索参数只来自服务端设置，聊天与内部检索网关请求体中的条数一律忽略。
 
 ## 版本与事务
 

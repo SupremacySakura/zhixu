@@ -22,7 +22,9 @@ export const ragChatSchema = z
       .object({
         capability: z.string().regex(/^[a-f0-9]{64}$/),
         search_url: z.string().url(),
-        top_k: z.number().int().min(1).max(10),
+        // Mirrors Go's RagMaxTopK; the gateway re-reads user settings, so this
+        // bound only guards contract shape.
+        top_k: z.number().int().min(1).max(50),
       })
       .strict(),
     // Optional conversation identity; when present, turns persist to MySQL and history

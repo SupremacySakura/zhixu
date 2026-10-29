@@ -42,6 +42,8 @@ const fixture = (): AIConfiguration => ({
   settings: {
     chat_model_id: 2,
     embedding_model_id: 3,
+    rag_top_k: 5,
+    rag_min_score: 0.5,
     config_version: 5,
     embedding_version: 1,
     needs_reindex: false,
@@ -113,11 +115,50 @@ describe('ModelSettings', () => {
       {
         chat_model_id: 2,
         embedding_model_id: 4,
+        rag_top_k: 5,
+        rag_min_score: 0.5,
         expected_version: 5,
         confirm_reindex: true,
       },
       expect.any(AbortSignal),
     )
+    wrapper.unmount()
+  })
+  it('submits retrieval breadth and threshold with the defaults payload', async () => {
+    vi.mocked(saveAIDefaults).mockResolvedValue(fixture())
+    const wrapper = mount(ModelSettings, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    await wrapper.get<HTMLInputElement>('#rag-top-k').setValue(20)
+    await wrapper.get<HTMLInputElement>('#rag-min-score').setValue(0.7)
+    await wrapper
+      .findAll('button')
+      .find(b => b.text() === '保存默认模型')!
+      .trigger('click')
+    await flushPromises()
+    expect(saveAIDefaults).toHaveBeenCalledWith(
+      {
+        chat_model_id: 2,
+        embedding_model_id: 3,
+        rag_top_k: 20,
+        rag_min_score: 0.7,
+        expected_version: 5,
+        confirm_reindex: false,
+      },
+      expect.any(AbortSignal),
+    )
+    wrapper.unmount()
+  })
+  it('rejects out-of-range retrieval settings before saving', async () => {
+    const wrapper = mount(ModelSettings, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    await wrapper.get<HTMLInputElement>('#rag-min-score').setValue(0.01)
+    await wrapper
+      .findAll('button')
+      .find(b => b.text() === '保存默认模型')!
+      .trigger('click')
+    await flushPromises()
+    expect(saveAIDefaults).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('相似度阈值需在 0.05–1 之间')
     wrapper.unmount()
   })
   it('retains the editor on save failure and clears it only after success', async () => {

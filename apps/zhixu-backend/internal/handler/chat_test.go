@@ -117,7 +117,7 @@ func TestChatSendCarriesRagCapabilityWhenRequested(t *testing.T) {
 	require.Equal(t, 200, w.Code)
 	require.Len(t, payload.Rag.Capability, 64)
 	require.Equal(t, "http://127.0.0.1:9000/internal/rag/v1/search", payload.Rag.SearchURL)
-	require.Equal(t, service.RagDefaultTopK, payload.Rag.TopK)
+	require.Equal(t, 12, payload.Rag.TopK)
 	require.Nil(t, s.Capability(payload.Rag.Capability))
 }
 
@@ -130,7 +130,7 @@ func (ragChatStore) Read(_ context.Context, user uint) (*repository.AIConfigStat
 			{ID: 2, ProviderID: 1, UserID: user, Kind: "chat", ModelID: "chat-model"},
 			{ID: 4, ProviderID: 1, UserID: user, Kind: "embedding", ModelID: "embeddinggemma", Dimension: 768},
 		},
-		Settings: model.UserAISettings{ChatModelID: 2, EmbeddingModelID: 4},
+		Settings: model.UserAISettings{ChatModelID: 2, EmbeddingModelID: 4, RagTopK: 12, RagMinScore: 0.6},
 	}, nil
 }
 

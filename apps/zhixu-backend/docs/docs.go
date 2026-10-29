@@ -2840,6 +2840,12 @@ const docTemplate = `{
                 "needs_reindex": {
                     "type": "boolean"
                 },
+                "rag_min_score": {
+                    "type": "number"
+                },
+                "rag_top_k": {
+                    "type": "integer"
+                },
                 "updated_at": {
                     "type": "string"
                 }
@@ -2953,6 +2959,13 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "expected_version": {
+                    "type": "integer"
+                },
+                "rag_min_score": {
+                    "type": "number"
+                },
+                "rag_top_k": {
+                    "description": "Nil RagTopK/RagMinScore keeps the stored retrieval settings, so clients\npredating them can still save model defaults without resetting retrieval.",
                     "type": "integer"
                 }
             }

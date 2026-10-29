@@ -11,8 +11,14 @@ import (
 )
 
 const (
-	RagDefaultTopK   = 5
-	RagMaxTopK       = 10
+	RagDefaultTopK = 5
+	RagMaxTopK     = 50
+	// RagDefaultMinScore filters out low-similarity matches so off-topic questions
+	// count as "nothing found" instead of forcing weak chunks into the prompt.
+	RagDefaultMinScore = 0.5
+	// RagMinScoreFloor keeps the threshold meaningful; lower values would re-admit
+	// the noise the threshold exists to remove.
+	RagMinScoreFloor = 0.05
 	RagMaxCandidates = 320
 	// RagMaxChunkChars caps each returned passage so a single result cannot flood the model context.
 	RagMaxChunkChars = 1024
@@ -71,29 +77,49 @@ type RagSearcher struct {
 	Chat     *ChatService
 	Embedder VectorEmbedder
 	Vectors  interface {
-		Search(context.Context, string, uint, []float64, int) ([]VectorMatch, error)
+		Search(context.Context, string, uint, []float64, int, float64) ([]VectorMatch, error)
 	}
 	Chunks RagChunkStore
 }
 
 // Query mirrors the user id carried by the one-time capability; the chat handler
 // authorizes it against the authenticated caller before any retrieval happens.
+// Retrieval breadth and the similarity threshold come from the user's saved
+// settings, never from the request body.
 type RagQuery struct {
 	UserID uint
 	Query  string
-	TopK   int
+}
+
+// RagSettings resolves the effective retrieval breadth and similarity threshold,
+// falling back to defaults for rows predating the columns or values out of range.
+func (s *ChatService) RagSettings(ctx context.Context, user uint) (int, float64, error) {
+	state, err := s.Store.Read(ctx, user)
+	if err != nil {
+		return 0, 0, err
+	}
+	topK := state.Settings.RagTopK
+	if topK < 1 || topK > RagMaxTopK {
+		topK = RagDefaultTopK
+	}
+	minScore := state.Settings.RagMinScore
+	if minScore < RagMinScoreFloor || minScore > 1 {
+		minScore = RagDefaultMinScore
+	}
+	return topK, minScore, nil
 }
 
 func (s *RagSearcher) Search(ctx context.Context, query RagQuery) (*RagResult, error) {
-	if query.TopK < 1 || query.TopK > RagMaxTopK {
-		return nil, errors.New("检索数量超出允许范围")
-	}
 	if strings.TrimSpace(query.Query) == "" || utf8.RuneCountInString(query.Query) > 512 {
 		return nil, errors.New("检索关键词为空或过长")
 	}
 	cap, version, _, err := s.Chat.ResolveEmbedding(ctx, query.UserID)
 	if err != nil {
 		return nil, errors.New("Embedding 配置不可用，请检查模型设置")
+	}
+	topK, minScore, err := s.Chat.RagSettings(ctx, query.UserID)
+	if err != nil {
+		return nil, err
 	}
 	vectors, err := s.Embedder.Embed(ctx, cap, []string{query.Query})
 	if err != nil || len(vectors) != 1 {
@@ -118,11 +144,11 @@ func (s *RagSearcher) Search(ctx context.Context, query RagQuery) (*RagResult, e
 	// Increase only unmetered Qdrant candidate requests; the query is embedded once.
 	var matches []VectorMatch
 	var chunks []model.KnowledgeChunk
-	for limit := query.TopK; ; limit = min(limit*2, RagMaxCandidates) {
+	for limit := topK; ; limit = min(limit*2, RagMaxCandidates) {
 		best := map[uint]VectorMatch{}
 		exhausted := true
 		for _, name := range names {
-			found, searchErr := s.Vectors.Search(ctx, name, query.UserID, vectors[0], limit)
+			found, searchErr := s.Vectors.Search(ctx, name, query.UserID, vectors[0], limit, minScore)
 			if searchErr != nil {
 				return nil, searchErr
 			}
@@ -158,7 +184,7 @@ func (s *RagSearcher) Search(ctx context.Context, query RagQuery) (*RagResult, e
 				live++
 			}
 		}
-		if live >= query.TopK || exhausted || limit == RagMaxCandidates {
+		if live >= topK || exhausted || limit == RagMaxCandidates {
 			break
 		}
 	}
@@ -180,6 +206,11 @@ func (s *RagSearcher) Search(ctx context.Context, query RagQuery) (*RagResult, e
 	}
 	sources := make([]RagSource, 0, len(matches))
 	for _, match := range matches {
+		// The vector store already applied score_threshold; this guards legacy
+		// collections and test doubles that may return weaker matches.
+		if match.Score < minScore {
+			continue
+		}
 		chunk, ok := byID[match.ChunkID]
 		if !ok || chunk.State != "ready" || titles[chunk.KnowledgeID] == "" {
 			continue
@@ -192,7 +223,7 @@ func (s *RagSearcher) Search(ctx context.Context, query RagQuery) (*RagResult, e
 			KnowledgeID: chunk.KnowledgeID, Title: titles[chunk.KnowledgeID],
 			Section: chunk.Section, Content: content, Score: match.Score,
 		})
-		if len(sources) == query.TopK {
+		if len(sources) == topK {
 			break
 		}
 	}

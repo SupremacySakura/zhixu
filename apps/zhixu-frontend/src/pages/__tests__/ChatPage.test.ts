@@ -42,6 +42,8 @@ function configureModel(embeddingModelID = 0) {
     settings: {
       chat_model_id: 2,
       embedding_model_id: embeddingModelID,
+      rag_top_k: 5,
+      rag_min_score: 0.5,
       config_version: 1,
       embedding_version: 0,
       needs_reindex: false,
@@ -110,6 +112,8 @@ describe('ChatPage', () => {
       settings: {
         chat_model_id: 0,
         embedding_model_id: 0,
+        rag_top_k: 0,
+        rag_min_score: 0,
         config_version: 0,
         embedding_version: 0,
         needs_reindex: false,
@@ -142,6 +146,8 @@ describe('ChatPage', () => {
       settings: {
         chat_model_id: 2,
         embedding_model_id: 0,
+        rag_top_k: 5,
+        rag_min_score: 0.5,
         config_version: 1,
         embedding_version: 0,
         needs_reindex: false,
