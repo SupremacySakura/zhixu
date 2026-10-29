@@ -37,4 +37,4 @@ Mastra 新增 `GET /internal/health`，使用现有 `Authorization: Bearer INTER
 
 ## 文档差异
 
-Brain 中旧 `cloud-drive` 路径与无自动化测试描述仍与现有代码不一致，Brain/skills 对 AI 只读，留待人工审核；本功能以实际 `zhixu` 代码与测试为准。
+Brain 中旧 `cloud-drive` 路径与无自动化测试描述已于 2026-10-30 经人工授权修正（见 `brain/project.md`、`brain/tech-stack.md`、`brain/testing.md`、`brain/architecture.md`）；本功能以实际 `zhixu` 代码与测试为准。
