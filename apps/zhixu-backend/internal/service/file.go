@@ -5,8 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
-	"errors"
+		"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -283,34 +282,12 @@ func (s *fileService) folderName(userID uint, folderID uint) string {
 	return folder.Name
 }
 
-// recordOperation 以快照形式落一条操作日志；日志写入失败仅记错误，绝不影响主流程。
-// 写入成功后触发保留上限清理，清理失败同样仅记错误。
+// recordOperation 以快照形式落一条操作日志（folderID 现查目录名），具体见 writeOperationLog。
 func (s *fileService) recordOperation(userID uint, action model.OperationLogAction, targetType model.OperationLogTargetType, targetID uint, targetName string, folderID uint, detail map[string]any) {
 	if s.OperationLogRepository == nil {
 		return
 	}
-	detailJSON := "{}"
-	if len(detail) > 0 {
-		if payload, err := json.Marshal(detail); err == nil {
-			detailJSON = string(payload)
-		}
-	}
-	entry := &model.OperationLogModel{
-		UserID:     userID,
-		Action:     action,
-		TargetType: targetType,
-		TargetID:   targetID,
-		TargetName: targetName,
-		FolderName: s.folderName(userID, folderID),
-		Detail:     detailJSON,
-	}
-	if err := s.OperationLogRepository.CreateOperationLog(entry); err != nil {
-		log.Error().Err(err).Uint("user_id", userID).Str("action", string(action)).Msg("记录操作日志失败")
-		return
-	}
-	if _, err := s.OperationLogRepository.PruneOperationLogs(userID, operationLogKeepCount); err != nil {
-		log.Error().Err(err).Uint("user_id", userID).Msg("清理操作日志失败")
-	}
+	writeOperationLog(s.OperationLogRepository, userID, action, targetType, targetID, targetName, s.folderName(userID, folderID), detail)
 }
 
 // Completed tasks only deduplicate while their logical file still exists.
@@ -998,6 +975,7 @@ func (s *fileService) DeleteByIDs(userID uint, fileID, folderID uint, deleteKnow
 			}
 			return fmt.Errorf("删除文件失败: %w", err)
 		}
+		knowledgeRemoved := 0
 		deleteFile := func() error {
 			if !removeKnowledge {
 				return s.FileRepository.DeleteFileByIDAndUserID(fileID, userID)
@@ -1007,7 +985,9 @@ func (s *fileService) DeleteByIDs(userID uint, fileID, folderID uint, deleteKnow
 					return err
 				}
 				query := tx.Model(&model.KnowledgeItem{}).Where("user_id = ? AND source_file_id = ?", userID, fileID)
-				return repository.DeleteKnowledgeRows(tx, userID, query)
+				removed, err := repository.DeleteKnowledgeRows(tx, userID, query)
+				knowledgeRemoved = removed
+				return err
 			})
 		}
 		if err := deleteFile(); err != nil {
@@ -1017,11 +997,16 @@ func (s *fileService) DeleteByIDs(userID uint, fileID, folderID uint, deleteKnow
 			return fmt.Errorf("删除文件失败: %w", err)
 		}
 		// 实体已删除，日志只依赖事前捕获的名称/目录快照
-		s.recordOperation(userID, model.OperationLogActionDelete, model.OperationLogTargetTypeFile, fileID, targetFile.Name, targetFile.FolderID, map[string]any{"size": targetFile.Size})
+		detail := map[string]any{"size": targetFile.Size}
+		if knowledgeRemoved > 0 {
+			detail["knowledge_removed"] = knowledgeRemoved
+		}
+		s.recordOperation(userID, model.OperationLogActionDelete, model.OperationLogTargetTypeFile, fileID, targetFile.Name, targetFile.FolderID, detail)
 		return nil
 	}
 
 	var deletedRoot *model.FolderModel
+	knowledgeRemoved := 0
 	err := s.FileRepository.DB.Transaction(func(tx *gorm.DB) error {
 		txRepo := &repository.FileRepository{DB: tx}
 
@@ -1055,9 +1040,11 @@ func (s *fileService) DeleteByIDs(userID uint, fileID, folderID uint, deleteKnow
 			// Match current file membership, including the files just soft-deleted.
 			files := tx.Unscoped().Model(&model.FileModel{}).Select("id").Where("user_id = ? AND folder_id IN ?", userID, folderIDs)
 			query := tx.Model(&model.KnowledgeItem{}).Where("user_id = ? AND source_file_id IN (?)", userID, files)
-			if err := repository.DeleteKnowledgeRows(tx, userID, query); err != nil {
+			removed, err := repository.DeleteKnowledgeRows(tx, userID, query)
+			if err != nil {
 				return err
 			}
+			knowledgeRemoved = removed
 		}
 		return txRepo.DeleteFoldersByIDsAndUserID(folderIDs, userID)
 	})
@@ -1065,7 +1052,11 @@ func (s *fileService) DeleteByIDs(userID uint, fileID, folderID uint, deleteKnow
 		return err
 	}
 	if deletedRoot != nil {
-		s.recordOperation(userID, model.OperationLogActionDelete, model.OperationLogTargetTypeFolder, deletedRoot.ID, deletedRoot.Name, deletedRoot.ParentID, nil)
+		var detail map[string]any
+		if knowledgeRemoved > 0 {
+			detail = map[string]any{"knowledge_removed": knowledgeRemoved}
+		}
+		s.recordOperation(userID, model.OperationLogActionDelete, model.OperationLogTargetTypeFolder, deletedRoot.ID, deletedRoot.Name, deletedRoot.ParentID, detail)
 	}
 	return nil
 }

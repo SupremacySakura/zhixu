@@ -12,8 +12,11 @@ export type OperationLogAction =
   | 'share_link_delete'
   | 'pickup_code_create'
   | 'pickup_code_delete'
+  | 'knowledge_add'
+  | 'knowledge_delete'
+  | 'knowledge_retry'
 
-export type OperationLogTargetType = 'file' | 'folder'
+export type OperationLogTargetType = 'file' | 'folder' | 'knowledge'
 
 /**
  * 操作日志条目。
@@ -28,7 +31,7 @@ export interface OperationLogItem {
   target_name: string
   /** 所在目录快照，空串表示根目录 */
   folder_name: string
-  /** JSON 字符串扩展字段（size / old_name / from / to / packaged / code），由前端按需解析 */
+  /** JSON 字符串扩展字段（size / old_name / from / to / packaged / code / source_file / knowledge_removed），由前端按需解析 */
   detail: string
   created_at: string
 }

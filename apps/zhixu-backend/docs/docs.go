@@ -2705,11 +2705,17 @@ const docTemplate = `{
                 "share_link_create",
                 "share_link_delete",
                 "pickup_code_create",
-                "pickup_code_delete"
+                "pickup_code_delete",
+                "knowledge_add",
+                "knowledge_delete",
+                "knowledge_retry"
             ],
             "x-enum-comments": {
                 "OperationLogActionDelete": "删除",
                 "OperationLogActionDownload": "下载",
+                "OperationLogActionKnowledgeAdd": "加入知识库",
+                "OperationLogActionKnowledgeDelete": "移出知识库",
+                "OperationLogActionKnowledgeRetry": "重试知识导入",
                 "OperationLogActionMkdir": "新建文件夹",
                 "OperationLogActionMove": "移动",
                 "OperationLogActionPickupCodeCreate": "创建取件码",
@@ -2733,7 +2739,10 @@ const docTemplate = `{
                 "创建分享链接",
                 "删除分享链接",
                 "创建取件码",
-                "删除取件码"
+                "删除取件码",
+                "加入知识库",
+                "移出知识库",
+                "重试知识导入"
             ],
             "x-enum-varnames": [
                 "OperationLogActionUpload",
@@ -2747,18 +2756,23 @@ const docTemplate = `{
                 "OperationLogActionShareLinkCreate",
                 "OperationLogActionShareLinkDelete",
                 "OperationLogActionPickupCodeCreate",
-                "OperationLogActionPickupCodeDelete"
+                "OperationLogActionPickupCodeDelete",
+                "OperationLogActionKnowledgeAdd",
+                "OperationLogActionKnowledgeDelete",
+                "OperationLogActionKnowledgeRetry"
             ]
         },
         "model.OperationLogTargetType": {
             "type": "string",
             "enum": [
                 "file",
-                "folder"
+                "folder",
+                "knowledge"
             ],
             "x-enum-varnames": [
                 "OperationLogTargetTypeFile",
-                "OperationLogTargetTypeFolder"
+                "OperationLogTargetTypeFolder",
+                "OperationLogTargetTypeKnowledge"
             ]
         },
         "model.PickUpCodeStatus": {

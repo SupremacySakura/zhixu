@@ -37,7 +37,13 @@
 - 状态为 `pending/running/ready/failed`。未加入和格式不支持由文件页判断，不是知识条目的持久状态。
 - 详情字段包含 `source_file_id/source_file_name/source_folder_id/source_folder_name/source_type/title/content/status/error_code/error_message/imported_at/created_at/updated_at`。来源目录为提交时直接父目录的快照，不是实时完整路径。
 - 错误响应：参数/格式/大小错误 400、无权限或资源不存在 404、非失败任务重试 409、内部异常 500。现有 JWT 中间件的 401 格式保持不变。
-- 删除接口按当前用户限定范围，返回 HTTP 200 和 `data: null`；不存在或不属于当前用户的条目不做修改，作为幂等成功处理。
+- 删除接口按当前用户限定范围，成功返回 HTTP 200 和 `data: null`；不存在或不属于当前用户的条目返回 404（2026-10 起，此前按幂等成功处理）。
+
+## 操作日志
+
+- 加入（仅首次创建）、删除、重试导入会写入操作日志，目标类型为 `knowledge`，动作分别为 `knowledge_add/knowledge_delete/knowledge_retry`；标题与来源目录取知识条目快照。
+- 文件或文件夹删除勾选 `delete_knowledge` 级联删除知识时，不逐条写知识日志，而是在文件/文件夹的 `delete` 日志 `detail` 中增加 `knowledge_removed` 计数。
+- 日志写入失败仅记服务端错误，不影响主流程；每条写入后按用户裁剪至最近 500 条。
 
 ## 删除语义
 

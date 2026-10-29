@@ -18,14 +18,18 @@ const (
 	OperationLogActionShareLinkDelete  OperationLogAction = "share_link_delete"  // 删除分享链接
 	OperationLogActionPickupCodeCreate OperationLogAction = "pickup_code_create" // 创建取件码
 	OperationLogActionPickupCodeDelete OperationLogAction = "pickup_code_delete" // 删除取件码
+	OperationLogActionKnowledgeAdd     OperationLogAction = "knowledge_add"      // 加入知识库
+	OperationLogActionKnowledgeDelete  OperationLogAction = "knowledge_delete"   // 移出知识库
+	OperationLogActionKnowledgeRetry   OperationLogAction = "knowledge_retry"    // 重试知识导入
 )
 
 // OperationLogTargetType 操作目标的实体类型
 type OperationLogTargetType string
 
 const (
-	OperationLogTargetTypeFile   OperationLogTargetType = "file"
-	OperationLogTargetTypeFolder OperationLogTargetType = "folder"
+	OperationLogTargetTypeFile      OperationLogTargetType = "file"
+	OperationLogTargetTypeFolder    OperationLogTargetType = "folder"
+	OperationLogTargetTypeKnowledge OperationLogTargetType = "knowledge"
 )
 
 // OperationLogModel 用户操作日志。

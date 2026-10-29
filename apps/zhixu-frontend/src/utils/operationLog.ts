@@ -34,17 +34,25 @@ const detailString = (detail: Record<string, unknown>, key: string): string => {
   return typeof value === 'string' ? value : ''
 }
 
+const detailNumber = (detail: Record<string, unknown>, key: string): number => {
+  const value = detail[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
 const folderLabel = (folderName: string): string => sanitizeFileName(folderName) || '根目录'
 
-const fallbackTitle = (targetType: OperationLogItem['target_type']): string =>
-  targetType === 'folder' ? '未知文件夹' : '未知文件'
+const fallbackTitle = (targetType: OperationLogItem['target_type']): string => {
+  if (targetType === 'folder') return '未知文件夹'
+  if (targetType === 'knowledge') return '未知知识'
+  return '未知文件'
+}
 
 const UNKNOWN_ACTION_META = {
   icon: 'material-symbols:help-outline-rounded',
   colorClass: 'bg-surface-tertiary text-label-secondary',
 } as const
 
-/** 将操作日志条目映射为展示描述（纯函数，12 个 action 全覆盖） */
+/** 将操作日志条目映射为展示描述（纯函数，15 个 action 全覆盖） */
 export const describeOperationLog = (log: OperationLogItem): OperationLogDescription => {
   const detail = parseDetail(log.detail)
   const title = sanitizeFileName(log.target_name) || fallbackTitle(log.target_type)
@@ -94,14 +102,16 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
         highlight: to || '根目录',
       }
     }
-    case 'delete':
+    case 'delete': {
+      const knowledgeRemoved = detailNumber(detail, 'knowledge_removed')
       return {
         icon: 'material-symbols:delete-outline-rounded',
         colorClass: 'bg-pink-tint text-pink',
         title,
-        subtitle: '已删除',
+        subtitle: knowledgeRemoved > 0 ? `已删除，含 ${knowledgeRemoved} 条知识` : '已删除',
         highlight: '',
       }
+    }
     case 'download':
       return {
         icon: 'material-symbols:download-outline-rounded',
@@ -149,6 +159,30 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
         title,
         subtitle: '删除取件码',
         highlight: detailString(detail, 'code'),
+      }
+    case 'knowledge_add':
+      return {
+        icon: 'material-symbols:bookmark-add-outline-rounded',
+        colorClass: 'bg-primary-tint text-primary',
+        title,
+        subtitle: '加入知识库',
+        highlight: folderLabel(log.folder_name),
+      }
+    case 'knowledge_delete':
+      return {
+        icon: 'material-symbols:bookmark-remove-outline-rounded',
+        colorClass: 'bg-pink-tint text-pink',
+        title,
+        subtitle: '移出知识库',
+        highlight: '',
+      }
+    case 'knowledge_retry':
+      return {
+        icon: 'material-symbols:refresh-rounded',
+        colorClass: 'bg-warning-tint text-warning',
+        title,
+        subtitle: '重试导入',
+        highlight: '',
       }
     default:
       return { ...UNKNOWN_ACTION_META, title, subtitle: '', highlight: '' }

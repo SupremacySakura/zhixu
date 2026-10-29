@@ -75,6 +75,64 @@ describe('describeOperationLog', () => {
     expect(d.highlight).toBe('')
   })
 
+  it('appends cascaded knowledge count to delete subtitle', () => {
+    const d = describeOperationLog(
+      makeLog({ action: 'delete', detail: '{"size":2048,"knowledge_removed":3}' }),
+    )
+    expect(d.subtitle).toBe('已删除，含 3 条知识')
+
+    const folderCascade = describeOperationLog(
+      makeLog({
+        action: 'delete',
+        target_type: 'folder',
+        target_name: '资料',
+        detail: '{"knowledge_removed":2}',
+      }),
+    )
+    expect(folderCascade.subtitle).toBe('已删除，含 2 条知识')
+
+    const zero = describeOperationLog(
+      makeLog({ action: 'delete', detail: '{"knowledge_removed":0}' }),
+    )
+    expect(zero.subtitle).toBe('已删除')
+  })
+
+  it('maps knowledge_add with source folder highlight', () => {
+    const d = describeOperationLog(
+      makeLog({
+        action: 'knowledge_add',
+        target_type: 'knowledge',
+        target_name: '笔记',
+        detail: '{"source_file":"note.md"}',
+      }),
+    )
+    expect(d.icon).toBe('material-symbols:bookmark-add-outline-rounded')
+    expect(d.colorClass).toBe('bg-primary-tint text-primary')
+    expect(d.title).toBe('笔记')
+    expect(d.subtitle).toBe('加入知识库')
+    expect(d.highlight).toBe('工作')
+  })
+
+  it('maps knowledge_delete and knowledge_retry', () => {
+    const removed = describeOperationLog(
+      makeLog({ action: 'knowledge_delete', target_type: 'knowledge', target_name: '笔记' }),
+    )
+    expect(removed.subtitle).toBe('移出知识库')
+    expect(removed.colorClass).toBe('bg-pink-tint text-pink')
+    expect(removed.highlight).toBe('')
+
+    const retried = describeOperationLog(
+      makeLog({ action: 'knowledge_retry', target_type: 'knowledge', target_name: '笔记' }),
+    )
+    expect(retried.subtitle).toBe('重试导入')
+    expect(retried.colorClass).toBe('bg-warning-tint text-warning')
+  })
+
+  it('falls back to placeholder title for knowledge targets', () => {
+    const d = describeOperationLog(makeLog({ target_name: '', target_type: 'knowledge' }))
+    expect(d.title).toBe('未知知识')
+  })
+
   it('maps download and distinguishes packaged', () => {
     const single = describeOperationLog(makeLog({ action: 'download' }))
     expect(single.subtitle).toBe('下载')

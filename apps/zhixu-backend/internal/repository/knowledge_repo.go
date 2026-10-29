@@ -19,40 +19,45 @@ type KnowledgeRepository struct{ DB *gorm.DB }
 func NewKnowledgeRepository(db *gorm.DB) *KnowledgeRepository { return &KnowledgeRepository{DB: db} }
 
 // Delete tasks first to match the worker's lock order and fence in-flight results.
-func DeleteKnowledgeRows(tx *gorm.DB, userID uint, query *gorm.DB) error {
+// 返回删除的知识条数，供调用方在级联删除日志中展示。
+func DeleteKnowledgeRows(tx *gorm.DB, userID uint, query *gorm.DB) (int, error) {
 	if err := tx.Where("user_id = ? AND knowledge_id IN (?)", userID, query.Select("id")).
 		Delete(&model.KnowledgeImportTask{}).Error; err != nil {
-		return err
+		return 0, err
 	}
 	// Lock vector tasks before knowledge rows, matching fenced upserts. Capture
 	// deletion tombstones before removing tasks; commit them atomically with deletion.
 	var tasks []model.VectorizeTask
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND knowledge_id IN (?)", userID, query.Select("id")).Find(&tasks).Error; err != nil {
-		return err
+		return 0, err
 	}
 	var items []model.KnowledgeItem
 	if err := query.Clauses(clause.Locking{Strength: "UPDATE"}).Find(&items).Error; err != nil {
-		return err
+		return 0, err
 	}
 	for _, item := range items {
 		tombstone := model.VectorCleanupTask{UserID: userID, KnowledgeID: item.ID, NextAttemptAt: time.Now()}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&tombstone).Error; err != nil {
-			return err
+			return 0, err
 		}
 	}
 	for _, row := range []any{&model.VectorizeTask{}, &model.KnowledgeChunk{}} {
 		if err := tx.Where("user_id = ? AND knowledge_id IN (?)", userID, query.Select("id")).Delete(row).Error; err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return query.Delete(&model.KnowledgeItem{}).Error
+	if err := query.Delete(&model.KnowledgeItem{}).Error; err != nil {
+		return 0, err
+	}
+	return len(items), nil
 }
 
 func (r *KnowledgeRepository) Delete(ctx context.Context, userID, id uint) error {
 	return r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Include user ownership in both deletes; do not require a live source file.
 		query := tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", id, userID)
-		return DeleteKnowledgeRows(tx, userID, query)
+		_, err := DeleteKnowledgeRows(tx, userID, query)
+		return err
 	})
 }
 

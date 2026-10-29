@@ -261,6 +261,108 @@ func TestDeleteByIDs_IgnoresLogWriteFailure(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+// DeleteByIDs 级联删除知识时，文件删除日志的 detail 携带 knowledge_removed 计数
+func TestDeleteByIDs_RecordsKnowledgeCascadeCount(t *testing.T) {
+	db, mock, cleanup := setupServiceMockDB(t)
+	defer cleanup()
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `file_models`")).
+		WithArgs(uint(5), uint(7), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "user_id", "folder_id", "name", "size", "type", "file_hash",
+		}).AddRow(5, 7, 0, "doc.md", 2048, "text/markdown", "hash-doc"))
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE `file_models`")).
+		WithArgs(sqlmock.AnyArg(), uint(5), uint(7)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	// 知识级联删除链：任务 → 向量任务锁 → 知识行锁（1 条）→ tombstone → 清理
+	mock.ExpectExec("DELETE FROM `knowledge_import_tasks` WHERE user_id = .*knowledge_id IN").
+		WithArgs(uint(7), uint(7), uint(5)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").
+		WithArgs(uint(7), uint(7), uint(5)).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").
+		WithArgs(uint(7), uint(5)).WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(9, 7))
+	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(1, 1))
+	for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+		mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN").
+			WithArgs(uint(7), uint(7), uint(5)).WillReturnResult(sqlmock.NewResult(0, 1))
+	}
+	mock.ExpectExec("DELETE FROM `knowledge_items` WHERE user_id = .*source_file_id").
+		WithArgs(uint(7), uint(5)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	// FolderID=0 时 folderName 不查库，直接落日志（detail 含级联计数）
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `operation_log_models`")).
+		WithArgs(uint(7), "delete", "file", uint(5), "doc.md", "", `{"knowledge_removed":1,"size":2048}`, sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT `id` FROM `operation_log_models`")).
+		WithArgs(uint(7), 1, 500).
+		WillReturnError(gorm.ErrRecordNotFound)
+
+	svc := &fileService{
+		FileRepository:         repository.NewFileRepository(db),
+		OperationLogRepository: repository.NewOperationLogRepository(db),
+	}
+	err := svc.DeleteByIDs(7, 5, 0, true)
+
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// DeleteByIDs 文件夹级联删除知识时，文件夹删除日志携带 knowledge_removed 计数
+func TestDeleteFolderByIDs_RecordsKnowledgeCascadeCount(t *testing.T) {
+	db, mock, cleanup := setupServiceMockDB(t)
+	defer cleanup()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT .* FROM `folder_models`").
+		WithArgs(uint(3), uint(7), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "parent_id", "name"}).AddRow(3, 7, 0, "资料"))
+	mock.ExpectQuery("SELECT .* FROM `folder_models`").
+		WithArgs(uint(3), uint(7)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(4))
+	mock.ExpectQuery("SELECT .* FROM `folder_models`").
+		WithArgs(uint(4), uint(7)).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectExec("UPDATE `file_models`").WithArgs(sqlmock.AnyArg(), uint(3), uint(4), uint(7)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("DELETE FROM `knowledge_import_tasks` .*source_file_id IN .*folder_id IN").
+		WithArgs(uint(7), uint(7), uint(7), uint(3), uint(4)).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").
+		WithArgs(uint(7), uint(7), uint(7), uint(3), uint(4)).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	// 两条知识被级联删除
+	mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").
+		WithArgs(uint(7), uint(7), uint(3), uint(4)).WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(9, 7).AddRow(10, 7))
+	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(2, 1))
+	for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+		mock.ExpectExec("DELETE FROM `"+table+"` .*source_file_id IN .*folder_id IN").
+			WithArgs(uint(7), uint(7), uint(7), uint(3), uint(4)).WillReturnResult(sqlmock.NewResult(0, 2))
+	}
+	mock.ExpectExec("DELETE FROM `knowledge_items` .*source_file_id IN .*folder_id IN").
+		WithArgs(uint(7), uint(7), uint(3), uint(4)).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("UPDATE `folder_models`").WithArgs(sqlmock.AnyArg(), uint(3), uint(4), uint(7)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectCommit()
+	// 根目录文件夹（parent_id=0）不查 folderName；detail 只含级联计数
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `operation_log_models`")).
+		WithArgs(uint(7), "delete", "folder", uint(3), "资料", "", `{"knowledge_removed":2}`, sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT `id` FROM `operation_log_models`")).
+		WithArgs(uint(7), 1, 500).
+		WillReturnError(gorm.ErrRecordNotFound)
+
+	svc := &fileService{
+		FileRepository:         repository.NewFileRepository(db),
+		OperationLogRepository: repository.NewOperationLogRepository(db),
+	}
+	err := svc.DeleteByIDs(7, 0, 3, true)
+
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 // 在磁盘上按 hash 布局落一个真实文件，供 preview/download 流式读取
 func writeStoredFile(t *testing.T, fileRoot, fileHash string) {
 	t.Helper()

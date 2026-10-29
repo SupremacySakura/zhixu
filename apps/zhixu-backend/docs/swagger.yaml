@@ -248,10 +248,16 @@ definitions:
     - share_link_delete
     - pickup_code_create
     - pickup_code_delete
+    - knowledge_add
+    - knowledge_delete
+    - knowledge_retry
     type: string
     x-enum-comments:
       OperationLogActionDelete: 删除
       OperationLogActionDownload: 下载
+      OperationLogActionKnowledgeAdd: 加入知识库
+      OperationLogActionKnowledgeDelete: 移出知识库
+      OperationLogActionKnowledgeRetry: 重试知识导入
       OperationLogActionMkdir: 新建文件夹
       OperationLogActionMove: 移动
       OperationLogActionPickupCodeCreate: 创建取件码
@@ -275,6 +281,9 @@ definitions:
     - 删除分享链接
     - 创建取件码
     - 删除取件码
+    - 加入知识库
+    - 移出知识库
+    - 重试知识导入
     x-enum-varnames:
     - OperationLogActionUpload
     - OperationLogActionUploadInstant
@@ -288,14 +297,19 @@ definitions:
     - OperationLogActionShareLinkDelete
     - OperationLogActionPickupCodeCreate
     - OperationLogActionPickupCodeDelete
+    - OperationLogActionKnowledgeAdd
+    - OperationLogActionKnowledgeDelete
+    - OperationLogActionKnowledgeRetry
   model.OperationLogTargetType:
     enum:
     - file
     - folder
+    - knowledge
     type: string
     x-enum-varnames:
     - OperationLogTargetTypeFile
     - OperationLogTargetTypeFolder
+    - OperationLogTargetTypeKnowledge
   model.PickUpCodeStatus:
     enum:
     - Active

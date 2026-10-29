@@ -69,6 +69,104 @@ func (f *knowledgeFake) Retry(context.Context, uint, uint) error {
 	f.item.Status = model.KnowledgePending
 	return nil
 }
+func (f *knowledgeFake) Delete(_ context.Context, user, id uint) error {
+	if f.item == nil || f.item.UserID != user || f.item.ID != id {
+		return nil
+	}
+	f.item = nil
+	return nil
+}
+
+// operationLogSpy 捕获写入的操作日志，供知识域日志断言。
+type operationLogSpy struct {
+	entries []model.OperationLogModel
+	pruned  int
+}
+
+func (s *operationLogSpy) CreateOperationLog(entry *model.OperationLogModel) error {
+	s.entries = append(s.entries, *entry)
+	return nil
+}
+func (s *operationLogSpy) PruneOperationLogs(uint, int) (int64, error) {
+	s.pruned++
+	return 0, nil
+}
+
+func TestKnowledgeOperationLogs(t *testing.T) {
+	newFixture := func() (*knowledgeFake, *operationLogSpy, *KnowledgeService) {
+		f := &knowledgeFake{file: &model.FileModel{ID: 1, UserID: 2, Name: "note.md", FileHash: "aabbccdd", Size: 1}}
+		spy := &operationLogSpy{}
+		s := NewKnowledgeService(f, "")
+		s.Logs = spy
+		return f, spy, s
+	}
+
+	t.Run("add logs once", func(t *testing.T) {
+		_, spy, s := newFixture()
+		item, created, err := s.Add(context.Background(), 2, 1, "")
+		require.NoError(t, err)
+		require.True(t, created)
+		require.Len(t, spy.entries, 1)
+		entry := spy.entries[0]
+		require.Equal(t, model.OperationLogActionKnowledgeAdd, entry.Action)
+		require.Equal(t, model.OperationLogTargetTypeKnowledge, entry.TargetType)
+		require.Equal(t, item.ID, entry.TargetID)
+		require.Equal(t, item.Title, entry.TargetName)
+		require.Equal(t, "学习资料", entry.FolderName)
+		require.JSONEq(t, `{"source_file":"note.md"}`, entry.Detail)
+		require.Equal(t, 1, spy.pruned)
+
+		// 幂等重复请求不重复记日志。
+		_, created, err = s.Add(context.Background(), 2, 1, "")
+		require.NoError(t, err)
+		require.False(t, created)
+		require.Len(t, spy.entries, 1)
+	})
+
+	t.Run("delete logs snapshot", func(t *testing.T) {
+		f, spy, s := newFixture()
+		f.item = &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceFolderName: "学习资料", Title: "旧知识", Status: model.KnowledgeReady}
+		require.NoError(t, s.Delete(context.Background(), 2, 10))
+		require.Len(t, spy.entries, 1)
+		entry := spy.entries[0]
+		require.Equal(t, model.OperationLogActionKnowledgeDelete, entry.Action)
+		require.Equal(t, uint(10), entry.TargetID)
+		require.Equal(t, "旧知识", entry.TargetName)
+		require.Equal(t, "学习资料", entry.FolderName)
+
+		// 不存在的 id 现在返回 404，且不再产生日志。
+		require.ErrorIs(t, s.Delete(context.Background(), 2, 10), ErrKnowledgeNotFound)
+		require.Len(t, spy.entries, 1)
+	})
+
+	t.Run("retry logs after success", func(t *testing.T) {
+		f, spy, s := newFixture()
+		f.item = &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: "aabbccdd", SourceFolderName: "学习资料", Title: "失败知识", Status: model.KnowledgeFailed}
+		_, err := s.Retry(context.Background(), 2, 10)
+		require.NoError(t, err)
+		require.Len(t, spy.entries, 1)
+		entry := spy.entries[0]
+		require.Equal(t, model.OperationLogActionKnowledgeRetry, entry.Action)
+		require.Equal(t, "失败知识", entry.TargetName)
+
+		// 冲突（非失败状态）不记日志。
+		_, err = s.Retry(context.Background(), 2, 10)
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+		require.Len(t, spy.entries, 1)
+	})
+
+	t.Run("nil logs stays silent", func(t *testing.T) {
+		f, _, _ := newFixture()
+		s := NewKnowledgeService(f, "")
+		_, created, err := s.Add(context.Background(), 2, 1, "")
+		require.NoError(t, err)
+		require.True(t, created)
+		f.item.Status = model.KnowledgeFailed
+		_, err = s.Retry(context.Background(), 2, 10)
+		require.NoError(t, err)
+		require.NoError(t, s.Delete(context.Background(), 2, 10))
+	})
+}
 
 func writeKnowledgeSource(t *testing.T, root, hash, suffix, content string) {
 	t.Helper()

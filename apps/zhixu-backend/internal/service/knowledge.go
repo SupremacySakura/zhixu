@@ -44,6 +44,8 @@ type KnowledgeService struct {
 	store       KnowledgeStore
 	storagePath string
 	Vectors     VectorizeStore
+	// Logs 为可选依赖：为 nil 时跳过操作日志记录，不影响主流程。
+	Logs OperationLogWriter
 }
 
 func (s *KnowledgeService) Chunks(ctx context.Context, user, id uint) ([]model.KnowledgeChunk, error) {
@@ -85,6 +87,14 @@ func (s *KnowledgeService) ListFiltered(ctx context.Context, user uint, page, si
 
 func NewKnowledgeService(store KnowledgeStore, storagePath string) *KnowledgeService {
 	return &KnowledgeService{store: store, storagePath: storagePath}
+}
+
+// recordOperation 记录知识域操作日志；Logs 为 nil 时跳过，绝不影响主流程。
+func (s *KnowledgeService) recordOperation(userID uint, action model.OperationLogAction, targetID uint, targetName, folderName string, detail map[string]any) {
+	if s.Logs == nil {
+		return
+	}
+	writeOperationLog(s.Logs, userID, action, model.OperationLogTargetTypeKnowledge, targetID, targetName, folderName, detail)
 }
 
 func knowledgeError(err error) error {
@@ -136,7 +146,14 @@ func (s *KnowledgeService) Add(ctx context.Context, userID, fileID uint, title s
 		UserID: userID, SourceFileID: file.ID, SourceFileName: file.Name, SourceFolderID: file.FolderID,
 		SourceFolderName: folder, SourceHash: file.FileHash, SourceType: "markdown", Title: title, Status: model.KnowledgePending,
 	})
-	return item, created, knowledgeError(err)
+	if err != nil {
+		return nil, false, knowledgeError(err)
+	}
+	// 幂等重复请求不重复记日志。
+	if created {
+		s.recordOperation(userID, model.OperationLogActionKnowledgeAdd, item.ID, item.Title, item.SourceFolderName, map[string]any{"source_file": item.SourceFileName})
+	}
+	return item, created, nil
 }
 
 func (s *KnowledgeService) Get(ctx context.Context, userID, id uint) (*model.KnowledgeItem, error) {
@@ -145,7 +162,16 @@ func (s *KnowledgeService) Get(ctx context.Context, userID, id uint) (*model.Kno
 }
 
 func (s *KnowledgeService) Delete(ctx context.Context, userID, id uint) error {
-	return knowledgeError(s.store.Delete(ctx, userID, id))
+	// 先取快照：日志需要标题与来源目录；顺带让不存在的 id 返回 404（此前静默成功）。
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if err := knowledgeError(s.store.Delete(ctx, userID, id)); err != nil {
+		return err
+	}
+	s.recordOperation(userID, model.OperationLogActionKnowledgeDelete, id, item.Title, item.SourceFolderName, nil)
+	return nil
 }
 
 func (s *KnowledgeService) ByFile(ctx context.Context, userID, fileID uint) (*model.KnowledgeItem, error) {
@@ -189,7 +215,12 @@ func (s *KnowledgeService) Retry(ctx context.Context, userID, id uint) (*model.K
 	if err := s.store.Retry(ctx, userID, id); err != nil {
 		return nil, knowledgeError(err)
 	}
-	return s.Get(ctx, userID, id)
+	updated, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	s.recordOperation(userID, model.OperationLogActionKnowledgeRetry, id, updated.Title, updated.SourceFolderName, nil)
+	return updated, nil
 }
 
 type markdownFailure struct{ code, message string }

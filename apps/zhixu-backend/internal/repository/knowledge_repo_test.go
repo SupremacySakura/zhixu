@@ -116,6 +116,69 @@ func TestKnowledgeDeleteAtomicAndScoped(t *testing.T) {
 	}
 }
 
+// DeleteKnowledgeRows 返回删除的知识条数（来自既有的行锁查询，零额外开销）
+func TestDeleteKnowledgeRowsReturnsCount(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	mock.ExpectExec("DELETE FROM `knowledge_import_tasks` WHERE user_id = .*knowledge_id IN").
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(9, 2).AddRow(10, 2))
+	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(2, 1))
+	for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+		mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN").
+			WillReturnResult(sqlmock.NewResult(0, 2))
+	}
+	mock.ExpectExec("DELETE FROM `knowledge_items` WHERE user_id = .*source_file_id IN").
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectCommit()
+
+	repo := NewKnowledgeRepository(db)
+	var removed int
+	err := repo.DB.Transaction(func(tx *gorm.DB) error {
+		query := tx.Model(&model.KnowledgeItem{}).Where("user_id = ? AND source_file_id IN ?", 2, []uint{5, 6})
+		var err error
+		removed, err = DeleteKnowledgeRows(tx, 2, query)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, removed)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 无匹配知识时计数为零
+func TestDeleteKnowledgeRowsReturnsZeroWhenEmpty(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	mock.ExpectExec("DELETE FROM `knowledge_import_tasks` WHERE user_id = .*knowledge_id IN").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}))
+	for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+		mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+	}
+	mock.ExpectExec("DELETE FROM `knowledge_items` WHERE id = .*user_id").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+
+	repo := NewKnowledgeRepository(db)
+	var removed int
+	err := repo.DB.Transaction(func(tx *gorm.DB) error {
+		query := tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", 10, 2)
+		var err error
+		removed, err = DeleteKnowledgeRows(tx, 2, query)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, removed)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestKnowledgeCreateRejectsDeletedSource(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
