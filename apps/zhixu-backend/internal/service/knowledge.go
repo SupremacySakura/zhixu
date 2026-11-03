@@ -223,6 +223,30 @@ func (s *KnowledgeService) Retry(ctx context.Context, userID, id uint) (*model.K
 	return updated, nil
 }
 
+// RetryVectorize 重排队部分失败的向量化任务：失败分块回到 pending，已成功分块保留，
+// 不重复调用已确认的付费 Embedding。仅 vector_state=partial 可重试。
+func (s *KnowledgeService) RetryVectorize(ctx context.Context, userID, id uint) (*model.KnowledgeItem, error) {
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	if item.Status != model.KnowledgeReady || item.VectorState != model.VectorPartial {
+		return nil, repository.ErrKnowledgeConflict
+	}
+	if s.Vectors == nil {
+		return nil, repository.ErrKnowledgeConflict
+	}
+	if err := s.Vectors.Requeue(ctx, userID, id); err != nil {
+		return nil, knowledgeError(err)
+	}
+	updated, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	s.recordOperation(userID, model.OperationLogActionKnowledgeVectorRetry, id, updated.Title, updated.SourceFolderName, nil)
+	return updated, nil
+}
+
 type markdownFailure struct{ code, message string }
 
 func (e *markdownFailure) Error() string      { return e.message }

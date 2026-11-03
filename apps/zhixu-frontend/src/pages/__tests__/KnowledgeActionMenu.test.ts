@@ -66,6 +66,39 @@ describe('knowledge action menu', () => {
     expect(router.currentRoute.value.path).toBe('/home/knowledge/10/chunks')
     expect(menu()).toBeNull()
   })
+  it('offers vector retry for partial items and closes after selecting it', async () => {
+    const { wrapper } = await render({ vector_state: 'partial' })
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(entries().map(entry => entry.textContent?.trim())).toEqual([
+      '查看知识',
+      '分块结构',
+      '重试向量化',
+      '删除知识',
+    ])
+    entries()[2]!.click()
+    await nextTick()
+    expect(wrapper.emitted('retryVector')?.[0]?.[0]).toMatchObject({
+      id: 10,
+      vector_state: 'partial',
+    })
+    expect(menu()).toBeNull()
+  })
+  it.each(['pending', 'running', 'ready'] as const)(
+    'hides vector retry for %s vector state',
+    async vector_state => {
+      const { wrapper } = await render({ vector_state })
+      await wrapper.get('button').trigger('click')
+      await flushPromises()
+      expect(menu().textContent).not.toContain('重试向量化')
+    },
+  )
+  it('hides vector retry when the import is not ready', async () => {
+    const { wrapper } = await render({ status: 'failed', vector_state: 'partial' })
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(menu().textContent).not.toContain('重试向量化')
+  })
   it('supports arrows, Home/End, Escape and restoring focus', async () => {
     const { wrapper } = await render()
     await wrapper.get('button').trigger('keydown', { key: 'ArrowDown' })

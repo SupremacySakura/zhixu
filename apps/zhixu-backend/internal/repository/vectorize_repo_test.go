@@ -70,3 +70,50 @@ func TestVectorWaitRetainsPendingWithoutFinishingChunks(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestVectorRequeueResetsFailedChunksOnly(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "knowledge_id", "user_id", "status"}).AddRow(1, 9, 7, "partial"))
+	mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "status", "vector_state"}).AddRow(9, "ready", "partial"))
+	mock.ExpectExec("UPDATE `vectorize_tasks` SET .* WHERE id = . AND status = ").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE `knowledge_chunks` SET .*state").
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("UPDATE `knowledge_items` SET .*chunks_failed.*vector_state").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	err := (&VectorizeRepository{DB: db}).Requeue(context.Background(), 7, 9)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVectorRequeueRejectsNonPartialTask(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "knowledge_id", "user_id", "status"}).AddRow(1, 9, 7, "ready"))
+	mock.ExpectRollback()
+	err := (&VectorizeRepository{DB: db}).Requeue(context.Background(), 7, 9)
+	require.ErrorIs(t, err, ErrKnowledgeConflict)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVectorRequeueRejectsConcurrentStateChange(t *testing.T) {
+	// 双击或 worker 竞态：任务仍为 partial，但条目状态已不在 partial。
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "knowledge_id", "user_id", "status"}).AddRow(1, 9, 7, "partial"))
+	mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "status", "vector_state"}).AddRow(9, "ready", "pending"))
+	mock.ExpectRollback()
+	err := (&VectorizeRepository{DB: db}).Requeue(context.Background(), 7, 9)
+	require.ErrorIs(t, err, ErrKnowledgeConflict)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

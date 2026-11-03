@@ -259,3 +259,33 @@ func (h *KnowledgeHandler) Retry(c *gin.Context) {
 	}
 	response.SuccessWithStatus(c, http.StatusAccepted, item)
 }
+
+// RetryVectorize godoc
+// @Summary 重试部分失败的向量化任务
+// @Description 仅重试失败分块，已成功分块不重复计费。返回202仅代表已重新排队。
+// @Tags knowledge
+// @Produce json
+// @Param id path int true "知识ID"
+// @Success 202 {object} response.Response{data=model.KnowledgeItem}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Failure 409 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/vectorize/retry [post]
+func (h *KnowledgeHandler) RetryVectorize(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	item, err := h.Service.RetryVectorize(c.Request.Context(), userID, id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.SuccessWithStatus(c, http.StatusAccepted, item)
+}

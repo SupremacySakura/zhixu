@@ -6,21 +6,22 @@ import "time"
 type OperationLogAction string
 
 const (
-	OperationLogActionUpload           OperationLogAction = "upload"             // 分片上传完成
-	OperationLogActionUploadInstant    OperationLogAction = "upload_instant"     // 秒传（命中已有文件）
-	OperationLogActionMkdir            OperationLogAction = "mkdir"              // 新建文件夹
-	OperationLogActionRename           OperationLogAction = "rename"             // 重命名
-	OperationLogActionMove             OperationLogAction = "move"               // 移动
-	OperationLogActionDelete           OperationLogAction = "delete"             // 删除
-	OperationLogActionDownload         OperationLogAction = "download"           // 下载
-	OperationLogActionPreview          OperationLogAction = "preview"            // 预览
-	OperationLogActionShareLinkCreate  OperationLogAction = "share_link_create"  // 创建分享链接
-	OperationLogActionShareLinkDelete  OperationLogAction = "share_link_delete"  // 删除分享链接
-	OperationLogActionPickupCodeCreate OperationLogAction = "pickup_code_create" // 创建取件码
-	OperationLogActionPickupCodeDelete OperationLogAction = "pickup_code_delete" // 删除取件码
-	OperationLogActionKnowledgeAdd     OperationLogAction = "knowledge_add"      // 加入知识库
-	OperationLogActionKnowledgeDelete  OperationLogAction = "knowledge_delete"   // 移出知识库
-	OperationLogActionKnowledgeRetry   OperationLogAction = "knowledge_retry"    // 重试知识导入
+	OperationLogActionUpload               OperationLogAction = "upload"                 // 分片上传完成
+	OperationLogActionUploadInstant        OperationLogAction = "upload_instant"         // 秒传（命中已有文件）
+	OperationLogActionMkdir                OperationLogAction = "mkdir"                  // 新建文件夹
+	OperationLogActionRename               OperationLogAction = "rename"                 // 重命名
+	OperationLogActionMove                 OperationLogAction = "move"                   // 移动
+	OperationLogActionDelete               OperationLogAction = "delete"                 // 删除
+	OperationLogActionDownload             OperationLogAction = "download"               // 下载
+	OperationLogActionPreview              OperationLogAction = "preview"                // 预览
+	OperationLogActionShareLinkCreate      OperationLogAction = "share_link_create"      // 创建分享链接
+	OperationLogActionShareLinkDelete      OperationLogAction = "share_link_delete"      // 删除分享链接
+	OperationLogActionPickupCodeCreate     OperationLogAction = "pickup_code_create"     // 创建取件码
+	OperationLogActionPickupCodeDelete     OperationLogAction = "pickup_code_delete"     // 删除取件码
+	OperationLogActionKnowledgeAdd         OperationLogAction = "knowledge_add"          // 加入知识库
+	OperationLogActionKnowledgeDelete      OperationLogAction = "knowledge_delete"       // 移出知识库
+	OperationLogActionKnowledgeRetry       OperationLogAction = "knowledge_retry"        // 重试知识导入
+	OperationLogActionKnowledgeVectorRetry OperationLogAction = "knowledge_vector_retry" // 重试知识向量化
 )
 
 // OperationLogTargetType 操作目标的实体类型

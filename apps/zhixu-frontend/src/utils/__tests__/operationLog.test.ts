@@ -126,6 +126,13 @@ describe('describeOperationLog', () => {
     )
     expect(retried.subtitle).toBe('重试导入')
     expect(retried.colorClass).toBe('bg-warning-tint text-warning')
+
+    const vectorRetried = describeOperationLog(
+      makeLog({ action: 'knowledge_vector_retry', target_type: 'knowledge', target_name: '笔记' }),
+    )
+    expect(vectorRetried.subtitle).toBe('重试向量化')
+    expect(vectorRetried.colorClass).toBe('bg-warning-tint text-warning')
+    expect(vectorRetried.title).toBe('笔记')
   })
 
   it('falls back to placeholder title for knowledge targets', () => {

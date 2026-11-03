@@ -106,7 +106,7 @@ onScopeDispose(() => {
             >
           </article>
           <div class="space-y-5">
-            <KnowledgeVectorPanel :item="item" />
+            <KnowledgeVectorPanel :item="item" @retried="item = $event" />
             <aside class="rounded-lg border border-hairline bg-surface p-5">
               <h2 class="mb-5 text-body font-semibold">来源信息</h2>
               <dl class="space-y-5">

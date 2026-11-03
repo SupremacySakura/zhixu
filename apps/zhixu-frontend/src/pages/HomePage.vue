@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { AnimatePresence, Motion, animate, type PanInfo } from 'motion-v'
 import { springBouncy, springSnappy, fadeTransition } from '../utils/motion'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import SideBar, { type NavItem } from '../components/bussiness/SideBar.vue'
+import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
+import { getProfile } from '../services/apis/auth'
+import { useUserStore } from '../stores/user'
 
 const NavItems: NavItem[] = [
   { label: '仪表盘', icon: 'material-symbols:dashboard', to: '/home/dashboard' },
@@ -17,7 +20,30 @@ const NavItems: NavItem[] = [
 ]
 
 const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
 const isMobileMenuOpen = ref(false)
+const logoutConfirmOpen = ref(false)
+
+// 进入主框架时静默刷新用户信息；401 由请求拦截器统一登出并跳转
+async function loadProfile() {
+  try {
+    const res = await getProfile()
+    if (res.code === 0 && res.data) userStore.setProfile(res.data)
+  } catch {
+    // 拉取失败保留已缓存的展示信息
+  }
+}
+
+onMounted(() => {
+  if (userStore.isLoggedIn) void loadProfile()
+})
+
+function confirmLogout() {
+  logoutConfirmOpen.value = false
+  userStore.logout()
+  void router.push('/login')
+}
 
 const currentNavLabel = computed(() => {
   const matched = NavItems.find(
@@ -64,7 +90,15 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
       跳转到主要内容
     </a>
     <div class="hidden h-full lg:block">
-      <SideBar :nav-items="NavItems" :brand-title="'知序'" :brand-subtitle="''" />
+      <SideBar
+        :nav-items="NavItems"
+        :brand-title="'知序'"
+        :brand-subtitle="''"
+        :user-name="userStore.profile?.username || ''"
+        :user-email="userStore.profile?.email || ''"
+        :user-avatar="userStore.profile?.avatar_url || ''"
+        @logout="logoutConfirmOpen = true"
+      />
     </div>
 
     <div class="flex min-h-screen min-w-0 flex-1 flex-col lg:min-h-0">
@@ -132,10 +166,23 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
               :brand-title="'知序'"
               :brand-subtitle="''"
               :compact="true"
+              :user-name="userStore.profile?.username || ''"
+              :user-email="userStore.profile?.email || ''"
+              :user-avatar="userStore.profile?.avatar_url || ''"
+              @logout="logoutConfirmOpen = true"
             />
           </div>
         </Motion>
       </Motion>
     </AnimatePresence>
+    <ConfirmDialog
+      :model-value="logoutConfirmOpen"
+      title="退出登录"
+      message="退出后需要重新登录才能访问你的知识库。"
+      confirm-text="退出登录"
+      danger
+      @cancel="logoutConfirmOpen = false"
+      @confirm="confirmLogout"
+    />
   </div>
 </template>

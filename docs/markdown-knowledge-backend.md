@@ -27,6 +27,7 @@
 | GET | `/knowledge/:id` | 详情、Markdown 原始正文、状态和错误原因 |
 | GET | `/knowledge/by-file/:file_id` | 文件对应知识条目；未加入返回 404 |
 | POST | `/knowledge/:id/retry` | 重试失败任务，无请求体 |
+| POST | `/knowledge/:id/vectorize/retry` | 重试部分失败分块的向量化，无请求体 |
 | DELETE | `/knowledge/:id` | 删除知识及处理任务，保留原文件 |
 
 保持项目统一的 `{code,msg,data}` 响应格式：
@@ -41,7 +42,8 @@
 
 ## 操作日志
 
-- 加入（仅首次创建）、删除、重试导入会写入操作日志，目标类型为 `knowledge`，动作分别为 `knowledge_add/knowledge_delete/knowledge_retry`；标题与来源目录取知识条目快照。
+- 加入（仅首次创建）、删除、重试导入、重试向量化会写入操作日志，目标类型为 `knowledge`，动作分别为 `knowledge_add/knowledge_delete/knowledge_retry/knowledge_vector_retry`；标题与来源目录取知识条目快照。
+- 向量化重试仅允许向量状态为 `partial` 且知识状态为 `ready` 的条目：任务重置为 `pending` 重入队列，全部 `failed` 分块重置为 `pending` 后清空错误文本，条目的 `vector_error` 清空、`chunks_failed` 归零；成功分块不重复写入向量库，不产生重复计费。非 `partial` 状态或非本人物品返回 409/404。
 - 文件或文件夹删除勾选 `delete_knowledge` 级联删除知识时，不逐条写知识日志，而是在文件/文件夹的 `delete` 日志 `detail` 中增加 `knowledge_removed` 计数。
 - 日志写入失败仅记服务端错误，不影响主流程；每条写入后按用户裁剪至最近 500 条。
 

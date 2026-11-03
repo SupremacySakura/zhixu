@@ -4,13 +4,13 @@ import (
 	"net/http"
 
 	"zhixu-backend/internal/dto"
+	apperrors "zhixu-backend/internal/errors"
 	"zhixu-backend/internal/middleware"
 	"zhixu-backend/internal/model"
 	"zhixu-backend/internal/response"
 	"zhixu-backend/internal/service"
 	"zhixu-backend/internal/utils"
 	"zhixu-backend/internal/vo"
-	apperrors "zhixu-backend/internal/errors"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,6 +29,7 @@ func (h *AuthHandler) Register(r *gin.RouterGroup) {
 	r.POST("/register", h.RegisterUser)
 	r.POST("/login", h.Login)
 	r.GET("/check", middleware.AuthMiddleware(), h.checkLogin)
+	r.GET("/profile", middleware.AuthMiddleware(), h.Profile)
 }
 
 // RegisterUser godoc
@@ -110,6 +111,39 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 返回成功响应
 	response.Success(c, vo.LoginResp{
 		Token: token,
+	})
+}
+
+// Profile godoc
+// @Summary 获取当前用户信息
+// @Description 返回当前登录用户的基本信息与存储用量（通过JWT Token识别）
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.Response{data=vo.ProfileResp} "返回统一响应（code=0成功；data包含用户信息）"
+// @Failure 401 {object} response.Response "未登录（code=1002）"
+// @Security ApiKeyAuth
+// @Router /auth/profile [get]
+func (h *AuthHandler) Profile(c *gin.Context) {
+	// 从上下文获取用户ID（AuthMiddleware 已保证存在）
+	userID, ok := getCurrentUserID(c)
+	if !ok {
+		response.FailWithMsg(c, response.CodeUnauthorized, "unauthorized")
+		return
+	}
+	user, err := h.AuthService.GetUserByID(userID)
+	if err != nil {
+		response.Fail(c, response.CodeServerError)
+		return
+	}
+	response.Success(c, vo.ProfileResp{
+		ID:           user.ID,
+		Username:     user.Username,
+		Email:        user.Email,
+		AvatarURL:    user.AvatarURL,
+		StorageLimit: user.StorageLimit,
+		StorageUsed:  user.StorageUsed,
+		CreatedAt:    user.CreatedAt,
 	})
 }
 

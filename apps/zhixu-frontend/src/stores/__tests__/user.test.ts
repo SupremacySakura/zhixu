@@ -34,6 +34,39 @@ describe('useUserStore', () => {
     expect(store.refreshToken).toBe('')
   })
 
+  it('should set and clear profile', () => {
+    const store = useUserStore()
+    expect(store.profile).toBeNull()
+    store.setProfile({
+      id: 1,
+      username: 'tester',
+      email: 't@example.com',
+      avatar_url: '',
+      storage_limit: 1024,
+      storage_used: 0,
+      created_at: '',
+    })
+    expect(store.profile?.username).toBe('tester')
+    store.setProfile(null)
+    expect(store.profile).toBeNull()
+  })
+
+  it('should clear profile on logout', () => {
+    const store = useUserStore()
+    store.setToken('test-token-123')
+    store.setProfile({
+      id: 1,
+      username: 'tester',
+      email: 't@example.com',
+      avatar_url: '',
+      storage_limit: 1024,
+      storage_used: 0,
+      created_at: '',
+    })
+    store.logout()
+    expect(store.profile).toBeNull()
+  })
+
   it('should return isLoggedIn as false when no token', () => {
     const store = useUserStore()
     expect(store.isLoggedIn).toBe(false)

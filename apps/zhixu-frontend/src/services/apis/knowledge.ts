@@ -112,3 +112,14 @@ export async function retryKnowledge(id: number, signal?: AbortSignal) {
     ).data,
   )
 }
+export async function retryKnowledgeVectorize(id: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.post<ResponseData<KnowledgeItem>>(
+        `/api/knowledge/${id}/vectorize/retry`,
+        undefined,
+        { signal },
+      )
+    ).data,
+  )
+}

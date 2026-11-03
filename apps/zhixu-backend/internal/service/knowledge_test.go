@@ -317,3 +317,69 @@ func TestKnowledgeRetryAndValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, processed)
 }
+
+func TestKnowledgeRetryVectorize(t *testing.T) {
+	newFixture := func() (*knowledgeFake, *vectorStoreFake, *operationLogSpy, *KnowledgeService) {
+		f := &knowledgeFake{item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFolderName: "学习资料", Title: "笔记", Status: model.KnowledgeReady, VectorState: model.VectorPartial}}
+		vectors := &vectorStoreFake{}
+		spy := &operationLogSpy{}
+		s := NewKnowledgeService(f, "")
+		s.Vectors = vectors
+		s.Logs = spy
+		return f, vectors, spy, s
+	}
+
+	t.Run("requeues partial and logs", func(t *testing.T) {
+		_, vectors, spy, s := newFixture()
+		updated, err := s.RetryVectorize(context.Background(), 2, 10)
+		require.NoError(t, err)
+		require.Equal(t, uint(10), updated.ID)
+		require.True(t, vectors.requeueCalled)
+		require.Equal(t, uint(2), vectors.requeueUser)
+		require.Equal(t, uint(10), vectors.requeueKnowledge)
+		require.Len(t, spy.entries, 1)
+		require.Equal(t, model.OperationLogActionKnowledgeVectorRetry, spy.entries[0].Action)
+		require.Equal(t, model.OperationLogTargetTypeKnowledge, spy.entries[0].TargetType)
+	})
+
+	t.Run("rejects non partial vector states", func(t *testing.T) {
+		for _, state := range []model.VectorState{"", model.VectorPending, model.VectorRunning, model.VectorReady} {
+			f, vectors, _, s := newFixture()
+			f.item.VectorState = state
+			_, err := s.RetryVectorize(context.Background(), 2, 10)
+			require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+			require.False(t, vectors.requeueCalled)
+		}
+	})
+
+	t.Run("rejects when content not ready", func(t *testing.T) {
+		f, vectors, _, s := newFixture()
+		f.item.Status = model.KnowledgeFailed
+		_, err := s.RetryVectorize(context.Background(), 2, 10)
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+		require.False(t, vectors.requeueCalled)
+	})
+
+	t.Run("not found or other user", func(t *testing.T) {
+		_, _, _, s := newFixture()
+		_, err := s.RetryVectorize(context.Background(), 2, 99)
+		require.ErrorIs(t, err, ErrKnowledgeNotFound)
+		_, err = s.RetryVectorize(context.Background(), 3, 10)
+		require.ErrorIs(t, err, ErrKnowledgeNotFound)
+	})
+
+	t.Run("requires vector store", func(t *testing.T) {
+		f := &knowledgeFake{item: &model.KnowledgeItem{ID: 10, UserID: 2, Status: model.KnowledgeReady, VectorState: model.VectorPartial}}
+		s := NewKnowledgeService(f, "")
+		_, err := s.RetryVectorize(context.Background(), 2, 10)
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+	})
+
+	t.Run("propagates store conflict", func(t *testing.T) {
+		_, vectors, spy, s := newFixture()
+		vectors.requeueErr = repository.ErrKnowledgeConflict
+		_, err := s.RetryVectorize(context.Background(), 2, 10)
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+		require.Empty(t, spy.entries)
+	})
+}

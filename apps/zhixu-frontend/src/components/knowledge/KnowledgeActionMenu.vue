@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import type { KnowledgeItem } from '../../services/apis/knowledge'
 import { fadeTransition } from '../../utils/motion'
 
 const props = defineProps<{ item: KnowledgeItem }>()
-const emit = defineEmits<{ track: [item: KnowledgeItem]; delete: [item: KnowledgeItem] }>()
+const emit = defineEmits<{
+  track: [item: KnowledgeItem]
+  delete: [item: KnowledgeItem]
+  retryVector: [item: KnowledgeItem]
+}>()
 const trigger = ref<HTMLButtonElement | null>(null)
 const menu = ref<HTMLElement | null>(null)
 const open = ref(false)
@@ -14,6 +18,13 @@ const id = useId()
 const position = ref({ top: 0, left: 0, above: false })
 const itemClass =
   'flex min-h-11 w-full items-center gap-2.5 rounded-sm px-3 py-2.5 text-left text-subhead focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2 active:bg-surface-tertiary'
+const canRetryVector = computed(
+  () => props.item.status === 'ready' && props.item.vector_state === 'partial',
+)
+const estimatedHeight = computed(() => {
+  const rows = 2 + (props.item.chunks_total > 0 ? 1 : 0) + (canRetryVector.value ? 1 : 0)
+  return rows * 44 + 23
+})
 
 function entries() {
   return Array.from(menu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') || [])
@@ -26,7 +37,7 @@ function place() {
   const rect = trigger.value?.getBoundingClientRect()
   if (!rect) return
   const width = Math.min(200, window.innerWidth - 24)
-  const height = (menu.value?.offsetHeight || (props.item.chunks_total > 0 ? 155 : 111)) + 2
+  const height = (menu.value?.offsetHeight || estimatedHeight.value) + 2
   const below = window.innerHeight - rect.bottom
   const above = below < height + 20 && rect.top > below
   position.value = {
@@ -100,6 +111,10 @@ function track() {
 function selectDelete() {
   close(true)
   emit('delete', props.item)
+}
+function retryVector() {
+  close(true)
+  emit('retryVector', props.item)
 }
 function removeListeners() {
   document.removeEventListener('pointerdown', outside)
@@ -198,6 +213,21 @@ onBeforeUnmount(removeListeners)
                 aria-hidden="true"
               />分块结构
             </RouterLink>
+            <button
+              v-if="canRetryVector"
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              :aria-label="`重试向量化 ${item.title}`"
+              :class="[itemClass, 'knowledge-menu-item text-label']"
+              @click="retryVector"
+            >
+              <Icon
+                icon="material-symbols:refresh-rounded"
+                class="text-lg"
+                aria-hidden="true"
+              />重试向量化
+            </button>
             <div role="separator" class="mx-1.5 my-[5px] h-px bg-hairline"></div>
             <button
               type="button"

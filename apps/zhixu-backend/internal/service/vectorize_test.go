@@ -15,15 +15,18 @@ import (
 )
 
 type vectorStoreFake struct {
-	task        *model.VectorizeTask
-	chunks      []model.KnowledgeChunk
-	saved       []uint
-	savedErr    string
-	finished    string
-	prepareName string
-	waiting     string
-	liveErr     error
-	saveErr     error
+	task                          *model.VectorizeTask
+	chunks                        []model.KnowledgeChunk
+	saved                         []uint
+	savedErr                      string
+	finished                      string
+	prepareName                   string
+	waiting                       string
+	liveErr                       error
+	saveErr                       error
+	requeueErr                    error
+	requeueCalled                 bool
+	requeueUser, requeueKnowledge uint
 }
 
 func (f *vectorStoreFake) Backfill(context.Context) error { return nil }
@@ -60,6 +63,11 @@ func (f *vectorStoreFake) WithLiveTask(_ context.Context, _ *model.VectorizeTask
 }
 
 func (f *vectorStoreFake) Renew(context.Context, *model.VectorizeTask) error { return nil }
+
+func (f *vectorStoreFake) Requeue(_ context.Context, user, knowledge uint) error {
+	f.requeueCalled, f.requeueUser, f.requeueKnowledge = true, user, knowledge
+	return f.requeueErr
+}
 
 func (f *vectorStoreFake) Chunks(context.Context, uint, uint) ([]model.KnowledgeChunk, error) {
 	return append([]model.KnowledgeChunk(nil), f.chunks...), nil

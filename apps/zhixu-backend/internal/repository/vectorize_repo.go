@@ -199,6 +199,51 @@ func (r *VectorizeRepository) Finish(ctx context.Context, task *model.VectorizeT
 	})
 }
 
+// Requeue requeues a partial task for a manual retry: failed chunks return to
+// pending while ready chunks are kept, so acknowledged paid calls are never
+// replayed. Lock order task -> knowledge matches the result transactions.
+func (r *VectorizeRepository) Requeue(ctx context.Context, user, knowledge uint) error {
+	return r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var task model.VectorizeTask
+		result := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("knowledge_id = ? AND user_id = ?", knowledge, user).Limit(1).Find(&task)
+		if result.Error != nil {
+			return result.Error
+		}
+		if task.ID == 0 || task.Status != model.VectorPartial {
+			return ErrKnowledgeConflict
+		}
+		var item model.KnowledgeItem
+		result = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND user_id = ?", knowledge, user).Limit(1).Find(&item)
+		if result.Error != nil {
+			return result.Error
+		}
+		if item.ID == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		if item.Status != model.KnowledgeReady || item.VectorState != model.VectorPartial {
+			return ErrKnowledgeConflict
+		}
+		if err := tx.Model(&model.VectorizeTask{}).Where("id = ? AND status = ?", task.ID, model.VectorPartial).
+			Updates(map[string]any{
+				"status":           model.VectorPending,
+				"lease_token":      "",
+				"lease_expires_at": nil,
+				"next_attempt_at":  nil,
+			}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.KnowledgeChunk{}).
+			Where("knowledge_id = ? AND user_id = ? AND state = ?", knowledge, user, "failed").
+			Updates(map[string]any{"state": "pending", "error_message": ""}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", knowledge, user).
+			Updates(map[string]any{"vector_state": model.VectorPending, "vector_error": "", "chunks_failed": 0}).Error
+	})
+}
+
 func (r *VectorizeRepository) Chunks(ctx context.Context, user, id uint) ([]model.KnowledgeChunk, error) {
 	items := make([]model.KnowledgeChunk, 0)
 	err := r.DB.WithContext(ctx).Where("user_id = ? AND knowledge_id = ?", user, id).Order("seq ASC").Find(&items).Error

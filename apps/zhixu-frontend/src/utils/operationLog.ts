@@ -184,6 +184,14 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
         subtitle: '重试导入',
         highlight: '',
       }
+    case 'knowledge_vector_retry':
+      return {
+        icon: 'material-symbols:refresh-rounded',
+        colorClass: 'bg-warning-tint text-warning',
+        title,
+        subtitle: '重试向量化',
+        highlight: '',
+      }
     default:
       return { ...UNKNOWN_ACTION_META, title, subtitle: '', highlight: '' }
   }

@@ -52,6 +52,8 @@ const onSubmit = async () => {
       return
     }
     userStore.setToken(token)
+    // 清掉可能存在的上一个账号的缓存信息，进入主页后会重新拉取
+    userStore.setProfile(null)
 
     successMessage.value = res?.msg || '登录成功'
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/home'

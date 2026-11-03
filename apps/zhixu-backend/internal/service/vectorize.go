@@ -19,6 +19,7 @@ type VectorizeStore interface {
 	Claim(context.Context, string, time.Time) (*model.VectorizeTask, error)
 	Prepare(context.Context, *model.VectorizeTask, []model.KnowledgeChunk, string) error
 	Renew(context.Context, *model.VectorizeTask) error
+	Requeue(context.Context, uint, uint) error
 	Chunks(context.Context, uint, uint) ([]model.KnowledgeChunk, error)
 	SaveBatch(context.Context, *model.VectorizeTask, []uint, string) error
 	Finish(context.Context, *model.VectorizeTask, string) error

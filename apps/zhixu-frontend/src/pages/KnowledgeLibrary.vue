@@ -4,6 +4,7 @@ import FilterMenu from '../components/ui/FilterMenu.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import {
   deleteKnowledge,
+  retryKnowledgeVectorize,
   type KnowledgeItem,
   type KnowledgeStatus,
   type KnowledgeVectorState,
@@ -67,6 +68,27 @@ async function confirmDelete() {
   }
 }
 onScopeDispose(() => deleteController?.abort())
+const vectorRetryControllers = new Map<number, AbortController>()
+onScopeDispose(() => {
+  vectorRetryControllers.forEach(controller => controller.abort())
+})
+async function retryVector(entry: KnowledgeItem) {
+  if (vectorRetryControllers.has(entry.id)) return
+  const controller = new AbortController()
+  vectorRetryControllers.set(entry.id, controller)
+  try {
+    const updated = await retryKnowledgeVectorize(entry.id, controller.signal)
+    if (controller.signal.aborted) return
+    items.value = items.value.map(current => (current.id === entry.id ? updated : current))
+    if (item.value?.id === entry.id) item.value = updated
+    displayToast('失败分块已重新排队，向量化稍后自动继续', 'success')
+    await load()
+  } catch (e) {
+    if (!controller.signal.aborted) displayToast(knowledgeError(e), 'error')
+  } finally {
+    vectorRetryControllers.delete(entry.id)
+  }
+}
 function closePanel() {
   panelOpen.value = false
   void load()
@@ -171,7 +193,12 @@ onMounted(() => {
               ><time>{{ knowledgeDate(entry.created_at) }}</time>
             </div>
           </div>
-          <KnowledgeActionMenu :item="entry" @track="track" @delete="selectDelete" />
+          <KnowledgeActionMenu
+            :item="entry"
+            @track="track"
+            @delete="selectDelete"
+            @retry-vector="retryVector"
+          />
         </article>
       </div>
       <FilePagination

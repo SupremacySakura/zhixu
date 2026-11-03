@@ -18,10 +18,10 @@ import (
 
 // Mock AuthService
 type mockAuthService struct {
-	validateUserFunc   func(username, password string) (*model.UserModel, error)
-	registerUserFunc   func(user *model.UserModel) error
-	generateTokenFunc  func(userID uint) (string, error)
-	getUserByIDFunc    func(userID uint) (*model.UserModel, error)
+	validateUserFunc  func(username, password string) (*model.UserModel, error)
+	registerUserFunc  func(user *model.UserModel) error
+	generateTokenFunc func(userID uint) (string, error)
+	getUserByIDFunc   func(userID uint) (*model.UserModel, error)
 }
 
 func (m *mockAuthService) ValidateUser(username, password string) (*model.UserModel, error) {
@@ -338,6 +338,70 @@ func TestCheckLogin_WithUserID(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "0") // CodeSuccess
+}
+
+// Test Profile Handler
+func TestProfile_NoUserID(t *testing.T) {
+	router, _, handler := setupAuthHandlerTest()
+	router.GET("/profile", handler.Profile)
+
+	req := httptest.NewRequest(http.MethodGet, "/profile", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "1002") // CodeUnauthorized
+}
+
+func TestProfile_Success(t *testing.T) {
+	router, mockSvc, handler := setupAuthHandlerTest()
+	mockSvc.getUserByIDFunc = func(userID uint) (*model.UserModel, error) {
+		return &model.UserModel{
+			ID:           userID,
+			Username:     "testuser",
+			Email:        "test@example.com",
+			AvatarURL:    "",
+			StorageLimit: 1024,
+			StorageUsed:  512,
+		}, nil
+	}
+	router.GET("/profile", func(c *gin.Context) {
+		c.Set("user_id", uint(1))
+		handler.Profile(c)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/profile", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"code":0`)
+	assert.Contains(t, w.Body.String(), `"username":"testuser"`)
+	assert.Contains(t, w.Body.String(), `"email":"test@example.com"`)
+	assert.Contains(t, w.Body.String(), `"storage_limit":1024`)
+	assert.Contains(t, w.Body.String(), `"storage_used":512`)
+	assert.NotContains(t, w.Body.String(), "password")
+}
+
+func TestProfile_ServiceError(t *testing.T) {
+	router, mockSvc, handler := setupAuthHandlerTest()
+	mockSvc.getUserByIDFunc = func(userID uint) (*model.UserModel, error) {
+		return nil, errors.New("user not found")
+	}
+	router.GET("/profile", func(c *gin.Context) {
+		c.Set("user_id", uint(999))
+		handler.Profile(c)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/profile", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "1004") // CodeServerError
 }
 
 // Test Login with Token Generation Error

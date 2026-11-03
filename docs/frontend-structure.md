@@ -36,7 +36,8 @@
 
 ## 状态与请求层分工
 
-- Pinia（`src/stores/user.ts`）负责保存用户状态与 token，并持久化到本地存储。
+- Pinia（`src/stores/user.ts`）负责保存用户状态与 token，并持久化到本地存储；登录用户资料（`profile`）随登录态一并持久化，退出登录时清空。
+- 主框架 `src/pages/HomePage.vue` 挂载时静默拉取 `GET /api/auth/profile` 刷新用户资料；侧边栏 `src/components/bussiness/SideBar.vue` 底部展示当前用户（头像缺省时用用户名首字符占位）并提供退出登录入口，退出前经 `ConfirmDialog` 二次确认，确认后清空登录态并跳转 `/login`。
 - 请求层（`src/services/request.ts`）负责统一注入 `Authorization` 请求头与处理通用响应逻辑。
 - 业务 API 文件只关心参数与返回结构，不重复处理 token 拼接逻辑。
 
@@ -45,6 +46,8 @@
 - `/home/knowledge` 为知识列表，`/home/knowledge/:id` 为阅读详情，沿用主路由鉴权。
 - 文件列表、网格及更多菜单使用 `components/knowledge/FileKnowledgeAction.vue` 查询来源文件的知识状态，支持单文件加入。
 - `useKnowledgeImport` 管理提交、重试、状态面板与任务轮询，`useKnowledgeLibrary` 管理分页搜索、状态筛选及请求取消。
+- 知识详情的向量面板 `components/knowledge/KnowledgeVectorPanel.vue` 展示向量化状态与分块进度；向量状态为部分失败时提供「重试向量化」按钮（`POST /knowledge/:id/vectorize/retry`），仅重置失败分块，成功后面板数据随任务轮询刷新。
+- 知识列表每条的 `KnowledgeActionMenu.vue` 同样在知识已加入且向量状态为 `partial` 时提供「重试向量化」；成功后更新条目并重新加载当前列表（保持筛选条件），失败显示提示；同条目请求去重，离开页面取消未完成请求。
 - Markdown 使用 `markdown-it` 渲染，禁用原始 HTML、危险协议、相对资源链接和所有图片请求。正文仅阅读，不编辑、不请求 AI。
 - 已加入文件直接跳转详情。详情来源目录链接使用加入时快照，因此文件后续移动或删除时不能保证定位原件；不声称精确定位。
 - 接入行为与验收边界见 [Markdown 知识前端](./markdown-knowledge-frontend.md)。

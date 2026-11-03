@@ -1,12 +1,28 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { KnowledgeItem } from '../../services/apis/knowledge'
-import { knowledgeDate } from '../../utils/knowledge'
+import { computed, ref } from 'vue'
+import { retryKnowledgeVectorize, type KnowledgeItem } from '../../services/apis/knowledge'
+import { knowledgeDate, knowledgeError } from '../../utils/knowledge'
 import KnowledgeVectorBadge from './KnowledgeVectorBadge.vue'
 
 const props = defineProps<{ item: KnowledgeItem }>()
+const emit = defineEmits<{ retried: [item: KnowledgeItem] }>()
+const retrying = ref(false)
+const retryError = ref('')
 const visible = computed(() => props.item.status === 'ready' && Boolean(props.item.vector_state))
 const state = computed(() => props.item.vector_state)
+const canRetry = computed(() => state.value === 'partial')
+async function retry() {
+  if (retrying.value) return
+  retrying.value = true
+  retryError.value = ''
+  try {
+    emit('retried', await retryKnowledgeVectorize(props.item.id))
+  } catch (e) {
+    retryError.value = knowledgeError(e)
+  } finally {
+    retrying.value = false
+  }
+}
 const rows = computed(() => {
   const list: { label: string; value: string }[] = []
   if (state.value === 'running' || state.value === 'partial' || state.value === 'ready') {
@@ -67,6 +83,22 @@ const showChunksLink = computed(() => props.item.chunks_total > 0)
     >
       {{ message }}
     </p>
+    <div v-if="canRetry" class="mt-4">
+      <button
+        type="button"
+        class="knowledge-button-tint w-full"
+        :disabled="retrying"
+        @click="retry"
+      >
+        {{ retrying ? '正在重新排队…' : '重试向量化' }}
+      </button>
+      <p class="mt-2 text-caption leading-5 text-label-secondary">
+        仅重试失败分块，已成功分块不重复计费。
+      </p>
+      <p v-if="retryError" class="mt-2 text-caption leading-5 text-danger" role="alert">
+        {{ retryError }}
+      </p>
+    </div>
     <RouterLink
       v-if="showChunksLink"
       :to="`/home/knowledge/${item.id}/chunks`"

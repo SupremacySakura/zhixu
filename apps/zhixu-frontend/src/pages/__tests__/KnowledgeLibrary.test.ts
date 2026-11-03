@@ -2,12 +2,19 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import KnowledgeLibrary from '../KnowledgeLibrary.vue'
-import { listKnowledge, deleteKnowledge } from '../../services/apis/knowledge'
+import {
+  listKnowledge,
+  deleteKnowledge,
+  retryKnowledgeVectorize,
+  type KnowledgeItem,
+} from '../../services/apis/knowledge'
+import KnowledgeActionMenu from '../../components/knowledge/KnowledgeActionMenu.vue'
 vi.mock('../../services/apis/knowledge', () => ({
   listKnowledge: vi.fn(),
   addKnowledge: vi.fn(),
   getKnowledge: vi.fn(),
   retryKnowledge: vi.fn(),
+  retryKnowledgeVectorize: vi.fn(),
   deleteKnowledge: vi.fn(),
 }))
 vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
@@ -64,6 +71,99 @@ describe('KnowledgeLibrary', () => {
     expect(deleteKnowledge).toHaveBeenCalledWith(10, expect.any(AbortSignal))
     expect(wrapper.text()).toContain('让第一份资料成为知识')
     wrapper.unmount()
+  })
+  it('retries vector chunks from the menu and refreshes the list', async () => {
+    const partial = {
+      id: 11,
+      title: '部分失败笔记',
+      status: 'ready',
+      vector_state: 'partial',
+      chunks_total: 4,
+      chunks_ready: 3,
+      chunks_failed: 1,
+      source_file_name: 'note.md',
+      created_at: '',
+    } as KnowledgeItem
+    const updated = { ...partial, vector_state: 'pending' as const, chunks_failed: 0 }
+    vi.mocked(listKnowledge)
+      .mockResolvedValueOnce({ items: [partial], total: 1, page: 1, page_size: 20 })
+      .mockResolvedValue({ items: [updated], total: 1, page: 1, page_size: 20 })
+    vi.mocked(retryKnowledgeVectorize).mockResolvedValueOnce(updated)
+    const wrapper = await render()
+    try {
+      await wrapper.get('[aria-label="更多操作 部分失败笔记"]').trigger('click')
+      await flushPromises()
+      document.querySelector<HTMLButtonElement>('[aria-label="重试向量化 部分失败笔记"]')!.click()
+      await flushPromises()
+      expect(retryKnowledgeVectorize).toHaveBeenCalledWith(11, expect.any(AbortSignal))
+      expect(listKnowledge).toHaveBeenCalledTimes(2)
+      expect(wrapper.text()).toContain('失败分块已重新排队')
+      expect(wrapper.findComponent(KnowledgeActionMenu).props('item').vector_state).toBe('pending')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+  it('shows vector retry errors without refreshing the list', async () => {
+    const partial = {
+      id: 11,
+      title: '部分失败笔记',
+      status: 'ready',
+      vector_state: 'partial',
+      chunks_total: 4,
+      created_at: '',
+      source_file_name: 'note.md',
+    } as KnowledgeItem
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: [partial],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    vi.mocked(retryKnowledgeVectorize).mockRejectedValueOnce(new Error('重试失败'))
+    const wrapper = await render()
+    try {
+      wrapper.findComponent(KnowledgeActionMenu).vm.$emit('retryVector', partial)
+      await flushPromises()
+      expect(wrapper.text()).toContain('重试失败')
+      expect(listKnowledge).toHaveBeenCalledTimes(1)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+  it('guards duplicate retries and aborts the request on unmount', async () => {
+    const partial = {
+      id: 11,
+      title: '部分失败笔记',
+      status: 'ready',
+      vector_state: 'partial',
+      chunks_total: 4,
+      created_at: '',
+      source_file_name: 'note.md',
+    } as KnowledgeItem
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: [partial],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    let resolveRequest!: (item: KnowledgeItem) => void
+    vi.mocked(retryKnowledgeVectorize).mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveRequest = resolve
+        }),
+    )
+    const wrapper = await render()
+    const actionMenu = wrapper.findComponent(KnowledgeActionMenu)
+    actionMenu.vm.$emit('retryVector', partial)
+    actionMenu.vm.$emit('retryVector', partial)
+    expect(retryKnowledgeVectorize).toHaveBeenCalledTimes(1)
+    const signal = vi.mocked(retryKnowledgeVectorize).mock.calls[0]![1]!
+    wrapper.unmount()
+    expect(signal.aborted).toBe(true)
+    resolveRequest(partial)
+    await flushPromises()
+    expect(listKnowledge).toHaveBeenCalledTimes(1)
   })
   it('shows an actionable empty state', async () => {
     vi.mocked(listKnowledge).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })

@@ -17,6 +17,9 @@ const props = withDefaults(
     storagePercent?: number
     storageDetail?: string
     compact?: boolean
+    userName?: string
+    userEmail?: string
+    userAvatar?: string
   }>(),
   {
     brandTitle: '知序',
@@ -24,8 +27,13 @@ const props = withDefaults(
     storagePercent: 0,
     storageDetail: '',
     compact: false,
+    userName: '',
+    userEmail: '',
+    userAvatar: '',
   },
 )
+
+const emit = defineEmits<{ logout: [] }>()
 
 const route = useRoute()
 
@@ -53,6 +61,9 @@ const isActive = (to: string) => {
   const target = normalizePath(to)
   return current === target || (target !== '/' && current.startsWith(`${target}/`))
 }
+
+// 无头像时使用用户名首字符占位（中英文均取第一个字符）
+const avatarInitial = computed(() => (props.userName.trim()[0] || '?').toUpperCase())
 
 const linkClass = (to: string) => {
   const base =
@@ -117,31 +128,65 @@ const linkClass = (to: string) => {
     </nav>
 
     <!-- 存储指示：父级传入 storageDetail 时渲染（默认隐藏，避免展示假数据） -->
-    <div v-if="storageDetail" class="mt-auto px-2 pb-0.5 pt-4">
-      <div class="mb-2 flex items-baseline justify-between">
-        <span class="text-subhead text-label-secondary">存储空间</span>
-        <span
-          class="text-[15px] font-semibold"
-          :class="isStorageWarning ? 'text-danger' : 'text-label'"
-        >
-          {{ storagePercentClamped }}%
-        </span>
+    <div class="mt-auto">
+      <div v-if="storageDetail" class="px-2 pb-0.5 pt-4">
+        <div class="mb-2 flex items-baseline justify-between">
+          <span class="text-subhead text-label-secondary">存储空间</span>
+          <span
+            class="text-[15px] font-semibold"
+            :class="isStorageWarning ? 'text-danger' : 'text-label'"
+          >
+            {{ storagePercentClamped }}%
+          </span>
+        </div>
+        <div class="h-1.5 overflow-hidden rounded-full bg-surface-tertiary">
+          <div
+            class="h-full rounded-full transition-[width] duration-500 ease-out"
+            :class="isStorageWarning ? 'bg-warning' : 'bg-primary'"
+            :style="{ width: `${storagePercentClamped}%` }"
+          />
+        </div>
+        <div class="mt-2 flex items-center justify-between gap-2">
+          <p class="text-caption text-label-tertiary">{{ storageDetail }}</p>
+          <span
+            v-if="isStorageWarning"
+            class="inline-flex h-[22px] flex-none items-center rounded-full bg-warning-tint px-2.5 text-caption font-semibold text-warning-strong"
+          >
+            空间不足
+          </span>
+        </div>
       </div>
-      <div class="h-1.5 overflow-hidden rounded-full bg-surface-tertiary">
-        <div
-          class="h-full rounded-full transition-[width] duration-500 ease-out"
-          :class="isStorageWarning ? 'bg-warning' : 'bg-primary'"
-          :style="{ width: `${storagePercentClamped}%` }"
+
+      <!-- 当前用户：加载完成后渲染，退出登录由父级确认后执行 -->
+      <div
+        v-if="userName"
+        class="mt-3 flex items-center gap-2.5 border-t border-hairline px-2 pb-0.5 pt-3"
+      >
+        <img
+          v-if="userAvatar"
+          :src="userAvatar"
+          :alt="`${userName} 的头像`"
+          class="h-9 w-9 flex-none rounded-full object-cover"
         />
-      </div>
-      <div class="mt-2 flex items-center justify-between gap-2">
-        <p class="text-caption text-label-tertiary">{{ storageDetail }}</p>
         <span
-          v-if="isStorageWarning"
-          class="inline-flex h-[22px] flex-none items-center rounded-full bg-warning-tint px-2.5 text-caption font-semibold text-warning-strong"
+          v-else
+          class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary-tint text-[15px] font-semibold text-primary-pressed"
+          aria-hidden="true"
+          >{{ avatarInitial }}</span
         >
-          空间不足
-        </span>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-subhead font-semibold text-label">{{ userName }}</p>
+          <p v-if="userEmail" class="truncate text-caption text-label-tertiary">{{ userEmail }}</p>
+        </div>
+        <button
+          type="button"
+          aria-label="退出登录"
+          title="退出登录"
+          class="flex h-9 w-9 flex-none items-center justify-center rounded-sm text-label-secondary transition-[background-color,color,transform] duration-150 hover:bg-surface-secondary hover:text-label focus-visible:outline-2 focus-visible:outline-primary active:scale-[0.95]"
+          @click="emit('logout')"
+        >
+          <Icon icon="material-symbols:logout-rounded" class="text-[18px]" aria-hidden="true" />
+        </button>
       </div>
     </div>
   </aside>

@@ -107,6 +107,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/profile": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "返回当前登录用户的基本信息与存储用量（通过JWT Token识别）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "获取当前用户信息",
+                "responses": {
+                    "200": {
+                        "description": "返回统一响应（code=0成功；data包含用户信息）",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/vo.ProfileResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录（code=1002）",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/register": {
             "post": {
                 "description": "用户通过用户名、邮箱、密码注册",
@@ -2086,6 +2132,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/knowledge/{id}/vectorize/retry": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "仅重试失败分块，已成功分块不重复计费。返回202仅代表已重新排队。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "knowledge"
+                ],
+                "summary": "重试部分失败的向量化任务",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "知识ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.KnowledgeItem"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/settings/ai": {
             "get": {
                 "security": [
@@ -2708,7 +2824,8 @@ const docTemplate = `{
                 "pickup_code_delete",
                 "knowledge_add",
                 "knowledge_delete",
-                "knowledge_retry"
+                "knowledge_retry",
+                "knowledge_vector_retry"
             ],
             "x-enum-comments": {
                 "OperationLogActionDelete": "删除",
@@ -2716,6 +2833,7 @@ const docTemplate = `{
                 "OperationLogActionKnowledgeAdd": "加入知识库",
                 "OperationLogActionKnowledgeDelete": "移出知识库",
                 "OperationLogActionKnowledgeRetry": "重试知识导入",
+                "OperationLogActionKnowledgeVectorRetry": "重试知识向量化",
                 "OperationLogActionMkdir": "新建文件夹",
                 "OperationLogActionMove": "移动",
                 "OperationLogActionPickupCodeCreate": "创建取件码",
@@ -2742,7 +2860,8 @@ const docTemplate = `{
                 "删除取件码",
                 "加入知识库",
                 "移出知识库",
-                "重试知识导入"
+                "重试知识导入",
+                "重试知识向量化"
             ],
             "x-enum-varnames": [
                 "OperationLogActionUpload",
@@ -2759,7 +2878,8 @@ const docTemplate = `{
                 "OperationLogActionPickupCodeDelete",
                 "OperationLogActionKnowledgeAdd",
                 "OperationLogActionKnowledgeDelete",
-                "OperationLogActionKnowledgeRetry"
+                "OperationLogActionKnowledgeRetry",
+                "OperationLogActionKnowledgeVectorRetry"
             ]
         },
         "model.OperationLogTargetType": {
@@ -3197,6 +3317,32 @@ const docTemplate = `{
                 },
                 "type": {
                     "$ref": "#/definitions/model.PickUpTargetType"
+                }
+            }
+        },
+        "vo.ProfileResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "storage_limit": {
+                    "type": "integer"
+                },
+                "storage_used": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         }
