@@ -18,6 +18,11 @@ vi.mock('../../services/apis/chat', () => ({
   deleteConversation: vi.fn(),
 }))
 vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('motion-v', () => ({
+  AnimatePresence: { template: '<slot />' },
+  Motion: { template: '<div><slot /></div>' },
+  animate: vi.fn(),
+}))
 const global = { stubs: { RouterLink: { template: '<a><slot /></a>' }, teleport: true } }
 beforeEach(() => {
   vi.mocked(listConversations).mockResolvedValue([])
@@ -173,6 +178,62 @@ describe('ChatPage', () => {
     )
     expect(wrapper.text()).toContain('真实流内容')
     expect(wrapper.text()).toContain('回复完成')
+    wrapper.unmount()
+  })
+  it('opens and closes the mobile conversation drawer', async () => {
+    configureModel()
+    vi.mocked(listConversations).mockResolvedValue([
+      { id: 'c1', title: '历史一', created_at: '', updated_at: '' },
+    ])
+    const wrapper = mount(ChatPage, { global })
+    await flushPromises()
+    expect(wrapper.findAll('aside')).toHaveLength(1)
+    await wrapper.get('[aria-label="打开会话历史"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('aside')).toHaveLength(2)
+    await wrapper.get('[aria-label="关闭会话历史"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('aside')).toHaveLength(1)
+    wrapper.unmount()
+  })
+  it('loads a conversation from the drawer and closes it', async () => {
+    configureModel()
+    vi.mocked(listConversations).mockResolvedValue([
+      { id: 'c1', title: '历史一', created_at: '', updated_at: '' },
+    ])
+    vi.mocked(getConversation).mockResolvedValue({
+      conversation: { id: 'c1', title: '历史一', created_at: '', updated_at: '' },
+      messages: [{ role: 'user', content: '抽屉里的问题', created_at: '' }],
+    })
+    const wrapper = mount(ChatPage, { global })
+    await flushPromises()
+    await wrapper.get('[aria-label="打开会话历史"]').trigger('click')
+    await flushPromises()
+    const drawerAside = wrapper.findAll('aside')[1]
+    await drawerAside
+      .findAll('button')
+      .find(b => b.text() === '历史一')!
+      .trigger('click')
+    await flushPromises()
+    expect(getConversation).toHaveBeenCalledWith('c1', expect.any(AbortSignal))
+    expect(wrapper.findAll('aside')).toHaveLength(1)
+    expect(wrapper.text()).toContain('抽屉里的问题')
+    wrapper.unmount()
+  })
+  it('starts a new chat from the drawer without confirmation when empty', async () => {
+    configureModel()
+    const wrapper = mount(ChatPage, { global })
+    await flushPromises()
+    await wrapper.get('[aria-label="打开会话历史"]').trigger('click')
+    await flushPromises()
+    const drawerAside = wrapper.findAll('aside')[1]
+    await drawerAside
+      .findAll('button')
+      .find(b => b.text() === '＋ 新对话')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('aside')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('开始新对话？')
     wrapper.unmount()
   })
 })

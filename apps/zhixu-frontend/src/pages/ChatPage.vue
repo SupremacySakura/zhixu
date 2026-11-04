@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { Icon } from '@iconify/vue'
+import { AnimatePresence, Motion, animate, type PanInfo } from 'motion-v'
+import { springBouncy, springSnappy, fadeTransition } from '../utils/motion'
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import SettingsModal from '../components/ui/SettingsModal.vue'
 import ConversationSidebar from '../components/chat/ConversationSidebar.vue'
@@ -20,7 +23,10 @@ const {
 const model = ref('0')
 const prompt = ref('')
 const ragEnabled = ref(true)
-const sidebar = ref<InstanceType<typeof ConversationSidebar> | null>(null)
+// 桌面与移动端抽屉各持有一个会话列表实例，首轮对话完成后两个列表都要刷新
+const sidebarDesktop = ref<InstanceType<typeof ConversationSidebar> | null>(null)
+const sidebarMobile = ref<InstanceType<typeof ConversationSidebar> | null>(null)
+const historyOpen = ref(false)
 const hasEmbedding = computed(() => (configuration.value?.settings.embedding_model_id || 0) > 0)
 const transcript = ref<HTMLElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
@@ -59,6 +65,29 @@ function newChat() {
   if (messages.value.length || prompt.value) confirmation.value = 'new'
   else reset()
 }
+// 移动端抽屉内的选择：先关抽屉再走原有打开/新建流程
+function selectConversation(id: string) {
+  historyOpen.value = false
+  void openConversation(id)
+}
+function newChatFromDrawer() {
+  historyOpen.value = false
+  newChat()
+}
+// 抽屉拖拽关闭（DESIGN.md §2.4 手势：速度方向优先，动量投影辅助判断，同 HomePage 导航抽屉）
+const drawerPanel = ref<HTMLElement | null>(null)
+const setDrawerPanelRef = (instance: unknown) => {
+  drawerPanel.value =
+    (instance as { $el?: HTMLElement } | null)?.$el ?? (instance as HTMLElement) ?? null
+}
+const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
+  const shouldClose = info.velocity.x < -400 || (info.velocity.x <= 0 && info.offset.x < -80)
+  if (shouldClose) {
+    historyOpen.value = false
+    return
+  }
+  if (drawerPanel.value) animate(drawerPanel.value, { x: 0 }, springSnappy)
+}
 async function openConversation(id: string) {
   if (running.value) return
   try {
@@ -96,7 +125,8 @@ async function submit() {
   if (transcript.value) transcript.value.scrollTop = transcript.value.scrollHeight
   await task
   // A finished first turn creates the thread server-side; refresh the history list.
-  sidebar.value?.reload()
+  sidebarDesktop.value?.reload()
+  sidebarMobile.value?.reload()
   input.value?.focus()
 }
 function keydown(event: KeyboardEvent) {
@@ -123,17 +153,29 @@ onMounted(() => {
 </script>
 <template>
   <div class="flex h-[calc(100dvh-60px)] min-h-0 lg:h-auto">
-    <ConversationSidebar
-      ref="sidebar"
-      :active-id="conversationId"
-      @select="openConversation"
-      @new="newChat"
-    />
+    <div class="hidden h-full lg:block">
+      <ConversationSidebar
+        ref="sidebarDesktop"
+        :active-id="conversationId"
+        @select="openConversation"
+        @new="newChat"
+      />
+    </div>
     <main class="flex min-w-0 flex-1 flex-col bg-surface">
-      <header class="flex flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-8">
-        <div>
-          <p class="mb-1 text-caption text-label-secondary">工作空间 / 对话</p>
-          <h1 class="text-title-3">普通对话</h1>
+      <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8 lg:py-5">
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="打开会话历史"
+            class="flex h-10 w-10 items-center justify-center rounded-sm border border-hairline bg-surface text-label transition-[transform,background-color] duration-150 hover:bg-surface-secondary active:scale-[0.92] lg:hidden"
+            @click="historyOpen = true"
+          >
+            <Icon icon="material-symbols:history-rounded" class="text-[20px]" />
+          </button>
+          <div>
+            <p class="mb-1 hidden text-caption text-label-secondary lg:block">工作空间 / 对话</p>
+            <h1 class="text-title-3">普通对话</h1>
+          </div>
         </div>
         <div class="flex items-center gap-4 text-caption">
           <RouterLink to="/home/settings" class="text-primary-pressed">模型设置 ↗</RouterLink
@@ -304,7 +346,9 @@ onMounted(() => {
           </article>
         </div>
       </section>
-      <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 sm:px-8">
+      <div
+        class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8"
+      >
         <p role="status" class="min-h-7 text-caption text-label-secondary">
           {{
             running
@@ -333,8 +377,8 @@ onMounted(() => {
           <div
             class="mt-2 flex items-center justify-between gap-2 text-caption text-label-secondary"
           >
-            <span>Enter 发送 · Shift + Enter 换行</span>
-            <div class="flex items-center gap-3">
+            <span class="hidden sm:inline">Enter 发送 · Shift + Enter 换行</span>
+            <div class="ml-auto flex items-center gap-3">
               <span>{{ prompt.length }} / 8000</span
               ><button
                 v-if="running"
@@ -359,6 +403,59 @@ onMounted(() => {
           文字将发送至当前模型供应商；请勿输入敏感信息。模型回复可能不准确。
         </p>
       </div>
+      <!-- 移动端会话历史抽屉：同 HomePage 导航抽屉模式（弹簧滑入 + 遮罩点击/拖拽左滑关闭） -->
+      <AnimatePresence>
+        <Motion
+          v-if="historyOpen"
+          key="chat-history-layer"
+          :initial="{ opacity: 0 }"
+          :animate="{ opacity: 1 }"
+          :exit="{ opacity: 0 }"
+          :transition="fadeTransition"
+          class="fixed inset-0 z-40 flex lg:hidden"
+          @click="historyOpen = false"
+        >
+          <div class="absolute inset-0 bg-scrim backdrop-blur-[6px]"></div>
+          <Motion
+            :ref="setDrawerPanelRef"
+            :initial="{ x: '-100%' }"
+            :animate="{ x: 0 }"
+            :exit="{ x: '-100%' }"
+            :transition="springBouncy"
+            drag="x"
+            :drag-constraints="{ left: -320, right: 0 }"
+            :drag-elastic="{ left: 0.2, right: 0 }"
+            :drag-momentum="false"
+            class="relative flex h-full w-[min(18rem,86vw)] flex-col bg-surface shadow-popover"
+            @click.stop
+            @pan-end="handleDrawerPanEnd"
+          >
+            <div
+              class="flex flex-none items-center justify-between border-b border-hairline px-3 py-2.5"
+            >
+              <h2 class="px-1 text-caption font-semibold tracking-wide text-label-secondary">
+                会话历史
+              </h2>
+              <button
+                type="button"
+                aria-label="关闭会话历史"
+                class="flex h-10 w-10 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-secondary hover:text-label"
+                @click="historyOpen = false"
+              >
+                <Icon icon="material-symbols:close-rounded" class="text-[20px]" />
+              </button>
+            </div>
+            <div class="min-h-0 flex-1">
+              <ConversationSidebar
+                ref="sidebarMobile"
+                :active-id="conversationId"
+                @select="selectConversation"
+                @new="newChatFromDrawer"
+              />
+            </div>
+          </Motion>
+        </Motion>
+      </AnimatePresence>
       <SettingsModal v-if="confirmation" title="开始新对话？" @close="confirmation = null"
         ><p class="mb-6 text-subhead leading-7 text-label-secondary">
           当前消息和草稿将清空，正在生成的回复会停止，无法恢复。切换模型只影响本次会话，不修改默认模型。

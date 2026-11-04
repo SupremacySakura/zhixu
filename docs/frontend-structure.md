@@ -52,6 +52,11 @@
 - 已加入文件直接跳转详情。详情来源目录链接使用加入时快照，因此文件后续移动或删除时不能保证定位原件；不声称精确定位。
 - 接入行为与验收边界见 [Markdown 知识前端](./markdown-knowledge-frontend.md)。
 
+## 对话页
+
+- `/home/chat` 根高度为 `h-[calc(100dvh-60px)] lg:h-auto`，扣除移动端顶栏后内部滚动；桌面端会话历史 `ConversationSidebar` 常驻，移动端（`<lg`）改为左侧抽屉（复用 HomePage 导航抽屉模式：motion-v 弹簧滑入、遮罩点击与拖拽左滑关闭），入口为头部 `lg:hidden` 的历史按钮，选择会话或新建后自动关闭。
+- 会话项的改名/删除按钮在触屏常显、桌面端 hover/focus 显示；输入区带底部安全区 padding，键盘提示仅 `sm:` 以上显示。
+
 ## UI 与样式约定
 
 模型设置 `/home/settings` 的页面、表单和请求管理见 [模型设置前端](./model-settings-frontend.md)。已接入真实配置存储与[基础服务检测](./service-status.md)，实际模型连接测试仍待实现。

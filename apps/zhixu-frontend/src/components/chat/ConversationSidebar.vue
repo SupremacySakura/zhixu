@@ -69,7 +69,7 @@ defineExpose({ reload: load })
 
 <template>
   <aside
-    class="flex h-full w-64 shrink-0 flex-col border-r border-hairline bg-surface-secondary"
+    class="flex h-full w-full flex-col bg-surface-secondary lg:w-64 lg:shrink-0 lg:border-r lg:border-hairline"
     aria-label="会话历史"
   >
     <div class="flex items-center justify-between px-4 py-4">
@@ -112,7 +112,7 @@ defineExpose({ reload: load })
               </button>
               <div class="mt-1 flex items-center justify-between text-[11px] text-label-secondary">
                 <span>{{ relative(conversation.updated_at) }}</span>
-                <span class="hidden gap-2 group-hover:flex">
+                <span class="flex gap-2 lg:hidden lg:group-hover:flex lg:group-focus-within:flex">
                   <button type="button" @click="startRename(conversation)">改名</button>
                   <button type="button" class="text-danger" @click="remove(conversation.id)">
                     删除
