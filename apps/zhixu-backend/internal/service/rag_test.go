@@ -199,36 +199,3 @@ func TestRagSearchEmptyResultIsAvailable(t *testing.T) {
 	require.True(t, result.Available)
 	require.Empty(t, result.Sources)
 }
-
-func TestChatPrepareResolvesEmbeddingOnlyWhenRequested(t *testing.T) {
-	chat := &ChatService{Store: &embeddingConfigFake{state: &repository.AIConfigState{
-		Providers: []model.ModelProvider{{ID: 3, ProviderID: "openai", BaseURL: "https://api.example.com/v1", AuthType: "none"}},
-		Models: []model.ProviderModel{
-			{ID: 2, ProviderID: 3, ModelID: "chat-model", Kind: "chat"},
-			{ID: 4, ProviderID: 3, ModelID: "text-embedding-3-small", Kind: "embedding", Dimension: 2},
-		},
-		Settings: model.UserAISettings{ChatModelID: 2, EmbeddingModelID: 4},
-	}}}
-	input := ChatInput{Messages: []ChatMessage{{Role: "user", Content: "你好"}}}
-	prepared, err := chat.Prepare(context.Background(), 7, input)
-	require.NoError(t, err)
-	require.False(t, prepared.Rag)
-	require.Nil(t, prepared.Embedding)
-	input.RAG = true
-	prepared, err = chat.Prepare(context.Background(), 7, input)
-	require.NoError(t, err)
-	require.True(t, prepared.Rag)
-	require.Equal(t, "text-embedding-3-small", prepared.Embedding.Model.ModelID)
-}
-
-func TestChatPrepareFallsBackWithoutEmbedding(t *testing.T) {
-	chat := &ChatService{Store: &embeddingConfigFake{state: &repository.AIConfigState{
-		Providers: []model.ModelProvider{{ID: 3, ProviderID: "openai", BaseURL: "https://api.example.com/v1", AuthType: "none"}},
-		Models:    []model.ProviderModel{{ID: 2, ProviderID: 3, ModelID: "chat-model", Kind: "chat"}},
-		Settings:  model.UserAISettings{ChatModelID: 2},
-	}}}
-	prepared, err := chat.Prepare(context.Background(), 7, ChatInput{RAG: true, Messages: []ChatMessage{{Role: "user", Content: "你好"}}})
-	require.NoError(t, err)
-	require.False(t, prepared.Rag)
-	require.Nil(t, prepared.Embedding)
-}

@@ -17,6 +17,7 @@ import (
 type chatSourceStoreFake struct {
 	rows        []model.ChatTurnSource
 	saved       []model.ChatTurnSource
+	usages      []model.ChatTurnUsage
 	lastID      string
 	lastUsr     uint
 	states      map[string]model.ChatConversationState
@@ -30,6 +31,14 @@ func (f *chatSourceStoreFake) SaveTurnSource(_ context.Context, row *model.ChatT
 		return ErrConversationDeleted
 	}
 	f.saved = append(f.saved, *row)
+	return nil
+}
+
+func (f *chatSourceStoreFake) SaveTurnUsage(_ context.Context, row *model.ChatTurnUsage) error {
+	if state := f.states[ResourceID(row.UserID)+":"+row.ConversationID]; state.Tombstoned {
+		return ErrConversationDeleted
+	}
+	f.usages = append(f.usages, *row)
 	return nil
 }
 
@@ -317,4 +326,47 @@ func TestSaveTurnSource(t *testing.T) {
 
 	svcNoStore := &ConversationService{}
 	require.NoError(t, svcNoStore.SaveTurnSource(context.Background(), "c1", 1, "m1", "q", nil))
+}
+
+func TestSaveTurnUsage(t *testing.T) {
+	sources := &chatSourceStoreFake{}
+	svc := &ConversationService{Sources: sources}
+
+	require.NoError(t, svc.SaveTurnUsage(context.Background(), &model.ChatTurnUsage{ConversationID: "", UserID: 1, MessageID: "m1"}))
+	require.NoError(t, svc.SaveTurnUsage(context.Background(), &model.ChatTurnUsage{ConversationID: "c1", UserID: 1, MessageID: "  "}))
+	require.NoError(t, svc.SaveTurnUsage(context.Background(), nil))
+	require.Empty(t, sources.usages, "usage without a conversation or message id has no safe owner")
+
+	row := &model.ChatTurnUsage{ConversationID: "c1", UserID: 5, MessageID: "m9", ModelID: 2, Model: "chat-model", InputTokens: 12, OutputTokens: 7, TotalTokens: 19}
+	require.NoError(t, svc.SaveTurnUsage(context.Background(), row))
+	require.Len(t, sources.usages, 1)
+	require.Equal(t, []int{12, 7, 19}, []int{sources.usages[0].InputTokens, sources.usages[0].OutputTokens, sources.usages[0].TotalTokens})
+
+	// A tombstoned conversation rejects late accounting the same way it rejects citations.
+	tombstoned := &chatSourceStoreFake{states: map[string]model.ChatConversationState{
+		ResourceID(5) + ":c1": {UserID: 5, ConversationID: "c1", Tombstoned: true},
+	}}
+	require.ErrorIs(t, (&ConversationService{Sources: tombstoned}).SaveTurnUsage(context.Background(), row), ErrConversationDeleted)
+
+	svcNoStore := &ConversationService{}
+	require.NoError(t, svcNoStore.SaveTurnUsage(context.Background(), row))
+}
+
+func TestConversationDetailSkipsInterruptedAssistantTurns(t *testing.T) {
+	svc, sources := newConversationFixture(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"conversation":{"id":"c1","title":"t"},"messages":[
+			{"id":"m1","role":"user","content":{"format":2,"parts":[{"type":"text","text":"怎么发布？"}]},"created_at":"2026-10-24T10:00:00Z"},
+			{"id":"m2","role":"assistant","content":{"format":2,"parts":[{"type":"reasoning","reasoning":"想一下"},{"type":"tool-invocation"}]},"created_at":"2026-10-24T10:01:00Z"},
+			{"id":"m3","role":"user","content":{"format":2,"parts":[{"type":"text","text":"那部署呢？"}]},"created_at":"2026-10-24T10:02:00Z"},
+			{"id":"m4","role":"assistant","content":{"format":2,"parts":[{"type":"text","text":"先构建"}]},"created_at":"2026-10-24T10:03:00Z"}
+		]}`))
+	})
+	detail, err := svc.Detail(context.Background(), 7, "c1")
+	require.NoError(t, err)
+	require.Len(t, detail.Messages, 3) // interrupted assistant turn skipped
+	require.Equal(t, "怎么发布？", detail.Messages[0].Content)
+	require.Equal(t, "那部署呢？", detail.Messages[1].Content)
+	require.Equal(t, "assistant", detail.Messages[2].Role)
+	require.Equal(t, "先构建", detail.Messages[2].Content)
+	require.Empty(t, sources.saved)
 }

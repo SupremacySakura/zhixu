@@ -12,10 +12,11 @@ import (
 	"time"
 )
 
+// MastraEmbedder asks the AI service to turn a batch of texts into vectors. The
+// configured embedding model travels with each request, so the AI service needs no
+// credential store of its own and Go no longer proxies provider traffic.
 type MastraEmbedder struct {
-	Chat       *ChatService
-	AIURL      string
-	BackendURL string
+	AIURL string
 }
 
 func ValidateEmbeddings(vectors [][]float64, count, dimension int) error {
@@ -41,15 +42,13 @@ func ValidateEmbeddings(vectors [][]float64, count, dimension int) error {
 }
 
 func (e *MastraEmbedder) Embed(ctx context.Context, snapshot *ChatCapability, texts []string) ([][]float64, error) {
-	cap := &ChatCapability{Model: snapshot.Model, Provider: snapshot.Provider, Key: snapshot.Key, Context: ctx, Texts: texts}
-	token, revoke, err := e.Chat.Register(cap)
-	if err != nil {
-		return nil, err
-	}
-	defer revoke()
 	payload, _ := json.Marshal(map[string]any{
-		"model": cap.Model.ModelID, "dimension": cap.Model.Dimension, "texts": texts,
-		"gateway": strings.TrimRight(e.BackendURL, "/") + "/internal/chat/v1", "capability": token,
+		"model": map[string]any{
+			"protocol": snapshot.Provider.Protocol, "model_id": snapshot.Model.ModelID,
+			"base_url": snapshot.Provider.BaseURL, "api_key": snapshot.Key,
+		},
+		"dimension": snapshot.Model.Dimension,
+		"texts":     texts,
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(e.AIURL, "/")+"/vectorize", bytes.NewReader(payload))
 	if err != nil {
@@ -76,7 +75,7 @@ func (e *MastraEmbedder) Embed(ctx context.Context, snapshot *ChatCapability, te
 	if err := json.NewDecoder(io.LimitReader(response.Body, 16*1024*1024)).Decode(&result); err != nil {
 		return nil, errors.New("AI 服务返回了无效的向量数据")
 	}
-	if err := ValidateEmbeddings(result.Embeddings, len(texts), int(cap.Model.Dimension)); err != nil {
+	if err := ValidateEmbeddings(result.Embeddings, len(texts), int(snapshot.Model.Dimension)); err != nil {
 		return nil, errors.New("Embedding 数量或维度与模型配置不一致")
 	}
 	return result.Embeddings, nil

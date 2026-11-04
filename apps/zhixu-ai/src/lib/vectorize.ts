@@ -1,34 +1,22 @@
 import { ModelRouterEmbeddingModel } from "@mastra/core/llm";
 import { z } from "zod";
 
+// The AI service holds no provider credentials: each batch carries the model it must
+// use, resolved and decrypted by Go for that task. No gateway indirection is involved.
 export const vectorizeSchema = z
   .object({
-    model: z.string().trim().min(1).max(200),
+    model: z.object({
+      protocol: z.enum(["chat", "responses"]),
+      model_id: z.string().trim().min(1).max(200),
+      base_url: z.string().url(),
+      api_key: z.string(),
+    }),
     dimension: z.number().int().min(1).max(65536),
-    gateway: z.string().url(),
-    capability: z.string().regex(/^[a-f0-9]{64}$/),
     texts: z.array(z.string().min(1).max(1024)).min(1).max(16),
   })
   .strict();
 
 export type VectorizeInput = z.infer<typeof vectorizeSchema>;
-
-export function allowedGateway(value: string, backendURL: string): boolean {
-  try {
-    const gateway = new URL(value);
-    const backend = new URL(backendURL);
-    return (
-      gateway.origin === backend.origin &&
-      gateway.pathname === "/internal/chat/v1" &&
-      !gateway.username &&
-      !gateway.password &&
-      !gateway.search &&
-      !gateway.hash
-    );
-  } catch {
-    return false;
-  }
-}
 
 // Specialized embedding executor: one deterministic SDK call, no chat model, tools, or memory.
 export class VectorizeAgent {
@@ -38,9 +26,10 @@ export class VectorizeAgent {
   ): Promise<number[][]> {
     const model = new ModelRouterEmbeddingModel({
       providerId: "openai",
-      modelId: input.model,
-      url: input.gateway,
-      apiKey: input.capability,
+      modelId: input.model.model_id,
+      url: input.model.base_url,
+      apiKey: input.model.api_key,
+      api: input.model.protocol,
     });
     const result = await model.doEmbed({
       values: input.texts,

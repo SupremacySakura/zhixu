@@ -39,18 +39,82 @@ func TestChatCapabilityLifetime(t *testing.T) {
 	revoke()
 	require.Nil(t, s.Capability(token))
 }
-func TestChatPrivateEndpointPolicy(t *testing.T) {
+func TestChatRuntimeEndpointPolicy(t *testing.T) {
 	for _, ip := range []string{"127.0.0.1", "::1", "10.0.0.1", "169.254.169.254", "100.100.100.200", "100.64.0.1"} {
 		require.True(t, unsafeModelIP(net.ParseIP(ip)))
 	}
 	require.False(t, unsafeModelIP(net.ParseIP("8.8.8.8")))
-	s := &ChatService{}
-	_, _, err := s.ModelClient(context.Background(), "http://127.0.0.1:11434/v1")
-	require.Error(t, err)
-	s.AllowedPrivateEndpoints = "http://127.0.0.1:11434/v1"
-	_, cleanup, err := s.ModelClient(context.Background(), "http://127.0.0.1:11434/v1")
+
+	ai := newAIConfigTestService(t)
+	// Saving stays permissive; the deployment policy is enforced when a provider is used.
+	input := testProviderInput()
+	input.BaseURL = "http://127.0.0.1:11434/v1"
+	input.AuthType = "none"
+	input.APIKey = nil
+	view, err := ai.SaveProvider(context.Background(), 7, 0, input)
 	require.NoError(t, err)
-	cleanup()
-	_, _, err = s.ModelClient(context.Background(), "http://127.0.0.1:11435/v1")
-	require.Error(t, err)
+	chat := &ChatService{Store: ai.Store, Credentials: ai.Credentials}
+	req := ChatInput{ModelID: view.Providers[0].Models[0].ID, Messages: []ChatMessage{{Role: "user", Content: "你好"}}}
+	_, err = chat.Resolve(context.Background(), 7, req)
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+	chat.AllowedPrivateEndpoints = "http://127.0.0.1:11434/v1"
+	_, err = chat.Resolve(context.Background(), 7, req)
+	require.NoError(t, err)
+
+	chat.AllowedPrivateEndpoints = ""
+	require.Error(t, chat.validateRuntimeModelURL("http://example.com/v1"))
+	require.NoError(t, chat.validateRuntimeModelURL("https://example.com/v1"))
+	require.Error(t, chat.validateRuntimeModelURL("http://localhost:11434/v1"))
+	chat.AllowedPrivateEndpoints = "http://localhost:11434/v1"
+	require.NoError(t, chat.validateRuntimeModelURL("http://localhost:11434/v1"))
+}
+
+func TestNormalizeChatHistoryDropsInterruptedTurns(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []ChatMessage
+		want []ChatMessage
+	}{
+		{
+			name: "healthy history is untouched",
+			in: []ChatMessage{
+				{Role: "user", Content: "问一"},
+				{Role: "assistant", Content: "答一"},
+				{Role: "user", Content: "问二"},
+			},
+			want: []ChatMessage{
+				{Role: "user", Content: "问一"},
+				{Role: "assistant", Content: "答一"},
+				{Role: "user", Content: "问二"},
+			},
+		},
+		{
+			name: "trailing interrupted answer is dropped",
+			in: []ChatMessage{
+				{Role: "user", Content: "问一"},
+				{Role: "assistant", Content: "答一"},
+				{Role: "user", Content: "问二"},
+				{Role: "assistant", Content: "   "},
+			},
+			want: []ChatMessage{
+				{Role: "user", Content: "问一"},
+				{Role: "assistant", Content: "答一"},
+				{Role: "user", Content: "问二"},
+			},
+		},
+		{
+			name: "interrupted answer in the middle merges adjacent user turns",
+			in: []ChatMessage{
+				{Role: "user", Content: "问一"},
+				{Role: "assistant", Content: ""},
+				{Role: "user", Content: "问二"},
+			},
+			want: []ChatMessage{{Role: "user", Content: "问一\n\n问二"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, NormalizeChatHistory(tc.in))
+		})
+	}
 }

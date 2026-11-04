@@ -47,7 +47,7 @@ func main() {
 	qdrant := &service.QdrantClient{URL: cfg.QdrantURL, APIKey: cfg.QdrantAPIKey}
 	chat.Rag = &service.RagSearcher{
 		Chat:     chat.Service,
-		Embedder: &service.MastraEmbedder{Chat: chat.Service, AIURL: cfg.ChatAIURL, BackendURL: cfg.ChatBackendURL},
+		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL},
 		Vectors:  qdrant, Chunks: &repository.RagRepository{DB: database.DB},
 	}
 	r.POST("/chat", middleware.AuthMiddleware(), chat.Send)
@@ -55,15 +55,14 @@ func main() {
 	r.GET("/chat/conversations/:id", middleware.AuthMiddleware(), conversationHandler.Detail)
 	r.PATCH("/chat/conversations/:id", middleware.AuthMiddleware(), conversationHandler.Rename)
 	r.DELETE("/chat/conversations/:id", middleware.AuthMiddleware(), conversationHandler.Delete)
-	r.POST("/internal/chat/v1/*endpoint", chat.Gateway)
-	r.POST("/internal/rag/v1/search", chat.RagSearch)
+	r.POST("/internal/tools/v1/search", chat.RagSearch)
 	knowledgeService := service.NewKnowledgeService(repository.NewKnowledgeRepository(database.DB), cfg.FileStoragePath)
 	vectorStore := &repository.VectorizeRepository{DB: database.DB}
 	knowledgeService.Vectors = vectorStore
 	knowledgeService.Logs = repository.NewOperationLogRepository(database.DB)
 	vectorService := &service.VectorizeService{
 		Store: vectorStore, Knowledge: repository.NewKnowledgeRepository(database.DB), Chat: chat.Service,
-		Embedder: &service.MastraEmbedder{Chat: chat.Service, AIURL: cfg.ChatAIURL, BackendURL: cfg.ChatBackendURL},
+		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL},
 		Vectors:  qdrant,
 	}
 	vectorCleanup := &service.VectorCleanupService{

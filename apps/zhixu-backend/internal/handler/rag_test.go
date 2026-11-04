@@ -16,9 +16,9 @@ func TestRagSearchRequiresCapability(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	h := &ChatHandler{Service: &service.ChatService{}}
-	r.POST("/internal/rag/v1/search", h.RagSearch)
+	r.POST("/internal/tools/v1/search", h.RagSearch)
 	for _, token := range []string{"", "unknown"} {
-		req := httptest.NewRequest("POST", "/internal/rag/v1/search", strings.NewReader(`{"query":"回滚"}`))
+		req := httptest.NewRequest("POST", "/internal/tools/v1/search", strings.NewReader(`{"query":"回滚"}`))
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -39,10 +39,4 @@ func TestRagSearchClaimsCapabilityAcrossTurn(t *testing.T) {
 	// A retrieval token survives repeated claims within one turn, unlike model tokens.
 	require.NotNil(t, s.ClaimRagCapability(token))
 	require.NotNil(t, s.ClaimRagCapability(token))
-	// Model tokens stay single-use.
-	modelToken, modelRevoke, err := s.Register(&service.ChatCapability{Context: context.Background()})
-	require.NoError(t, err)
-	defer modelRevoke()
-	require.NotNil(t, s.ClaimCapability(modelToken))
-	require.Nil(t, s.ClaimCapability(modelToken))
 }

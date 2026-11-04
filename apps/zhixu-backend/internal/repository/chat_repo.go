@@ -52,6 +52,25 @@ func (r *ChatSourceRepository) SaveTurnSource(ctx context.Context, row *model.Ch
 	})
 }
 
+// SaveTurnUsage records token usage for a completed assistant turn. Like provenance it
+// is fenced by the conversation tombstone so a deleted thread never keeps accumulating
+// billable rows; an unfinished turn (no message id) has nothing safe to attach to.
+func (r *ChatSourceRepository) SaveTurnUsage(ctx context.Context, row *model.ChatTurnUsage) error {
+	if row == nil || strings.TrimSpace(row.MessageID) == "" || row.ConversationID == "" {
+		return nil
+	}
+	return r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		state, err := lockConversation(tx, row.ConversationID, row.UserID)
+		if err != nil {
+			return err
+		}
+		if state.Tombstoned {
+			return model.ErrConversationDeleted
+		}
+		return tx.Create(row).Error
+	})
+}
+
 func (r *ChatSourceRepository) ListTurnSources(ctx context.Context, conversationID string, user uint) ([]model.ChatTurnSource, error) {
 	var rows []model.ChatTurnSource
 	err := r.DB.WithContext(ctx).
@@ -81,7 +100,10 @@ func (r *ChatSourceRepository) MarkDeleted(ctx context.Context, conversationID s
 		if err := tx.Model(state).Updates(map[string]any{"tombstoned": true, "cleanup_pending": true}).Error; err != nil {
 			return err
 		}
-		return tx.Where("conversation_id = ? AND user_id = ?", conversationID, user).Delete(&model.ChatTurnSource{}).Error
+		if err := tx.Where("conversation_id = ? AND user_id = ?", conversationID, user).Delete(&model.ChatTurnSource{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("conversation_id = ? AND user_id = ?", conversationID, user).Delete(&model.ChatTurnUsage{}).Error
 	})
 }
 
@@ -95,6 +117,9 @@ func (r *ChatSourceRepository) CompleteCleanup(ctx context.Context, conversation
 			return nil
 		}
 		if err := tx.Where("conversation_id = ? AND user_id = ?", conversationID, user).Delete(&model.ChatTurnSource{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("conversation_id = ? AND user_id = ?", conversationID, user).Delete(&model.ChatTurnUsage{}).Error; err != nil {
 			return err
 		}
 		// Never delete the state row or unset tombstoned: late streams stay fenced.

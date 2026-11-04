@@ -26,6 +26,11 @@ func expectSourceDelete(mock sqlmock.Sqlmock, user uint, id string) {
 		WithArgs(id, user).WillReturnResult(sqlmock.NewResult(0, 1))
 }
 
+func expectUsageDelete(mock sqlmock.Sqlmock, user uint, id string) {
+	mock.ExpectExec("DELETE FROM `chat_turn_usages` WHERE conversation_id = .* AND user_id =").
+		WithArgs(id, user).WillReturnResult(sqlmock.NewResult(0, 1))
+}
+
 func TestChatSourceSaveUsesPersistentConversationLock(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
@@ -65,6 +70,43 @@ func TestChatSourceMissingMessageIDDoesNotTouchDatabase(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestChatUsageSaveUsesPersistentConversationLock(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	expectConversationLock(mock, 7, "c1", false, false)
+	mock.ExpectExec("INSERT INTO `chat_turn_usages`").WithArgs(uint(7), "c1", "m1", uint(2), "chat-model", 12, 7, 19, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	err := NewChatSourceRepository(db).SaveTurnUsage(context.Background(), &model.ChatTurnUsage{
+		UserID: 7, ConversationID: "c1", MessageID: "m1", ModelID: 2, Model: "chat-model",
+		InputTokens: 12, OutputTokens: 7, TotalTokens: 19,
+	})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChatUsageAfterDeletedNeverInserts(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	expectConversationLock(mock, 7, "c1", true, false)
+	mock.ExpectRollback()
+	err := NewChatSourceRepository(db).SaveTurnUsage(context.Background(), &model.ChatTurnUsage{UserID: 7, ConversationID: "c1", MessageID: "late", Model: "m"})
+	require.ErrorIs(t, err, model.ErrConversationDeleted)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChatUsageMissingMessageIDDoesNotTouchDatabase(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	repo := NewChatSourceRepository(db)
+	for _, id := range []string{"", "  "} {
+		require.NoError(t, repo.SaveTurnUsage(context.Background(), &model.ChatTurnUsage{ConversationID: "c1", UserID: 7, MessageID: id}))
+	}
+	require.NoError(t, repo.SaveTurnUsage(context.Background(), nil))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestChatDeletionMarksAndClearsSourcesInSameTransaction(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
@@ -73,6 +115,7 @@ func TestChatDeletionMarksAndClearsSourcesInSameTransaction(t *testing.T) {
 	mock.ExpectExec("UPDATE `chat_conversation_states` SET .* WHERE `user_id` = .* AND `conversation_id` =").
 		WithArgs(true, true, sqlmock.AnyArg(), uint(7), "c1").WillReturnResult(sqlmock.NewResult(0, 1))
 	expectSourceDelete(mock, 7, "c1")
+	expectUsageDelete(mock, 7, "c1")
 	mock.ExpectCommit()
 	require.NoError(t, NewChatSourceRepository(db).MarkDeleted(context.Background(), "c1", 7))
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -96,6 +139,7 @@ func TestChatCleanupPreservesTombstoneAndClearsSources(t *testing.T) {
 	mock.ExpectBegin()
 	expectConversationLock(mock, 7, "c1", true, true)
 	expectSourceDelete(mock, 7, "c1")
+	expectUsageDelete(mock, 7, "c1")
 	mock.ExpectExec("UPDATE `chat_conversation_states` SET `cleanup_pending`=.* WHERE `user_id` = .* AND `conversation_id` =").
 		WithArgs(false, sqlmock.AnyArg(), uint(7), "c1").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
@@ -106,6 +150,7 @@ func TestChatCleanupPreservesTombstoneAndClearsSources(t *testing.T) {
 	mock.ExpectExec("UPDATE `chat_conversation_states` SET .* WHERE `user_id` = .* AND `conversation_id` =").
 		WithArgs(true, true, sqlmock.AnyArg(), uint(7), "c1").WillReturnResult(sqlmock.NewResult(0, 1))
 	expectSourceDelete(mock, 7, "c1")
+	expectUsageDelete(mock, 7, "c1")
 	mock.ExpectCommit()
 	require.NoError(t, NewChatSourceRepository(db).MarkDeleted(context.Background(), "c1", 7))
 	require.NoError(t, mock.ExpectationsWereMet())

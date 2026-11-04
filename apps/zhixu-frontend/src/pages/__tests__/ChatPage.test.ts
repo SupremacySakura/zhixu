@@ -91,26 +91,20 @@ describe('ChatPage', () => {
     expect(wrapper.get('textarea').attributes('disabled')).toBeUndefined()
     wrapper.unmount()
   })
-  it.each([true, false])(
-    'retries with original rag=%s even after the checkbox changes',
-    async rag => {
-      configureModel(3)
-      vi.mocked(streamChat).mockRejectedValue(new Error('调用失败'))
-      const wrapper = mount(ChatPage, { global })
-      await flushPromises()
-      const checkbox = wrapper.get('input[type="checkbox"]')
-      await checkbox.setValue(rag)
-      await wrapper.get('textarea').setValue('问题')
-      await wrapper.get('form').trigger('submit')
-      await flushPromises()
-      await checkbox.setValue(!rag)
-      const retryButton = wrapper.findAll('button').find(b => b.text() === '重试这条消息')!
-      await retryButton.trigger('click')
-      await flushPromises()
-      expect(vi.mocked(streamChat).mock.calls.map(call => call[4])).toEqual([rag, rag])
-      wrapper.unmount()
-    },
-  )
+  it('retries the failed reply through the same unified route', async () => {
+    configureModel()
+    vi.mocked(streamChat).mockRejectedValue(new Error('调用失败'))
+    const wrapper = mount(ChatPage, { global })
+    await flushPromises()
+    await wrapper.get('textarea').setValue('问题')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    const retryButton = wrapper.findAll('button').find(b => b.text() === '重试这条消息')!
+    await retryButton.trigger('click')
+    await flushPromises()
+    expect(vi.mocked(streamChat).mock.calls.map(call => call[4])).toEqual([undefined, undefined])
+    wrapper.unmount()
+  })
   it('shows configuration guidance without requiring embedding', async () => {
     vi.mocked(getAIConfiguration).mockResolvedValue({
       providers: [],
@@ -173,7 +167,6 @@ describe('ChatPage', () => {
       [{ role: 'user', content: '你好' }],
       expect.any(AbortSignal),
       expect.any(Function),
-      false,
       undefined,
     )
     expect(wrapper.text()).toContain('真实流内容')

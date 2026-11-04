@@ -63,21 +63,17 @@ describe('temporary chat', () => {
     expect(chat.messages.value).toEqual([])
     scope.stop()
   })
-  it.each([true, false])(
-    'retry preserves the original rag=%s mode before any sources arrive',
-    async rag => {
-      vi.mocked(streamChat).mockRejectedValue(new Error('调用失败'))
-      const scope = effectScope()
-      const chat = scope.run(useChat)!
-      await chat.send('第一轮', 2, 'provider/model', rag)
-      expect(chat.messages.value[1]?.rag).toBe(rag)
-      await chat.retry(1, 2, 'provider/model')
-      expect(vi.mocked(streamChat).mock.calls[1]![4]).toBe(rag)
-      expect(chat.messages.value).toHaveLength(2)
-      scope.stop()
-    },
-  )
-  it('stores knowledge sources on the assistant message and forwards the rag flag', async () => {
+  it('retry regenerates the failed reply in the same conversation', async () => {
+    vi.mocked(streamChat).mockRejectedValue(new Error('调用失败'))
+    const scope = effectScope()
+    const chat = scope.run(useChat)!
+    await chat.send('第一轮', 2, 'provider/model')
+    await chat.retry(1, 2, 'provider/model')
+    expect(vi.mocked(streamChat).mock.calls[1]![4]).toBeUndefined()
+    expect(chat.messages.value).toHaveLength(2)
+    scope.stop()
+  })
+  it('stores knowledge sources on the assistant message', async () => {
     vi.mocked(streamChat).mockImplementation(async (_id, _messages, _signal, emit) => {
       emit({
         type: 'sources',
@@ -91,8 +87,7 @@ describe('temporary chat', () => {
     })
     const scope = effectScope()
     const chat = scope.run(useChat)!
-    await chat.send('怎么回滚？', 2, 'provider/model', true)
-    expect(vi.mocked(streamChat).mock.calls[0]![4]).toBe(true)
+    await chat.send('怎么回滚？', 2, 'provider/model')
     const reply = chat.messages.value.at(-1)
     expect(reply?.status).toBe('completed')
     expect(reply?.query).toBe('回滚步骤')
@@ -177,30 +172,9 @@ describe('conversation history', () => {
     const chat = scope.run(useChat)!
     await chat.send('第一轮', 2, 'provider/model')
     expect(chat.conversationId.value).toBe('conv-1')
-    expect(vi.mocked(streamChat).mock.calls[0]![5]).toBeUndefined()
+    expect(vi.mocked(streamChat).mock.calls[0]![4]).toBeUndefined()
     await chat.send('第二轮', 2, 'provider/model')
-    expect(vi.mocked(streamChat).mock.calls[1]![5]).toBe('conv-1')
-    scope.stop()
-  })
-  it.each([
-    { metadata: {}, rag: false },
-    { metadata: { sources: [] }, rag: true },
-    { metadata: { query: '检索词' }, rag: true },
-  ])('infers persisted retry mode from metadata $metadata', async ({ metadata, rag }) => {
-    vi.mocked(getConversation).mockResolvedValue({
-      ...conversation('history'),
-      messages: [
-        { role: 'user', content: '问题', created_at: '' },
-        { role: 'assistant', content: '回复', created_at: '', ...metadata },
-      ],
-    })
-    vi.mocked(streamChat).mockRejectedValue(new Error('调用失败'))
-    const scope = effectScope()
-    const chat = scope.run(useChat)!
-    await chat.loadConversation('history')
-    expect(chat.messages.value[1]?.rag).toBe(rag)
-    await chat.retry(1, 2, 'provider/model')
-    expect(vi.mocked(streamChat).mock.calls[0]![4]).toBe(rag)
+    expect(vi.mocked(streamChat).mock.calls[1]![4]).toBe('conv-1')
     scope.stop()
   })
   it('loadConversation restores messages with sources and reset clears the id', async () => {

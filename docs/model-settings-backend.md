@@ -4,10 +4,10 @@
 
 本轮只实现供应商、模型清单、默认模型的存储与管理，不调用模型、不执行模型发现或连接测试、不接 Qdrant、不下发明文密钥。使用现有 `zhixu` 数据库，启动 AutoMigrate 幂等补建：
 
-| 表 | 内容 |
-| --- | --- |
-| `model_providers` | 用户、稳定 Provider ID、目录归属、显示名称、地址、协议、认证方式、加密凭据 |
-| `provider_models` | 用户、所属供应商数据库 ID、模型 ID、用途、向量维度 |
+| 表                 | 内容                                                                       |
+| ------------------ | -------------------------------------------------------------------------- |
+| `model_providers`  | 用户、稳定 Provider ID、目录归属、显示名称、地址、协议、认证方式、加密凭据 |
+| `provider_models`  | 用户、所属供应商数据库 ID、模型 ID、用途、向量维度                         |
 | `user_ai_settings` | 用户默认模型、检索条数与相似度阈值、配置版本、Embedding 版本、需要重建标记 |
 
 供应商 `(user_id, provider_id)` 唯一，模型 `(provider_id, model_id)` 唯一。均为物理删除。Provider ID 和目录归属保存后不可修改；同名模型在更新时保留数据库 ID。模型清单随供应商 PUT 整体替换，不另设重复的模型 CRUD 接口。
@@ -16,14 +16,14 @@
 
 以下为后端路径，前端通过 `/api` 代理。全部需要 JWT，用户身份取自服务端上下文，拒绝请求中的 `user_id` 等未知字段。
 
-| 方法 | 路径 | 用途 |
-| --- | --- | --- |
-| GET | `/settings/ai` | 当前用户供应商、模型和默认设置 |
-| GET | `/settings/ai/catalog` | DeepSeek、OpenAI、硅基流动连接预设，不是实时模型清单 |
-| POST | `/settings/ai/providers` | 创建供应商和模型，成功 201 |
-| PUT | `/settings/ai/providers/:id` | 替换供应商配置和模型清单 |
-| DELETE | `/settings/ai/providers/:id` | 删除供应商及模型；JSON 携带 `expected_version` |
-| PUT | `/settings/ai/defaults` | 更新默认模型 |
+| 方法   | 路径                         | 用途                                                 |
+| ------ | ---------------------------- | ---------------------------------------------------- |
+| GET    | `/settings/ai`               | 当前用户供应商、模型和默认设置                       |
+| GET    | `/settings/ai/catalog`       | DeepSeek、OpenAI、硅基流动连接预设，不是实时模型清单 |
+| POST   | `/settings/ai/providers`     | 创建供应商和模型，成功 201                           |
+| PUT    | `/settings/ai/providers/:id` | 替换供应商配置和模型清单                             |
+| DELETE | `/settings/ai/providers/:id` | 删除供应商及模型；JSON 携带 `expected_version`       |
+| PUT    | `/settings/ai/defaults`      | 更新默认模型                                         |
 
 所有写接口返回更新后的完整配置视图，保持 `{code,msg,data}`。未配置用户的 settings 版本与默认 ID 均为 0，providers 为数组。首次 POST 的请求示例：
 
@@ -37,8 +37,8 @@
   "auth_type": "key",
   "api_key": "<通过请求正文提交的密钥>",
   "models": [
-    {"model_id": "chat-model", "kind": "chat", "dimension": 0},
-    {"model_id": "embedding-model", "kind": "embedding", "dimension": 1024}
+    { "model_id": "chat-model", "kind": "chat", "dimension": 0 },
+    { "model_id": "embedding-model", "kind": "embedding", "dimension": 1024 }
   ],
   "expected_version": 0,
   "confirm_reindex": false
@@ -68,7 +68,7 @@
 
 ID 是 `provider_models.id`，不是供应商 Provider ID 或模型名称。允许 0 表示清除/未配置，支持分步设置；非 0 必须属于当前用户且用途匹配。删除或修改默认模型的用途前须先切换默认值。跨用户默认 ID 无效，不开放他人配置。
 
-`rag_top_k`（检索条数，1–50，默认 5）与 `rag_min_score`（相似度阈值，0.05–1，默认 0.5）随默认模型保存；省略字段则保留已存值，便于旧客户端只更新默认模型。检索时阈值先作为 Qdrant `score_threshold` 下推，Go 组装结果时再兜底过滤一次；全部低于阈值时返回空参考，AI 侧按"知识库中没有找到相关内容"拒答，不再强行凑满条数。存量行由 AutoMigrate 列默认值补齐；读取时遇到越界值（如未迁移的零值）回退默认值。检索参数只来自服务端设置，聊天与内部检索网关请求体中的条数一律忽略。
+`rag_top_k`（检索条数，1–50，默认 5）与 `rag_min_score`（相似度阈值，0.05–1，默认 0.5）随默认模型保存；省略字段则保留已存值，便于旧客户端只更新默认模型。检索时阈值先作为 Qdrant `score_threshold` 下推，Go 组装结果时再兜底过滤一次；全部低于阈值时返回空参考，不再强行凑满条数；AI 侧由模型通过系统提示词如实告知「知识库中没有找到相关内容」（是否检索由模型自主调用 search_knowledge 工具决定，不再是固定流水线）。存量行由 AutoMigrate 列默认值补齐；读取时遇到越界值（如未迁移的零值）回退默认值。检索参数只来自服务端设置，聊天与内部检索网关请求体中的条数一律忽略。
 
 ## 版本与事务
 

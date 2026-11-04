@@ -125,6 +125,7 @@ func Migrate() error {
 		&model.ProviderModel{},
 		&model.UserAISettings{},
 		&model.ChatTurnSource{},
+		&model.ChatTurnUsage{},
 		&model.ChatConversationState{},
 	); err != nil {
 		return err

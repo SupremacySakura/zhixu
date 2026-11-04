@@ -56,6 +56,7 @@
 
 - `/home/chat` 根高度为 `h-[calc(100dvh-60px)] lg:h-auto`，扣除移动端顶栏后内部滚动；桌面端会话历史 `ConversationSidebar` 常驻，移动端（`<lg`）改为左侧抽屉（复用 HomePage 导航抽屉模式：motion-v 弹簧滑入、遮罩点击与拖拽左滑关闭），入口为头部 `lg:hidden` 的历史按钮，选择会话或新建后自动关闭。
 - 会话项的改名/删除按钮在触屏常显、桌面端 hover/focus 显示；输入区带底部安全区 padding，键盘提示仅 `sm:` 以上显示。
+- 对话不区分普通/知识库：检索由 Mastra 侧模型自主调用 `search_knowledge` 工具，`sources` 事件在回答过程中到达并渲染为引用卡片，页面无「知识库检索」开关。
 
 ## UI 与样式约定
 

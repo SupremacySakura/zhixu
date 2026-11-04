@@ -40,3 +40,19 @@ type KnowledgeSource struct {
 	Content     string  `json:"content"`
 	Score       float64 `json:"score"`
 }
+
+// ChatTurnUsage records the provider-reported token usage of one completed turn. It is
+// the accounting foundation for future quotas and billing; the AI gateway only reports,
+// Go owns the ledger so usage survives AI-service restarts and is scoped per user.
+type ChatTurnUsage struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	UserID         uint      `gorm:"not null;index" json:"-"`
+	ConversationID string    `gorm:"size:64;not null;index:idx_chat_usage_conv" json:"conversation_id"`
+	MessageID      string    `gorm:"size:191" json:"message_id"`
+	ModelID        uint      `gorm:"not null" json:"model_id"`
+	Model          string    `gorm:"size:200;not null" json:"model"`
+	InputTokens    int       `gorm:"not null;default:0" json:"input_tokens"`
+	OutputTokens   int       `gorm:"not null;default:0" json:"output_tokens"`
+	TotalTokens    int       `gorm:"not null;default:0" json:"total_tokens"`
+	CreatedAt      time.Time `json:"created_at"`
+}

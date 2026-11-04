@@ -23,9 +23,10 @@ type ConversationService struct {
 	Sources ChatSourceStore
 }
 
-// ChatSourceStore persists RAG provenance per turn.
+// ChatSourceStore persists RAG provenance and token usage per conversation turn.
 type ChatSourceStore interface {
 	SaveTurnSource(ctx context.Context, row *model.ChatTurnSource) error
+	SaveTurnUsage(ctx context.Context, row *model.ChatTurnUsage) error
 	ListTurnSources(ctx context.Context, conversationID string, user uint) ([]model.ChatTurnSource, error)
 	IsDeleted(ctx context.Context, conversationID string, user uint) (bool, error)
 	MarkDeleted(ctx context.Context, conversationID string, user uint) error
@@ -170,8 +171,14 @@ func (s *ConversationService) Detail(ctx context.Context, user uint, id string) 
 		if m.Role != "user" && m.Role != "assistant" {
 			continue
 		}
+		content := renderContent(m.Content)
+		// Interrupted multi-step turns persist assistant messages whose only parts are
+		// reasoning and tool invocations. They have no visible answer to show or replay.
+		if m.Role == "assistant" && strings.TrimSpace(content) == "" {
+			continue
+		}
 		message := ConversationMessage{
-			Role: m.Role, Content: renderContent(m.Content), CreatedAt: m.CreatedAt,
+			Role: m.Role, Content: content, CreatedAt: m.CreatedAt,
 		}
 		if row, ok := sources[m.ID]; m.Role == "assistant" && ok {
 			message.Query = row.Query
@@ -219,6 +226,16 @@ func (s *ConversationService) SaveTurnSource(ctx context.Context, conversationID
 	return s.Sources.SaveTurnSource(ctx, &model.ChatTurnSource{
 		ConversationID: conversationID, UserID: user, MessageID: messageID, Query: query, Sources: string(encoded),
 	})
+}
+
+// SaveTurnUsage records the provider-reported token usage of the turn that just
+// finished. Accounting is best-effort: callers log failures and never withhold the
+// already-generated reply because the ledger write failed.
+func (s *ConversationService) SaveTurnUsage(ctx context.Context, row *model.ChatTurnUsage) error {
+	if s.Sources == nil || row == nil || row.ConversationID == "" || strings.TrimSpace(row.MessageID) == "" {
+		return nil
+	}
+	return s.Sources.SaveTurnUsage(ctx, row)
 }
 
 // renderContent flattens a V2 message body to plain text for the chat UI.

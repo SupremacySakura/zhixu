@@ -12,11 +12,17 @@ export interface ChatSource {
   content: string
   score: number
 }
+export interface ChatUsage {
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+}
 export type ChatEvent =
   | { type: 'delta'; text: string }
   | { type: 'meta'; model_id: number; model: string; provider: string; conversation_id?: string }
   | { type: 'sources'; query: string; items: ChatSource[] }
-  | { type: 'done' }
+  // Token usage is accounting data owned by the Go BFF; the UI may ignore it.
+  | { type: 'done'; usage?: ChatUsage }
   | { type: 'error'; message: string }
 
 export interface ConversationSummary {
@@ -101,7 +107,6 @@ export async function streamChat(
   messages: ChatWireMessage[],
   signal: AbortSignal,
   onEvent: (event: ChatEvent) => void,
-  rag = false,
   conversationID?: string,
 ) {
   const user = useUserStore()
@@ -110,7 +115,7 @@ export async function streamChat(
     method: 'POST',
     signal,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
-    body: JSON.stringify({ model_id: modelID, messages, rag, conversation_id: conversationID }),
+    body: JSON.stringify({ model_id: modelID, messages, conversation_id: conversationID }),
   })
   if (response.status === 401) user.logout()
   await readChatStream(response, onEvent)

@@ -13,7 +13,6 @@ export interface ChatMessage {
   error?: string
   sources?: ChatSource[]
   query?: string
-  rag?: boolean
 }
 export function useChat() {
   const messages = ref<ChatMessage[]>([])
@@ -58,8 +57,6 @@ export function useChat() {
         status: 'completed',
         query: m.query,
         sources: m.sources,
-        // Persisted history has no explicit mode; even empty sources mark a RAG turn.
-        rag: m.query !== undefined || m.sources !== undefined,
       }))
     } catch (e) {
       if (historyController === current && !current.signal.aborted) throw e
@@ -70,7 +67,7 @@ export function useChat() {
       }
     }
   }
-  async function generate(modelID: number, label: string, rag: boolean) {
+  async function generate(modelID: number, label: string) {
     const current = new AbortController()
     controller = current
     running.value = true
@@ -82,7 +79,6 @@ export function useChat() {
       content: '',
       model: label,
       status: 'generating',
-      rag,
     }
     messages.value.push(message)
     const index = messages.value.length - 1
@@ -108,7 +104,6 @@ export function useChat() {
             reply.query = event.query
           }
         },
-        rag,
         conversationId.value || undefined,
       )
       if (!current.signal.aborted) {
@@ -127,21 +122,20 @@ export function useChat() {
       if (controller === current) running.value = false
     }
   }
-  async function send(text: string, modelID: number, label: string, rag = false) {
+  async function send(text: string, modelID: number, label: string) {
     if (running.value || !text.trim()) return false
     const last = messages.value.at(-1)
     if (last?.role === 'assistant' && last.status !== 'completed') return false
     invalidateHistory()
     messages.value.push({ role: 'user', content: text.trim() })
-    await generate(modelID, label, rag)
+    await generate(modelID, label)
     return true
   }
   async function retry(index: number, modelID: number, label: string) {
     const reply = messages.value[index]
     if (running.value || loadingHistory.value || reply?.role !== 'assistant') return
-    const rag = reply.rag ?? (reply.query !== undefined || reply.sources !== undefined)
     messages.value.splice(index)
-    await generate(modelID, label, rag)
+    await generate(modelID, label)
   }
   onScopeDispose(() => {
     invalidateHistory()

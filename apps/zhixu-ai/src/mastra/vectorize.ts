@@ -1,9 +1,6 @@
 import { registerApiRoute } from "@mastra/core/server";
-import {
-  allowedGateway,
-  vectorizeAgent,
-  vectorizeSchema,
-} from "../lib/vectorize";
+import { allowedProviderURL } from "../lib/chat";
+import { vectorizeAgent, vectorizeSchema } from "../lib/vectorize";
 
 export const vectorizeRoute = registerApiRoute("/vectorize", {
   method: "POST",
@@ -14,13 +11,8 @@ export const vectorizeRoute = registerApiRoute("/vectorize", {
     if (!parsed.success)
       return c.json({ error: "Invalid vectorize input" }, 400);
     const input = parsed.data;
-    if (
-      !allowedGateway(
-        input.gateway,
-        process.env.CHAT_BACKEND_URL || "http://127.0.0.1:9000",
-      )
-    ) {
-      return c.json({ error: "Invalid gateway" }, 403);
+    if (!allowedProviderURL(input.model.base_url)) {
+      return c.json({ error: "Invalid model URL" }, 403);
     }
     const controller = new AbortController();
     const abort = () => controller.abort();

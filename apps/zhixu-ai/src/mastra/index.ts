@@ -10,8 +10,7 @@ import {
 } from "@mastra/observability";
 import { agent } from "./agents/agent";
 import { startScheduleTool, stopScheduleTool } from "./tools/schedule-tools";
-import { plainChatRoute } from "./plain-chat";
-import { ragChatRoute } from "./rag-chat";
+import { chatRoute } from "./chat";
 import { vectorizeRoute } from "./vectorize";
 import { conversationRoutes } from "./conversations";
 import { healthRoute } from "./health";
@@ -19,13 +18,7 @@ import { healthRoute } from "./health";
 export const mastra = new Mastra({
   server: {
     host: "127.0.0.1",
-    apiRoutes: [
-      plainChatRoute,
-      ragChatRoute,
-      vectorizeRoute,
-      healthRoute,
-      ...conversationRoutes,
-    ],
+    apiRoutes: [chatRoute, vectorizeRoute, healthRoute, ...conversationRoutes],
   },
   bundler: {
     externals: ["@duckdb/node-bindings"],

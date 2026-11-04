@@ -22,12 +22,10 @@ const {
 } = useChat()
 const model = ref('0')
 const prompt = ref('')
-const ragEnabled = ref(true)
 // 桌面与移动端抽屉各持有一个会话列表实例，首轮对话完成后两个列表都要刷新
 const sidebarDesktop = ref<InstanceType<typeof ConversationSidebar> | null>(null)
 const sidebarMobile = ref<InstanceType<typeof ConversationSidebar> | null>(null)
 const historyOpen = ref(false)
-const hasEmbedding = computed(() => (configuration.value?.settings.embedding_model_id || 0) > 0)
 const transcript = ref<HTMLElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
 const confirmation = ref<string | null>(null)
@@ -115,12 +113,7 @@ async function submit() {
     return
   const text = prompt.value
   prompt.value = ''
-  const task = send(
-    text,
-    Number(model.value),
-    selected.value.label,
-    ragEnabled.value && hasEmbedding.value,
-  )
+  const task = send(text, Number(model.value), selected.value.label)
   await nextTick()
   if (transcript.value) transcript.value.scrollTop = transcript.value.scrollHeight
   await task
@@ -195,18 +188,6 @@ onMounted(() => {
             @update:model-value="changeModel"
           />
         </fieldset>
-        <label
-          class="flex items-center gap-2 text-caption"
-          :class="hasEmbedding ? 'text-label-primary' : 'text-label-secondary'"
-        >
-          <input
-            v-model="ragEnabled"
-            type="checkbox"
-            :disabled="!hasEmbedding || running"
-            class="h-4 w-4 accent-primary-pressed"
-          />
-          知识库检索{{ hasEmbedding ? '' : '（需先配置 Embedding 模型）' }}
-        </label>
       </div>
       <section
         ref="transcript"

@@ -43,35 +43,6 @@ type RagResult struct {
 	Sources   []RagSource `json:"sources"`
 }
 
-// RagPrepared carries the two capabilities one chat turn may need: the conversation
-// model and, when retrieval is enabled and configured, the query embedding model.
-type RagPrepared struct {
-	Chat      *ChatCapability
-	Embedding *ChatCapability
-	UserID    uint
-	Rag       bool
-}
-
-// Prepare resolves the conversation model and, when the caller requested retrieval,
-// the embedding model. Retrieval stays optional: without a configured embedding
-// model the turn silently falls back to a plain conversation.
-func (s *ChatService) Prepare(ctx context.Context, user uint, input ChatInput) (*RagPrepared, error) {
-	chat, err := s.Resolve(ctx, user, input)
-	if err != nil {
-		return nil, err
-	}
-	prepared := &RagPrepared{Chat: chat, UserID: user}
-	if !input.RAG {
-		return prepared, nil
-	}
-	embedding, _, _, err := s.ResolveEmbedding(ctx, user)
-	if err != nil {
-		return prepared, nil
-	}
-	prepared.Embedding, prepared.Rag = embedding, true
-	return prepared, nil
-}
-
 // RagSearcher embeds a query and matches it against the caller's vector collection.
 type RagSearcher struct {
 	Chat     *ChatService

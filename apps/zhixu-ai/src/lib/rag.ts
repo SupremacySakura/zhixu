@@ -1,47 +1,16 @@
 import { z } from "zod";
 
 // Search parameters issued by the Go chat handler. The capability authorizes this
-// single chat turn against the internal RAG gateway; the AI service never sees
-// model credentials or the vector database.
-export const ragChatSchema = z
+// single chat turn against the internal tool gateway; the AI service never sees
+// model credentials at rest or the vector database.
+export const searchToolsSchema = z
   .object({
-    model: z.string().min(1).max(200),
-    protocol: z.enum(["chat", "responses"]),
-    gateway: z.string().url(),
+    search_url: z.string().url(),
     capability: z.string().regex(/^[a-f0-9]{64}$/),
-    messages: z
-      .array(
-        z.object({
-          role: z.enum(["user", "assistant"]),
-          content: z.string().min(1).max(8000),
-        }),
-      )
-      .min(1)
-      .max(79),
-    rag: z
-      .object({
-        capability: z.string().regex(/^[a-f0-9]{64}$/),
-        search_url: z.string().url(),
-        // Mirrors Go's RagMaxTopK; the gateway re-reads user settings, so this
-        // bound only guards contract shape.
-        top_k: z.number().int().min(1).max(50),
-      })
-      .strict(),
-    // Optional conversation identity; when present, turns persist to MySQL and history
-    // is auto-loaded by Memory. Go sends only the latest user message in that mode.
-    conversation: z
-      .object({
-        id: z.string().min(1).max(64),
-        resource: z.string().min(1).max(64),
-        title: z.string().max(200).optional(),
-        metadata: z.record(z.string(), z.unknown()).optional(),
-      })
-      .strict()
-      .optional(),
   })
   .strict();
 
-export type RagChatInput = z.infer<typeof ragChatSchema>;
+export type SearchTools = z.infer<typeof searchToolsSchema>;
 
 export interface KnowledgeSource {
   knowledge_id: number;
@@ -59,7 +28,7 @@ export function allowedSearchURL(value: string, backendURL: string): boolean {
     const backend = new URL(backendURL);
     return (
       search.origin === backend.origin &&
-      search.pathname === "/internal/rag/v1/search" &&
+      search.pathname === "/internal/tools/v1/search" &&
       !search.username &&
       !search.password &&
       !search.search &&
@@ -71,17 +40,17 @@ export function allowedSearchURL(value: string, backendURL: string): boolean {
 }
 
 export async function searchKnowledge(
-  rag: RagChatInput["rag"],
+  tools: SearchTools,
   query: string,
   signal: AbortSignal,
 ): Promise<KnowledgeSource[]> {
-  const response = await fetch(rag.search_url, {
+  const response = await fetch(tools.search_url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${rag.capability}`,
+      Authorization: `Bearer ${tools.capability}`,
     },
-    body: JSON.stringify({ query, topK: rag.top_k }),
+    body: JSON.stringify({ query }),
     signal,
   });
   if (!response.ok) {
