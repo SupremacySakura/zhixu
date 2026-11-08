@@ -38,6 +38,9 @@ type Config struct {
 	// CORS 配置
 	CORSAllowedOrigins string `mapstructure:"CORS_ALLOWED_ORIGINS"`
 
+	// 可信代理 CIDR（逗号分隔），决定 ClientIP 是否采信 X-Forwarded-For
+	TrustedProxies string `mapstructure:"TRUSTED_PROXIES"`
+
 	// 文件存储配置
 	ChunkStoragePath string `mapstructure:"CHUNK_STORAGE_PATH"`
 	FileStoragePath  string `mapstructure:"FILE_STORAGE_PATH"`
@@ -102,6 +105,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("FILE_STORAGE_PATH", "./data")
 	v.SetDefault("LOG_LEVEL", "info")
 	v.SetDefault("APP_ENV", "production")
+	// 默认可信代理仅本机（本地 Vite/直连场景）；Docker 部署由 compose 注入网段
+	v.SetDefault("TRUSTED_PROXIES", "127.0.0.1,::1")
 }
 
 // loadEnvFile 尝试从多个位置加载 .env 文件
@@ -144,7 +149,7 @@ func bindEnvVariables(v *viper.Viper) {
 		"MODEL_CONFIG_ENCRYPTION_KEY",
 		"CHAT_AI_URL", "CHAT_BACKEND_URL", "MODEL_ALLOWED_PRIVATE_ENDPOINTS", "INTERNAL_API_SECRET",
 		"QDRANT_URL", "QDRANT_API_KEY",
-		"CORS_ALLOWED_ORIGINS",
+		"CORS_ALLOWED_ORIGINS", "TRUSTED_PROXIES",
 		"CHUNK_STORAGE_PATH", "FILE_STORAGE_PATH",
 		"LOG_LEVEL", "APP_ENV",
 	}
@@ -193,6 +198,17 @@ func resolvePath(path string) string {
 	return filepath.Join(wd, path)
 }
 
+// weakJWTSecrets 是已知的占位/弱 JWT 密钥，启动时拒绝
+var weakJWTSecrets = map[string]struct{}{
+	"your_secret_key":     {},
+	"your_jwt_secret_key": {},
+	"changeme":            {},
+	"secret":              {},
+	"password":            {},
+	// 历史文档中出现过的占位值，防止复制示例后直接用于部署
+	"replace_with_32_plus_char_random_secret": {},
+}
+
 // validate 验证必需字段
 // 如果必需字段为空，返回错误
 func (c *Config) validate() error {
@@ -202,9 +218,17 @@ func (c *Config) validate() error {
 			return fmt.Errorf("MODEL_CONFIG_ENCRYPTION_KEY 必须是 32 字节随机密钥的 Base64 编码")
 		}
 	}
-	// JWT_SECRET 是必需字段
-	if strings.TrimSpace(c.JWTSecret) == "" {
+	// JWT_SECRET 是必需字段，且必须是高强度随机密钥：
+	// 后端用 HS256 对称签名，弱密钥可被爆破后伪造任意用户登录态
+	secret := strings.TrimSpace(c.JWTSecret)
+	if secret == "" {
 		return fmt.Errorf("必需配置项 JWT_SECRET 为空: JWT 密钥必须显式配置")
+	}
+	if _, weak := weakJWTSecrets[strings.ToLower(secret)]; weak {
+		return fmt.Errorf("JWT_SECRET 使用了已知占位值，请配置强随机密钥（如 openssl rand -hex 32）")
+	}
+	if len(secret) < 32 {
+		return fmt.Errorf("JWT_SECRET 强度不足: 请使用 openssl rand -hex 32 生成随机密钥（长度不是唯一要求，必须是随机值）")
 	}
 
 	// 验证数据库必需字段
@@ -242,16 +266,30 @@ func (c *Config) GetDSN() string {
 
 // GetCORSOrigins 返回解析后的 CORS 来源列表
 func (c *Config) GetCORSOrigins() []string {
-	if strings.TrimSpace(c.CORSAllowedOrigins) == "" {
+	return splitCommaList(c.CORSAllowedOrigins)
+}
+
+// GetTrustedProxies 返回解析后的可信代理 CIDR 列表；空表示不信任任何代理。
+// 显式设为 "none" 可禁用代理信任（空串会被 viper 忽略并回退默认值，无法表达禁用）
+func (c *Config) GetTrustedProxies() []string {
+	if strings.EqualFold(strings.TrimSpace(c.TrustedProxies), "none") {
+		return []string{}
+	}
+	return splitCommaList(c.TrustedProxies)
+}
+
+// splitCommaList 解析逗号分隔的配置项
+func splitCommaList(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
 		return nil
 	}
 
-	var origins []string
-	for _, o := range strings.Split(c.CORSAllowedOrigins, ",") {
-		v := strings.TrimSpace(o)
+	var items []string
+	for _, entry := range strings.Split(raw, ",") {
+		v := strings.TrimSpace(entry)
 		if v != "" {
-			origins = append(origins, v)
+			items = append(items, v)
 		}
 	}
-	return origins
+	return items
 }

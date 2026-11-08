@@ -14,7 +14,7 @@ import (
 
 func TestModelEncryptionKeyConfiguration(t *testing.T) {
 	for _, key := range []string{"", base64.StdEncoding.EncodeToString(make([]byte, 32))} {
-		cfg := Config{JWTSecret: "test", DBUser: "root", DBHost: "localhost", DBPort: "3306", DBName: "zhixu", ModelConfigEncryptionKey: key}
+		cfg := Config{JWTSecret: "0123456789abcdef0123456789abcdef", DBUser: "root", DBHost: "localhost", DBPort: "3306", DBName: "zhixu", ModelConfigEncryptionKey: key}
 		require.NoError(t, cfg.validate())
 	}
 	cfg := Config{ModelConfigEncryptionKey: "invalid-secret"}
@@ -27,6 +27,32 @@ func TestModelEncryptionKeyConfiguration(t *testing.T) {
 	var loaded Config
 	require.NoError(t, v.Unmarshal(&loaded))
 	require.NotEmpty(t, loaded.ModelConfigEncryptionKey)
+}
+
+func TestJWTSecretValidation(t *testing.T) {
+	base := Config{JWTSecret: "0123456789abcdef0123456789abcdef", DBUser: "root", DBHost: "localhost", DBPort: "3306", DBName: "zhixu"}
+
+	// 空值、已知占位值（含历史文档中的长占位符）、31 字符边界均应被拒绝
+	for _, secret := range []string{"", "your_secret_key", "YOUR_SECRET_KEY", "changeme", "0123456789abcdef0123456789abcde", "REPLACE_WITH_32_PLUS_CHAR_RANDOM_SECRET"} {
+		cfg := base
+		cfg.JWTSecret = secret
+		require.Error(t, cfg.validate(), "secret %q should be rejected", secret)
+	}
+
+	// 32 字符边界应通过
+	cfg := base
+	require.NoError(t, cfg.validate())
+}
+
+func TestGetTrustedProxies(t *testing.T) {
+	// 空值返回 nil（调用方转成不信任任何代理）
+	require.Nil(t, (&Config{TrustedProxies: ""}).GetTrustedProxies())
+	// 显式 none 表示不信任任何代理（空串会被 viper 忽略，无法表达禁用）
+	require.Empty(t, (&Config{TrustedProxies: "none"}).GetTrustedProxies())
+	require.Empty(t, (&Config{TrustedProxies: " NONE "}).GetTrustedProxies())
+	// 正常解析 CIDR 列表并去空白
+	require.Equal(t, []string{"172.28.0.0/16", "127.0.0.1"},
+		(&Config{TrustedProxies: "172.28.0.0/16, 127.0.0.1"}).GetTrustedProxies())
 }
 
 func TestLoadEnvFileUsesExplicitDevelopmentFile(t *testing.T) {

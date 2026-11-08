@@ -1,6 +1,7 @@
 package router
 
 import (
+    "fmt"
     "net/http"
 
     "github.com/gin-gonic/gin"
@@ -15,6 +16,15 @@ import (
 
 func SetUpRouter(cfg *config.Config) *gin.Engine {
     r := gin.Default()
+    // 只信任配置内的代理来源，否则客户端可伪造 X-Forwarded-For 影响限流与日志。
+    // 空列表表示不信任任何代理，ClientIP 退化为直连地址。
+    proxies := cfg.GetTrustedProxies()
+    if proxies == nil {
+        proxies = []string{}
+    }
+    if err := r.SetTrustedProxies(proxies); err != nil {
+        panic(fmt.Sprintf("无效的 TRUSTED_PROXIES 配置: %v", err))
+    }
     // 注册跨域、限流和日志中间件
     r.Use(middleware.CORSMiddleware(cfg))
     r.Use(middleware.RateLimitMiddleware())

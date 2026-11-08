@@ -38,13 +38,13 @@
 
 | 变量名 | 默认值 | 说明 |
 |--------|--------|------|
-| `JWT_SECRET` | `your_secret_key` | JWT 签名密钥 |
+| `JWT_SECRET` | 无（必填） | JWT 签名密钥，至少 32 个字符的强随机值 |
 
-**⚠️ 安全警告**：生产环境必须修改 `JWT_SECRET`！
+**⚠️ 安全警告**：所有环境（包括本地开发）都必须显式设置 `JWT_SECRET`。服务启动时会拒绝空值、已知占位值（如 `your_secret_key`）和少于 32 个字符的密钥。
 
 生成强密钥的命令：
 ```bash
-openssl rand -base64 32
+openssl rand -hex 32
 ```
 
 ### 文件存储配置
@@ -84,7 +84,7 @@ CMD ["./server"]
 
 ```bash
 docker run -d \
-  -e JWT_SECRET="your-production-secret" \
+  -e JWT_SECRET="$(openssl rand -hex 32)" \
   -e DB_PASSWORD="your-db-password" \
   -e DB_HOST="mysql-host" \
   -p 9000:9000 \
@@ -104,7 +104,8 @@ After=network.target
 Type=simple
 User=zhixu
 WorkingDirectory=/opt/zhixu
-Environment="JWT_SECRET=your-production-secret"
+# 先用 openssl rand -hex 32 生成，再填入下方等号右侧；留空时服务会拒绝启动
+Environment="JWT_SECRET="
 Environment="DB_PASSWORD=your-db-password"
 Environment="DB_HOST=localhost"
 Environment="FILE_STORAGE_PATH=/var/zhixu/data"
@@ -130,7 +131,7 @@ sudo systemctl start zhixu
 
 2. **生产环境使用强密码和密钥**
    - 数据库密码至少 16 位随机字符
-   - JWT 密钥使用 `openssl rand -base64 32` 生成
+   - JWT 密钥使用 `openssl rand -hex 32` 生成
 
 3. **限制文件存储目录权限**
    ```bash

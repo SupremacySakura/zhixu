@@ -4,11 +4,11 @@ services:
     container_name: ${MYSQL_CONTAINER_NAME:-zhixu-mysql}
     profiles: ["infra", "backend", "frontend", "full"]
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456123456}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-zhixu}
       MYSQL_INITDB_SKIP_TZINFO: "${MYSQL_INITDB_SKIP_TZINFO:-1}"
     ports:
-      - "${MYSQL_PORT:-3307}:3306"
+      - "127.0.0.1:${MYSQL_PORT:-3307}:3306"
     volumes:
       - ${MYSQL_DATA_DIR:-./data/mysql}:/var/lib/mysql
       - ${MYSQL_INIT_DIR:-./ops/mysql/init}:/docker-entrypoint-initdb.d:ro
@@ -47,9 +47,12 @@ services:
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}
       DB_USER: ${DB_USER:-root}
-      DB_PASSWORD: ${DB_PASSWORD:-123456123456}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       DB_NAME: ${DB_NAME:-${MYSQL_DATABASE:-zhixu}}
-      JWT_SECRET: ${JWT_SECRET:-your_secret_key}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env - generate with openssl rand -hex 32}
+      # 可信代理 CIDR（逗号分隔）。默认仅信任本 compose 网络子网（NETWORK_SUBNET），
+      # 使前端 nginx 的 X-Forwarded-For 生效；显式设为 none 则不信任任何代理
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-${NETWORK_SUBNET:-172.28.0.0/16}}
       MODEL_CONFIG_ENCRYPTION_KEY: ${MODEL_CONFIG_ENCRYPTION_KEY:-}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       QDRANT_API_KEY: ${QDRANT_API_KEY:-}
@@ -107,6 +110,11 @@ networks:
   zhixu-network:
     name: ${NETWORK_NAME:-zhixu-network}
     driver: bridge
+    # 固定子网，与后端 TRUSTED_PROXIES 默认值对齐；不要改成会被外部直连客户端落入的网段。
+    # 注意：已有部署修改子网后需先 docker compose down 再 up，让 Docker 重建网络。
+    ipam:
+      config:
+        - subnet: ${NETWORK_SUBNET:-172.28.0.0/16}
 
 volumes:
   backend-data:

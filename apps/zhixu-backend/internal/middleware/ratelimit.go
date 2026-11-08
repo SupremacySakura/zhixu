@@ -21,7 +21,33 @@ type bucket struct {
 var (
     rateBuckets = make(map[string]*bucket)
     rlMu        sync.RWMutex
+    sweepOnce   sync.Once
 )
+
+// bucketIdleTTL 是限流桶的空闲存活时间。桶表按限流键增长且永不回收会被
+// 伪造 IP 耗尽内存，因此由清扫协程定期回收超过该时长未活跃的桶。
+const bucketIdleTTL = 10 * time.Minute
+
+// startBucketSweeper 定期回收空闲限流桶，防止桶表无限增长
+func startBucketSweeper() {
+    go func() {
+        ticker := time.NewTicker(time.Minute)
+        defer ticker.Stop()
+        for now := range ticker.C {
+            cutoff := now.Add(-bucketIdleTTL)
+            rlMu.Lock()
+            for key, b := range rateBuckets {
+                b.mu.Lock()
+                idle := b.last.Before(cutoff)
+                b.mu.Unlock()
+                if idle {
+                    delete(rateBuckets, key)
+                }
+            }
+            rlMu.Unlock()
+        }
+    }()
+}
 
 func getBucket(key string, capacity int) *bucket {
     rlMu.Lock()
@@ -59,6 +85,7 @@ func (b *bucket) allow() bool {
 
 // RateLimitMiddleware 基于 IP 的简单令牌桶限流
 func RateLimitMiddleware() gin.HandlerFunc {
+    sweepOnce.Do(startBucketSweeper)
     return func(c *gin.Context) {
         path := strings.ToLower(c.Request.URL.Path)
         var key string
