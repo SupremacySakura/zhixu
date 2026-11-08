@@ -47,7 +47,7 @@ func main() {
 	qdrant := &service.QdrantClient{URL: cfg.QdrantURL, APIKey: cfg.QdrantAPIKey}
 	chat.Rag = &service.RagSearcher{
 		Chat:     chat.Service,
-		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL},
+		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 		Vectors:  qdrant, Chunks: &repository.RagRepository{DB: database.DB},
 	}
 	r.POST("/chat", middleware.AuthMiddleware(), chat.Send)
@@ -62,7 +62,7 @@ func main() {
 	knowledgeService.Logs = repository.NewOperationLogRepository(database.DB)
 	vectorService := &service.VectorizeService{
 		Store: vectorStore, Knowledge: repository.NewKnowledgeRepository(database.DB), Chat: chat.Service,
-		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL},
+		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 		Vectors:  qdrant,
 	}
 	vectorCleanup := &service.VectorCleanupService{

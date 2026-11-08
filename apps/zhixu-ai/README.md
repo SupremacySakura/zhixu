@@ -36,6 +36,30 @@ The agent asks for approval before it changes files or runs commands. When it cr
 
 The local filesystem tools stay inside the `workspace/` directory, which resolves relative to the server's working directory (`src/mastra/public/workspace/` during `mastra dev`). Shell commands start in that directory, but `LocalSandbox` does not provide operating-system isolation by default. Review command approvals carefully, and do not expose this template through an unauthenticated public server.
 
+## Running with the zhixu backend
+
+When used by the Go backend (`apps/zhixu-backend`), set these in the environment that starts the service:
+
+- `INTERNAL_API_SECRET`: shared secret with the backend. `/chat`, `/vectorize`, `/internal/conversations`, `/internal/conversations/*`, and `/internal/health` answer `403` unless it is configured and the request carries `Authorization: Bearer <secret>`.
+- `MASTRA_HOST`: listen address. Defaults to `127.0.0.1`; set `0.0.0.0` when the backend runs in a container and connects through the host gateway (`host.docker.internal`). Binding `0.0.0.0` exposes every interface, so keep the machine off untrusted networks: the API routes require `INTERNAL_API_SECRET`, but Mastra Studio (dev server UI) does not.
+- `CHAT_BACKEND_URL`: origin of the Go backend (defaults to `http://127.0.0.1:9000`, where the backend listens; set `http://127.0.0.1:9001` when it is reached through the compose port mapping). Knowledge-search requests may only target its `/internal/tools/v1/search` path.
+
+### Outbound address guard
+
+Every outbound `fetch` in this process goes through a guarded undici dispatcher. Two checks run before a connection is made:
+
+- Each request origin, including every redirect hop, is validated before dispatch. Literal IP addresses are rejected when they are private, loopback, link-local, CGNAT, multicast, or cloud-metadata addresses. The WHATWG URL parser normalizes alternative IPv4 spellings first, so `2130706433`, `0x7f000001`, `127.1`, and `127.0.0.1.` are all treated as `127.0.0.1` and rejected.
+- Hostnames are resolved at connect time and rejected when they resolve to those same ranges, which closes the DNS-rebinding window between validation and connection.
+
+A model base URL therefore cannot be used to reach the local network, even when its hostname passes the Go-side validation.
+
+Two narrow exceptions exist:
+
+- The backend exemption is the **exact `CHAT_BACKEND_URL` origin** (protocol, host, and port). `localhost` is not exempt by itself, so a redirect to another loopback port is still rejected.
+- `EGRESS_ALLOWED_HOSTS` (comma-separated) trusts specific hosts (any port) for local model servers. Those hosts may use plain HTTP and may resolve to private addresses; every other hop must be HTTPS.
+
+Literal private IPs need both entries: `MODEL_ALLOWED_PRIVATE_ENDPOINTS` on the Go side and `EGRESS_ALLOWED_HOSTS` here.
+
 ## Storage
 
 The default `file:./mastra.db` database stores agent memory, tasks, and schedules locally. To use Turso, set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.env`.

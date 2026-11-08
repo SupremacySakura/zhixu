@@ -142,7 +142,7 @@ P1 已删除 `/plain-chat`、`/rag-chat`，只保留上表三个路由面。
 ## 安全边界
 
 1. 供应商密钥只在 Go 加密存储（`model_providers.ciphertext`），逐轮解密经本机内网下发，Mastra 仅内存使用；两端日志不得出现明文 key。
-2. Mastra 仅监听 `127.0.0.1`，入站校验 `INTERNAL_API_SECRET`；拒绝重定向、禁代理。
+2. Mastra 默认只监听 `127.0.0.1`（后端在容器内时显式设 `MASTRA_HOST=0.0.0.0`），入站校验 `INTERNAL_API_SECRET`；出站由（`apps/zhixu-ai/src/lib/egress-guard.ts`）双层守卫：请求派发前校验目标源（字面 IP 经 URL 规范化后判定，覆盖每一跳重定向；仅 `CHAT_BACKEND_URL` 精确 origin 与 `EGRESS_ALLOWED_HOSTS` 可豁免，其余每一跳必须 HTTPS），主机名在 `connect.lookup` 连接时解析并拒绝私网、回环、链路本地、CGNAT、组播与云元数据地址。
 3. capability 单次、短时、只读、按用户隔离，请求结束即撤销。
 4. 工具只能访问该用户自己的知识数据；检索 SQL/向量查询必须带 `user_id`。
 

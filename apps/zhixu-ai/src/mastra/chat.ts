@@ -16,6 +16,7 @@ import { chatMemory, memoryStore } from "../lib/chat-history";
 import { authorized } from "../lib/internal-auth";
 import { persistedAssistantId } from "../lib/conversation-storage";
 import { conversationRuns } from "../lib/conversation-runs";
+import { DEFAULT_CHAT_BACKEND_URL } from "../lib/egress-guard";
 
 // One agent serves every turn. Retrieval is a tool, not a pipeline step: the model
 // decides itself when to search the knowledge base. The system prompt is the "skill"
@@ -131,7 +132,7 @@ export const chatRoute = registerApiRoute("/chat", {
     if (!allowedProviderURL(input.model.base_url)) {
       return c.json({ error: "Invalid model URL" }, 403);
     }
-    const backend = process.env.CHAT_BACKEND_URL || "http://127.0.0.1:9000";
+    const backend = process.env.CHAT_BACKEND_URL || DEFAULT_CHAT_BACKEND_URL;
     if (!allowedSearchURL(input.tools.search_url, backend)) {
       return c.json({ error: "Invalid search gateway" }, 403);
     }

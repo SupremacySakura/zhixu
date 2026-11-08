@@ -23,6 +23,9 @@ importers:
       '@mastra/observability':
         specifier: 1.20.1
         version: 1.20.1(@mastra/core@1.78.0(zod@4.6.7))(zod@4.6.7)
+      undici:
+        specifier: 7.30.1
+        version: 7.30.1
       zod:
         specifier: ^4.4.3
         version: 4.6.7

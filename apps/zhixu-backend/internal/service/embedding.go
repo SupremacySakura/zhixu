@@ -15,8 +15,11 @@ import (
 // MastraEmbedder asks the AI service to turn a batch of texts into vectors. The
 // configured embedding model travels with each request, so the AI service needs no
 // credential store of its own and Go no longer proxies provider traffic.
+// Secret is the internal bearer shared with the AI service: /vectorize rejects
+// unauthenticated callers because they could steer outbound model requests.
 type MastraEmbedder struct {
-	AIURL string
+	AIURL  string
+	Secret string
 }
 
 func ValidateEmbeddings(vectors [][]float64, count, dimension int) error {
@@ -42,6 +45,9 @@ func ValidateEmbeddings(vectors [][]float64, count, dimension int) error {
 }
 
 func (e *MastraEmbedder) Embed(ctx context.Context, snapshot *ChatCapability, texts []string) ([][]float64, error) {
+	if strings.TrimSpace(e.Secret) == "" {
+		return nil, errors.New("INTERNAL_API_SECRET 未配置，无法调用 AI 服务")
+	}
 	payload, _ := json.Marshal(map[string]any{
 		"model": map[string]any{
 			"protocol": snapshot.Provider.Protocol, "model_id": snapshot.Model.ModelID,
@@ -55,6 +61,7 @@ func (e *MastraEmbedder) Embed(ctx context.Context, snapshot *ChatCapability, te
 		return nil, errors.New("AI 服务地址配置无效")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+e.Secret)
 	client := &http.Client{
 		Timeout:       105 * time.Second,
 		Transport:     &http.Transport{Proxy: nil, ResponseHeaderTimeout: 100 * time.Second},

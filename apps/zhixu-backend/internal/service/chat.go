@@ -221,8 +221,12 @@ func (s *ChatService) privateEndpointAllowed(base string) bool {
 // validateRuntimeModelURL applies the deployment address policy when a provider is about
 // to be used. Saving stays permissive so configuration can be staged before the allowlist
 // is set; borrowing a public API over plain HTTP or pointing at loopback/metadata ranges
-// requires an exact allowlist entry. Hostnames are resolved by the AI service, so only
-// literal addresses and localhost can be judged here.
+// requires an exact allowlist entry. The AI service enforces the same policy again at
+// request time (apps/zhixu-ai/src/lib/egress-guard.ts): it rejects unsafe literal
+// addresses (including alternative IPv4 spellings that Go's parser does not recognize),
+// hostnames that resolve to private/reserved answers, and every non-exempt redirect hop
+// that is not HTTPS; only the exact backend origin and EGRESS_ALLOWED_HOSTS are exempt.
+// This check is a first policy gate rather than the only one.
 func (s *ChatService) validateRuntimeModelURL(raw string) error {
 	if err := validateModelURL(raw); err != nil {
 		return err
