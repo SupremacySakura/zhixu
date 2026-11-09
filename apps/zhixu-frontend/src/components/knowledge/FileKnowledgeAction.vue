@@ -1,20 +1,25 @@
 <script setup lang="ts">
-import { onScopeDispose, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import axios from 'axios'
 import type { FileDisplayItem } from '../../types/file'
 import { getKnowledgeByFile, type KnowledgeItem } from '../../services/apis/knowledge'
-import { isKnowledgeActive, isMarkdownFile } from '../../utils/knowledge'
+import { getKnowledgeFormat, isKnowledgeActive } from '../../utils/knowledge'
 import KnowledgeBadge from './KnowledgeBadge.vue'
 const props = defineProps<{ file: FileDisplayItem; revision?: number }>()
 const emit = defineEmits<{ action: [file: FileDisplayItem, knowledge: KnowledgeItem | null] }>()
 const item = ref<KnowledgeItem | null>(null)
 const state = ref<'loading' | 'loaded' | 'error'>('loading')
+const format = computed(() => getKnowledgeFormat(props.file))
+const tooLarge = computed(() => format.value !== null && props.file.size > format.value.maxBytes)
+const tooLargeText = computed(() =>
+  format.value ? `超过 ${Math.round(format.value.maxBytes / 1024 / 1024)} MB` : '',
+)
 let controller: AbortController | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
 async function load() {
   controller?.abort()
   clearTimeout(timer)
-  if (!isMarkdownFile(props.file)) return
+  if (!format.value) return
   const current = new AbortController()
   controller = current
   state.value = 'loading'
@@ -40,7 +45,7 @@ onScopeDispose(() => {
 </script>
 <template>
   <div v-if="file.type === 'file'" class="flex flex-wrap items-center gap-2" @click.stop>
-    <template v-if="isMarkdownFile(file)">
+    <template v-if="format">
       <KnowledgeBadge v-if="item" :status="item.status" />
       <span v-else class="text-caption text-label-secondary">{{
         state === 'loading' ? '查询状态…' : state === 'error' ? '状态查询失败' : '未加入'
@@ -52,7 +57,7 @@ onScopeDispose(() => {
         v-else
         type="button"
         class="knowledge-text-action"
-        :disabled="state === 'loading' || (!item && file.size > 20 * 1024 * 1024)"
+        :disabled="state === 'loading' || (!item && tooLarge)"
         @click="emit('action', file, item)"
       >
         {{
@@ -62,8 +67,8 @@ onScopeDispose(() => {
               ? '查看失败原因'
               : item
                 ? '查看进度'
-                : file.size > 20 * 1024 * 1024
-                  ? '超过 20 MB'
+                : tooLarge
+                  ? tooLargeText
                   : '加入知识库'
         }}
       </button>

@@ -1,16 +1,17 @@
-# Markdown 知识前端
+# 文件知识前端
 
-按 `design/MarkdownKnowledge.html` 的浅色品牌绿风格接入真实后端。删除语义与接口见 [Markdown 知识后端](./markdown-knowledge-backend.md)。
+按 `design/MarkdownKnowledge.html` 的浅色品牌绿风格接入真实后端。删除语义与接口见 [文件知识后端](./markdown-knowledge-backend.md)。
 
 ## 功能
 
-- 文件列表、网格与更多菜单提供单文件加入入口，仅 `.md/.markdown` 支持，未加入且大于 20 MiB 的文件禁用提交。
+- 文件列表、网格与更多菜单提供单文件加入入口，支持格式以 `utils/knowledge.ts` 的 `KNOWLEDGE_FORMATS` 能力表为准（Markdown/文本/PDF/Word/CSV/Excel），未加入且超过 20 MiB 的文件禁用提交。
 - 标题默认去扩展名，提交前按 Unicode 字符校验 1–200 字符。
 - 弹窗使用原生 dialog 处理焦点限制，motion-v 负责面板入场；移动端底部布局。提交中不允许关闭，关闭后恢复触发前焦点。
 - 排队/处理面板为非阻塞浮层。关闭只隐藏面板，不取消后台任务；页面卸载取消前端轮询，不取消持久化任务。
 - 文件状态每三秒轮询活动任务；新提交后更新文件行状态。未加入返回 404 是预期结果，网络异常则显示状态查询失败，不误显示加入入口。
 - `/home/knowledge` 支持标题搜索、状态筛选、分页、空态、错误重载和失败原因查看/重试。
 - `/home/knowledge/:id` 展示安全渲染正文和来源快照；活动任务自动查询直到完成。
+- 详情页按 `source_type` 选择渲染：`text` 用 breaks 模式保留换行；Markdown/PDF/Word/CSV/Excel 统一用 markdown-it 渲染（PDF 的 `## 第 N 页` 即普通 h2，表格内容横向滚动）。来源类型徽章取自能力表 label。
 - 文件删除确认框提供“同时删除关联知识条目”，每次打开默认不勾选；文件夹提示包含子目录。当前对所有文件展示该选项，不预先检查关联状态。
 - 知识列表提供独立删除确认，明确保留原文件；失败显示原因，成功刷新列表，删除末页后自动收缩页码。
 - 状态筛选复用从文件工具栏抽取的共享 `FilterMenu`，不使用原生 select；支持点击外部关闭、方向键、Home/End、Escape 和焦点恢复。

@@ -183,7 +183,7 @@ func TestKnowledgeAdd(t *testing.T) {
 	}{
 		{"default title", "笔记.MD", "", 1, false},
 		{"custom title", "note.markdown", "  标题  ", 1, false},
-		{"unsupported", "note.pdf", "", 1, true},
+		{"unsupported", "note.exe", "", 1, true},
 		{"too large", "note.md", "", MaxMarkdownBytes + 1, true},
 		{"long title", "note.md", strings.Repeat("知", 201), 1, true},
 		{"empty filename title", ".md", "", 1, true},

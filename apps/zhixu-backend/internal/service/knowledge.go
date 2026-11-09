@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,8 +17,6 @@ import (
 
 	"gorm.io/gorm"
 )
-
-const MaxMarkdownBytes = 20 * 1024 * 1024
 
 var (
 	ErrKnowledgeInvalid  = errors.New("invalid knowledge request")
@@ -104,17 +100,6 @@ func knowledgeError(err error) error {
 	return err
 }
 
-func validMarkdown(file *model.FileModel) error {
-	ext := strings.ToLower(filepath.Ext(file.Name))
-	if ext != ".md" && ext != ".markdown" {
-		return fmt.Errorf("%w: 仅支持 .md / .markdown 文件", ErrKnowledgeInvalid)
-	}
-	if file.Size > MaxMarkdownBytes {
-		return fmt.Errorf("%w: Markdown 文件不能超过 20 MB", ErrKnowledgeInvalid)
-	}
-	return nil
-}
-
 func (s *KnowledgeService) Add(ctx context.Context, userID, fileID uint, title string) (*model.KnowledgeItem, bool, error) {
 	file, err := s.store.File(ctx, userID, fileID)
 	if err != nil {
@@ -128,7 +113,8 @@ func (s *KnowledgeService) Add(ctx context.Context, userID, fileID uint, title s
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, false, err
 	}
-	if err := validMarkdown(file); err != nil {
+	extractor, err := validateSource(file)
+	if err != nil {
 		return nil, false, err
 	}
 	title = strings.TrimSpace(title)
@@ -144,7 +130,7 @@ func (s *KnowledgeService) Add(ctx context.Context, userID, fileID uint, title s
 	}
 	item, created, err := s.store.Create(ctx, &model.KnowledgeItem{
 		UserID: userID, SourceFileID: file.ID, SourceFileName: file.Name, SourceFolderID: file.FolderID,
-		SourceFolderName: folder, SourceHash: file.FileHash, SourceType: "markdown", Title: title, Status: model.KnowledgePending,
+		SourceFolderName: folder, SourceHash: file.FileHash, SourceType: extractor.SourceType(), Title: title, Status: model.KnowledgePending,
 	})
 	if err != nil {
 		return nil, false, knowledgeError(err)
@@ -206,7 +192,7 @@ func (s *KnowledgeService) Retry(ctx context.Context, userID, id uint) (*model.K
 	if err != nil {
 		return nil, knowledgeError(err)
 	}
-	if err := validMarkdown(file); err != nil {
+	if _, err := validateSource(file); err != nil {
 		return nil, err
 	}
 	if file.FileHash != item.SourceHash {
@@ -247,75 +233,6 @@ func (s *KnowledgeService) RetryVectorize(ctx context.Context, userID, id uint) 
 	return updated, nil
 }
 
-type markdownFailure struct{ code, message string }
-
-func (e *markdownFailure) Error() string      { return e.message }
-func failMarkdown(code, message string) error { return &markdownFailure{code, message} }
-
-func readMarkdown(storagePath, hash string) (string, error) {
-	// Hashes form paths and glob prefixes; accept hexadecimal characters only.
-	if len(hash) < 4 || len(hash) > 128 {
-		return "", failMarkdown("invalid_source", "原文件存储标识无效")
-	}
-	if _, err := hex.DecodeString(hash); err != nil {
-		return "", failMarkdown("invalid_source", "原文件存储标识无效")
-	}
-	root, err := os.OpenRoot(storagePath)
-	if err != nil {
-		return "", failMarkdown("source_unavailable", "无法读取原文件，请稍后重试")
-	}
-	defer root.Close()
-	dir := filepath.Join(hash[:2], hash[2:4])
-	path := filepath.Join(dir, hash)
-	file, err := root.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		// Older uploads used hash.extension. Root.Open also rejects escaping symlinks.
-		directory, openErr := root.Open(dir)
-		if openErr == nil {
-			entries, readErr := directory.ReadDir(-1)
-			directory.Close()
-			if readErr == nil {
-				for _, entry := range entries {
-					if entry.IsDir() || !strings.HasPrefix(entry.Name(), hash+".") {
-						continue
-					}
-					file, err = root.Open(filepath.Join(dir, entry.Name()))
-					if err == nil {
-						break
-					}
-				}
-			}
-		}
-	}
-	if err != nil {
-		return "", failMarkdown("source_unavailable", "无法读取原文件，请确认文件仍存在后重试")
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		return "", failMarkdown("source_unavailable", "原文件不是可读取的普通文件")
-	}
-	if info.Size() > MaxMarkdownBytes {
-		return "", failMarkdown("file_too_large", "Markdown 文件不能超过 20 MB")
-	}
-	data, err := io.ReadAll(io.LimitReader(file, MaxMarkdownBytes+1))
-	if err != nil {
-		return "", failMarkdown("source_unavailable", "读取原文件失败，请稍后重试")
-	}
-	if len(data) > MaxMarkdownBytes {
-		return "", failMarkdown("file_too_large", "Markdown 文件不能超过 20 MB")
-	}
-	text := strings.TrimPrefix(string(data), "\uFEFF")
-	if !utf8.ValidString(text) || strings.ContainsRune(text, 0) {
-		return "", failMarkdown("invalid_encoding", "仅支持 UTF-8 编码的 Markdown 文本")
-	}
-	text = strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
-	if strings.TrimSpace(text) == "" {
-		return "", failMarkdown("empty_content", "未读取到有效正文，原文件为空")
-	}
-	return text, nil
-}
-
 func (s *KnowledgeService) ProcessNext(ctx context.Context) (bool, error) {
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
@@ -343,7 +260,7 @@ func (s *KnowledgeService) ProcessNext(ctx context.Context) (bool, error) {
 	} else if file.FileHash != item.SourceHash {
 		code, message = "source_changed", "原文件内容已变化，无法处理原加入任务"
 	} else {
-		content, err = readMarkdown(s.storagePath, item.SourceHash)
+		content, err = extractSource(s.storagePath, item.SourceHash, item.SourceType)
 		if err != nil {
 			var failure *markdownFailure
 			if !errors.As(err, &failure) {

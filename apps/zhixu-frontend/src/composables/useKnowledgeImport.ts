@@ -6,7 +6,7 @@ import {
   type KnowledgeItem,
 } from '../services/apis/knowledge'
 import type { FileDisplayItem, ToastType } from '../types/file'
-import { isKnowledgeActive, knowledgeError } from '../utils/knowledge'
+import { isKnowledgeActive, knowledgeError, stripKnowledgeExtension } from '../utils/knowledge'
 
 export function useKnowledgeImport(notify: (message: string, type?: ToastType) => void) {
   const target = ref<FileDisplayItem | null>(null)
@@ -51,7 +51,7 @@ export function useKnowledgeImport(notify: (message: string, type?: ToastType) =
   }
   function open(file: FileDisplayItem) {
     target.value = file
-    title.value = file.name.replace(/\.(md|markdown)$/i, '')
+    title.value = stripKnowledgeExtension(file.name)
     error.value = ''
   }
   async function submit() {

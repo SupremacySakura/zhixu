@@ -7,8 +7,9 @@ import {
   isKnowledgeVectorActive,
   knowledgeDate,
   knowledgeError,
+  knowledgeSourceLabel,
 } from '../utils/knowledge'
-import { renderMarkdown } from '../utils/markdown'
+import { renderKnowledgeContent } from '../utils/markdown'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
 import KnowledgeVectorPanel from '../components/knowledge/KnowledgeVectorPanel.vue'
 const route = useRoute()
@@ -17,7 +18,11 @@ const error = ref('')
 const loading = ref(false)
 let controller: AbortController | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
-const html = computed(() => renderMarkdown(item.value?.content || ''))
+const html = computed(() =>
+  renderKnowledgeContent(item.value?.content || '', item.value?.source_type || ''),
+)
+// 空字符串（历史/异常数据）也要落到 Markdown 标签，否则来源徽章渲染为空。
+const sourceLabel = computed(() => knowledgeSourceLabel(item.value?.source_type || 'markdown'))
 async function load(background = false) {
   controller?.abort()
   clearTimeout(timer)
@@ -69,7 +74,9 @@ onScopeDispose(() => {
         <header class="mb-7 flex flex-wrap items-center justify-between gap-4">
           <div class="min-w-0">
             <h1 class="break-all text-title-1">{{ item.title }}</h1>
-            <p class="mt-2 text-subhead text-label-secondary">来源于 Markdown 文件 · 原始正文</p>
+            <p class="mt-2 text-subhead text-label-secondary">
+              来源于{{ sourceLabel }}文件 · 原始正文
+            </p>
           </div>
           <RouterLink
             :to="{
@@ -88,7 +95,7 @@ onScopeDispose(() => {
             <div
               class="mb-7 flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-4"
             >
-              <span class="text-caption text-label-secondary">正文 · Markdown</span
+              <span class="text-caption text-label-secondary">正文 · {{ sourceLabel }}</span
               ><KnowledgeBadge :status="item.status" />
             </div>
             <!-- Parser disables HTML, unsafe protocols, and all image requests. -->
@@ -120,7 +127,7 @@ onScopeDispose(() => {
                 </div>
                 <div>
                   <dt class="text-caption text-label-secondary">来源类型</dt>
-                  <dd class="mt-1.5 text-subhead">Markdown 文件</dd>
+                  <dd class="mt-1.5 text-subhead">{{ sourceLabel }}文件</dd>
                 </div>
                 <div>
                   <dt class="text-caption text-label-secondary">加入时间</dt>

@@ -104,8 +104,11 @@ func TestIsAllowedMIMEType_ValidTypes(t *testing.T) {
 		"video/avi",
 		"text/plain",
 		"text/html",
+		"text/csv",
 		"application/pdf",
 		"application/zip",
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 	}
 
 	for _, mimeType := range validTypes {

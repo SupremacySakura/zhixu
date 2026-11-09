@@ -76,7 +76,7 @@ func knowledgeID(c *gin.Context, raw string) (uint, bool) {
 }
 
 // Add godoc
-// @Summary 将 Markdown 文件加入知识库
+// @Summary 将文件加入知识库（支持格式由后端能力表决定）
 // @Description 首次加入返回202。重复请求返回原知识条目，不改变标题或重试失败任务。
 // @Tags knowledge
 // @Accept json

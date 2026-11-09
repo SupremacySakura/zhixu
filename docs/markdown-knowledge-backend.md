@@ -1,4 +1,6 @@
-# Markdown 文件加入知识库
+# 文件加入知识库（多格式）
+
+最初仅支持 Markdown；2026-11 起通过提取器抽象扩展为多格式：所有格式统一提取为规范化 Markdown 正文后入库，下游分块、向量化与前端渲染不感知原始格式。
 
 ## 数据库变化
 
@@ -6,7 +8,7 @@
 
 | 表 | 内容 | 约束 |
 | --- | --- | --- |
-| `knowledge_items` | 用户、标题、来源文件 ID、文件名/目录快照、来源哈希、Markdown 正文、状态、错误原因、入库时间 | `(user_id, source_file_id)` 唯一；用户/创建时间索引、状态索引 |
+| `knowledge_items` | 用户、标题、来源文件 ID、文件名/目录快照、来源哈希、来源类型、规范化 Markdown 正文、状态、错误原因、入库时间 | `(user_id, source_file_id)` 唯一；用户/创建时间索引、状态索引 |
 | `knowledge_import_tasks` | 知识 ID、用户、状态、尝试次数、处理租约与过期时间 | `knowledge_id` 唯一；状态/租约时间索引 |
 
 - 首次提交在同一事务内创建条目和任务，状态均为 `pending`。正文初始为空。
@@ -15,6 +17,26 @@
 - 一个逻辑文件对应一个知识条目。知识条目及任务使用物理删除，删除后可再次加入同一个仍存在的源文件；暂不支持新版本导入。
 - 不新增版本、向量、分块或摘要表，也不调用 Mastra。
 - 运行迁移的 MySQL 账号需有建表、建索引权限；任务领取使用 MySQL 8 的 `FOR UPDATE SKIP LOCKED`。
+
+## 支持格式与提取器
+
+`source_type` 由提取器决定；注册表在 `internal/service/extractor.go`，新增格式 = 新增一个 `Extractor` 实现并登记。
+
+| source_type | 扩展名 | 提取行为 | 大小上限 |
+| --- | --- | --- | --- |
+| `markdown` | `.md/.markdown` | 去 BOM、校验 UTF-8、统一换行后原样保存 | 20 MiB |
+| `text` | `.txt` | 编码探测（BOM → UTF-8 → GBK），保留换行 | 20 MiB |
+| `pdf` | `.pdf` | 逐页提取文本层并按 `## 第 N 页` 分段；加密 → `encrypted_file`；无文本层 → `scanned_pdf_no_text` | 20 MiB |
+| `docx` | `.docx` | 标题样式 → `#` 层级、编号列表 → 缩进列表、外链 → `[文本](url)`、表格 → GFM 表格；图片与版式丢弃 | 20 MiB |
+| `csv` | `.csv` | 编码探测后转 GFM 表格，首行作表头 | 20 MiB |
+| `xlsx` | `.xlsx` | 每个工作表 → `## 表名` + GFM 表格（首行表头、空表跳过），公式取缓存值 | 20 MiB |
+
+- 提取全部在 Go 后端内置完成，不引入外部转换服务：`pdf` 用 `github.com/ledongthuc/pdf`，`docx/xlsx` 用标准库 `archive/zip` + `encoding/xml`，`csv` 用 `encoding/csv`。
+- OOXML 解压防炸弹：全包解压总量限 50 MiB、单部件限 30 MiB，超限报 `file_too_large`。`encoding/xml` 不解析 DTD、不展开自定义实体、不访问外部资源，无 XXE / 实体炸弹面。
+- 表格展开限额：XLSX 单元格列引用不得超过 Excel 上限（XFD，16384 列），解析期单元格总数 ≤ 1,000,000（**稀疏列补齐出的空单元格同样计数**）；渲染期按最大列宽补齐后的单元格总数 ≤ 4,000,000，写满 20 MiB 输出上限后立即停止遍历；DOCX 提取正文同样以 20 MiB 为界，且正文、单段落与表格临时缓冲在构建过程中就有上限（不是构建完再检查），表格单元格总数 ≤ 4,000,000，外链目标超过 2048 字节时丢弃链接、保留文本；CSV 展开输出同样以 20 MiB 为界。超限报 `file_too_large`，避免小文件被共享字符串重复引用、超长外链重复输出或"窄行 + 一个超宽行"的补齐放大占满导入 worker。
+- 截断即失败：`document.xml`、工作簿/工作表/共享字符串 XML 未正常结束（unexpected EOF）时报 `parse_failed`，不把已解析的部分当作完整正文入库。
+- 表格补齐：Markdown 表格按最大列数补齐后再渲染。`markdown-it` 只按表头列数渲染，参差行不补齐会静默丢弃多出的字段（CSV 首行短于后续行即触发）。
+- 上传侧需先放行 MIME：`application/vnd.openxmlformats-officedocument.wordprocessingml.document`（docx）、`...spreadsheetml.sheet`（xlsx）；`.csv/.txt/.md/.pdf` 原有白名单已覆盖。
 
 ## 接口
 
@@ -58,23 +80,23 @@
 
 ## 处理流程
 
-1. 校验用户拥有文件，后缀为 `.md` 或 `.markdown`（忽略大小写），元数据大小不超过 20 MiB。
+1. 校验用户拥有文件，扩展名命中提取器能力表，元数据大小不超过该格式上限（当前统一 20 MiB）。不支持的扩展名返回 400。
 2. 默认标题为去扩展名的文件名；允许自定义，长度为 1–200 个 Unicode 字符。
 3. 持久化知识条目及任务。数据库唯一键处理并发重复提交，失败事务不遗留半条数据。
 4. 后台单 worker 每秒检查队列，也会连续处理已排队任务。用两分钟租约领取任务，将两表状态原子更新为 `running`。
-5. 按来源哈希读取文件，兼容旧 `hash.extension` 存储；使用受限根目录访问拒绝路径穿越和逃逸符号链接。
-6. 实际读取同样限制 20 MiB；验证普通文件、UTF-8、无 NUL 字符，去 BOM、统一换行。全空白正文失败。
-7. 原样保存 Markdown，不生成 HTML。后续前端渲染必须禁用危险 HTML 或做清洗，正文中的链接/图片不会在后端加载。
+5. 按来源哈希读取文件，兼容旧 `hash.extension` 存储；使用受限根目录访问拒绝路径穿越和逃逸符号链接。空 `source_type` 按 `markdown` 兜底（兼容历史条目）。
+6. 分派到对应提取器：直读前再做一次实际大小预检；提取器 panic 被 recover，统一转 `parse_failed`。
+7. 提取结果为规范化 Markdown，不生成 HTML；前端渲染必须禁用危险 HTML 或做清洗，正文中的链接/图片不会在后端加载。
 8. 完成后事务写入正文及 `ready` 状态；业务失败写入 `failed` 与公开错误原因。数据库故障或进程退出留下租约，过期后自动重新领取。
 
 租约 token 在写结果时再次校验，旧 worker 不能覆盖新 worker 的结果。关闭服务会取消并等待后台 worker；未完成任务下次启动恢复。
 
 ## 错误与边界
 
-公开错误码包括 `empty_content/invalid_encoding/file_too_large/source_unavailable/invalid_source/source_deleted/source_changed`，不泄漏服务器磁盘路径。
+公开错误码包括 `empty_content/invalid_encoding/file_too_large/source_unavailable/invalid_source/source_deleted/source_changed`，以及多格式新增的 `parse_failed/encrypted_file/scanned_pdf_no_text`，不泄漏服务器磁盘路径。
 
 - 原文件已删除的未完成任务失败；已完成知识不依赖源文件继续存在。
-- 正文格式为 UTF-8 Markdown；不执行 OCR、PDF 解析、AI 摘要、向量化或远程资源加载。
+- 正文格式为 UTF-8 规范化 Markdown；不执行 OCR、AI 摘要或远程资源加载。扫描件 PDF 与加密文件明确失败，不产出空知识。
 - 只允许失败任务重试。重试校验原文件仍存在、格式和大小合法且哈希与快照一致。
 - 空源文件反复重试仍会失败，系统不会将其改成虚构成功。当前文件模块不提供覆盖内容功能，需要另传有效文件并创建新条目。
 - 处理中的状态查询使用详情或按文件查询；本轮没有新增文件列表的批量状态联查，前端接入时可进一步优化。
@@ -86,6 +108,6 @@ pnpm test:backend
 pnpm build:backend
 ```
 
-单元测试覆盖文件与用户隔离、标题/格式/大小、幂等、BOM/换行、无效编码、空文件、路径保护、旧存储路径、失败重试、状态筛选、事务回滚、租约领取及旧 worker 写入拒绝，以及删除范围、同步删除回滚、子目录关联清理和已删除源文件拒绝加入。
+单元测试覆盖文件与用户隔离、标题/格式/大小、幂等、BOM/换行、无效编码、空文件、路径保护、旧存储路径、失败重试、状态筛选、事务回滚、租约领取及旧 worker 写入拒绝，以及删除范围、同步删除回滚、子目录关联清理和已删除源文件拒绝加入。多格式部分按提取器分组覆盖：编码探测（UTF-8/UTF-16/GBK）、PDF 多页/空文本页/损坏/加密、DOCX 标题与列表/外链/表格/损坏/解压炸弹、XLSX 多表/共享字符串/空表、CSV 编码/参差行/管道转义/空内容。
 
 真实 MySQL 迁移与 HTTP 联调需在本机开发环境执行；自动化测试使用临时磁盘文件和 sqlmock，不连接或修改开发数据库。

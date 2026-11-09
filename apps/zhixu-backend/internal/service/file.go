@@ -54,6 +54,9 @@ var allowedMIMETypes = map[string]bool{
 	"application/pdf": true,
 	"application/zip": true,
 	"text/":           true,
+	// Office Open XML：加入知识库的 docx/xlsx 需要先能上传
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":       true,
 }
 
 var blockedMIMETypes = map[string]bool{

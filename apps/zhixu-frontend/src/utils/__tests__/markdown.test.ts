@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderMarkdown } from '../markdown'
+import { renderKnowledgeContent, renderMarkdown } from '../markdown'
 import { isMarkdownFile } from '../knowledge'
 describe('Markdown knowledge', () => {
   it('renders headings, lists, tables, and code', () => {
@@ -31,5 +31,10 @@ describe('Markdown knowledge', () => {
     expect(isMarkdownFile({ type: 'file', name: 'note.markdown' })).toBe(true)
     expect(isMarkdownFile({ type: 'folder', name: 'note.md' })).toBe(false)
     expect(isMarkdownFile({ type: 'file', name: 'note.pdf' })).toBe(false)
+  })
+  it('keeps line breaks for extracted plain text, not for markdown', () => {
+    expect(renderKnowledgeContent('第一行\n第二行', 'text')).toContain('<br')
+    expect(renderKnowledgeContent('第一行\n第二行', 'markdown')).not.toContain('<br')
+    expect(renderKnowledgeContent('第一行\n第二行', '')).not.toContain('<br')
   })
 })
