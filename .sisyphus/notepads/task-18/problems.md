@@ -1,1 +1,0 @@
-- Status: initial store scaffolding created. Full migration pending.

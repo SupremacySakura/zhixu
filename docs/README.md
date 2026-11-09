@@ -28,6 +28,18 @@ AI 工具进入项目时应优先读取的必读层。
 
 - [README.md](./skills/README.md) — 格式规范与入库流程
 
+### 设计文档 [docs/design/](./design/)
+
+毕业设计三份源头文档的入库副本（需求/产品/架构），AI 只读。
+
+- [README.md](./design/README.md) — 文档清单与同步约定
+
+### 功能规划 [docs/plan/](./plan/)
+
+毕业设计需求 → 仓库实现的差距与分阶段实施计划（待办）。
+
+- [README.md](./plan/README.md) — 完成度矩阵、阶段总览、数据库与 API 契约变更总表
+
 ### 详细结构参考
 
 - [../README.md](../README.md#两种启动方式) — 本地开发与 Docker 启动、端口和升级约束

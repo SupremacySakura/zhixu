@@ -1,3 +1,0 @@
-- 新建 5 个 composable：useBreadcrumb、useFileList、useUpload、useFilePreview、useFileOperations，用于 FileManagement.vue 的功能分拆。
-- 已在 FileManagement.vue 尝试引入并初步接入这些 composable，后续将逐步完成状态迁移与 UI 适配，确保 UI/行为保持不变。
-- 当前进展：部分引用已开启，仍在进行完整的重构以达到预期的 <500 行目标与通过 typecheck/build 的要求。

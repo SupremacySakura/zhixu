@@ -1,2 +1,0 @@
-- Decision: Introduce Pinia stores as state containers for file management features.
-- Next: Migrate FileManagement.vue and useFileList/useUpload composables to consume stores.
