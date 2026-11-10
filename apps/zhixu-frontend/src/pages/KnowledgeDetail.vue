@@ -78,15 +78,23 @@ onScopeDispose(() => {
               {{ item.source_file_id ? `来源于${sourceLabel}文件` : '手动创建' }} · 原始正文
             </p>
           </div>
-          <RouterLink
-            v-if="item.source_file_id"
-            :to="{
-              path: '/home/files',
-              query: { folder: item.source_folder_id, folder_name: item.source_folder_name },
-            }"
-            class="knowledge-button-secondary"
-            >查看来源目录 →</RouterLink
-          >
+          <div class="flex flex-wrap items-center gap-3">
+            <RouterLink
+              v-if="item.status === 'ready'"
+              :to="`/home/knowledge/${item.id}/edit`"
+              class="knowledge-button-secondary"
+              >编辑</RouterLink
+            >
+            <RouterLink
+              v-if="item.source_file_id"
+              :to="{
+                path: '/home/files',
+                query: { folder: item.source_folder_id, folder_name: item.source_folder_name },
+              }"
+              class="knowledge-button-secondary"
+              >查看来源目录 →</RouterLink
+            >
+          </div>
         </header>
         <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_15rem]">
           <article

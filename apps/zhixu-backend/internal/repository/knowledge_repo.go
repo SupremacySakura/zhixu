@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -119,6 +120,82 @@ func (r *KnowledgeRepository) CreateManual(ctx context.Context, item *model.Know
 		}
 		return EnqueueVectorization(tx, item.UserID, item.ID)
 	})
+}
+
+// Update 编辑知识正文：先保存编辑前的版本快照，再更新正文并重新排队分块与向量化。
+// 锁序与向量化 worker 一致（先任务、后知识行）；旧分块的点 ID 记录到新任务，由任务启动时清理，
+// 避免旧向量残留占用检索候选位。
+func (r *KnowledgeRepository) Update(ctx context.Context, userID, id uint, title, content, sourceHash string, baseVersion uint) (*model.KnowledgeItem, error) {
+	var updated model.KnowledgeItem
+	err := r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var task model.VectorizeTask
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ? AND knowledge_id = ?", userID, id).Limit(1).Find(&task).Error; err != nil {
+			return err
+		}
+		var item model.KnowledgeItem
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND user_id = ?", id, userID).Limit(1).Find(&item).Error; err != nil {
+			return err
+		}
+		if item.ID == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		if item.Status != model.KnowledgeReady || item.Version != baseVersion {
+			return ErrKnowledgeConflict
+		}
+		updated = item
+		// 未改动标题与正文时不产生新版本，也不重复调用 Embedding。
+		if item.Title == title && item.Content == content {
+			return nil
+		}
+		if err := tx.Create(&model.KnowledgeVersion{
+			UserID: userID, KnowledgeID: id, VersionNumber: item.Version,
+			Title: item.Title, Content: item.Content, ChangeSource: model.KnowledgeChangeSourceManual,
+		}).Error; err != nil {
+			return err
+		}
+		var staleIDs []uint
+		if err := tx.Model(&model.KnowledgeChunk{}).Where("user_id = ? AND knowledge_id = ?", userID, id).
+			Pluck("id", &staleIDs).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", id, userID).Updates(map[string]any{
+			"title": title, "content": content, "source_hash": sourceHash, "version": item.Version + 1,
+			"vector_state": "", "chunks_total": 0, "chunks_ready": 0, "chunks_failed": 0,
+			"embedding_model": "", "embedding_version": 0, "vector_error": "",
+		}).Error; err != nil {
+			return err
+		}
+		for _, row := range []any{&model.VectorizeTask{}, &model.KnowledgeChunk{}} {
+			if err := tx.Where("user_id = ? AND knowledge_id = ?", userID, id).Delete(row).Error; err != nil {
+				return err
+			}
+		}
+		if err := EnqueueVectorization(tx, userID, id); err != nil {
+			return err
+		}
+		if task.Collection != "" && len(staleIDs) > 0 {
+			payload, err := json.Marshal(staleIDs)
+			if err != nil {
+				return err
+			}
+			if err := tx.Model(&model.VectorizeTask{}).Where("user_id = ? AND knowledge_id = ?", userID, id).
+				Updates(map[string]any{"stale_chunk_ids": string(payload), "cleanup_collection": task.Collection}).Error; err != nil {
+				return err
+			}
+		}
+		updated.Title, updated.Content, updated.SourceHash = title, content, sourceHash
+		updated.Version = item.Version + 1
+		updated.VectorState = model.VectorPending
+		updated.ChunksTotal, updated.ChunksReady, updated.ChunksFailed = 0, 0, 0
+		updated.EmbeddingModel, updated.EmbeddingVersion, updated.VectorError = "", 0, ""
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
 }
 
 func (r *KnowledgeRepository) List(ctx context.Context, userID uint, page, size int, query string, status model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error) {

@@ -129,6 +129,7 @@ type vectorDatabaseFake struct {
 	collection string
 	dimension  uint
 	points     []VectorPoint
+	deleted    []uint
 	err        error
 }
 
@@ -139,6 +140,11 @@ func (f *vectorDatabaseFake) EnsureCollection(_ context.Context, collection stri
 
 func (f *vectorDatabaseFake) Upsert(_ context.Context, _ string, points []VectorPoint) error {
 	f.points = append(f.points, points...)
+	return f.err
+}
+
+func (f *vectorDatabaseFake) DeletePoints(_ context.Context, _ string, ids []uint) error {
+	f.deleted = append(f.deleted, ids...)
 	return f.err
 }
 
@@ -275,4 +281,25 @@ func TestProcessNextIdleQueue(t *testing.T) {
 	processed, err := service.ProcessNext(context.Background())
 	require.NoError(t, err)
 	require.False(t, processed)
+}
+
+func TestProcessNextCleansStaleVectorsFromEdit(t *testing.T) {
+	service, store, _, vectors := newVectorizeFixture(nil)
+	store.task.StaleChunkIDs = "[11,12]"
+	store.task.CleanupCollection = "zhixu_u7_v3"
+	processed, err := service.ProcessNext(context.Background())
+	require.NoError(t, err)
+	require.True(t, processed)
+	require.Equal(t, []uint{11, 12}, vectors.deleted)
+}
+
+func TestProcessNextCleansStaleBeforeEmbeddingFailure(t *testing.T) {
+	service, store, _, vectors := newVectorizeFixture(errors.New("embedding down"))
+	store.task.StaleChunkIDs = "[21]"
+	store.task.CleanupCollection = "zhixu_u7_v3"
+	processed, err := service.ProcessNext(context.Background())
+	require.NoError(t, err)
+	require.True(t, processed)
+	require.Equal(t, []uint{21}, vectors.deleted)
+	require.Equal(t, "embedding down", store.savedErr)
 }

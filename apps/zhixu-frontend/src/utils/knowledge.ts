@@ -122,6 +122,9 @@ export const knowledgeError = (error: unknown) => {
     return error.response?.data.msg || '请求失败，请检查网络后重试'
   return error instanceof Error ? error.message : '请求失败，请稍后重试'
 }
+// 乐观锁冲突（409）：内容已在其他页面被修改，需刷新后重试。
+export const isKnowledgeConflict = (error: unknown) =>
+  axios.isAxiosError(error) && error.response?.status === 409
 export const knowledgeDate = (date: string | null) => {
   if (!date) return '尚未完成'
   const value = new Date(date)

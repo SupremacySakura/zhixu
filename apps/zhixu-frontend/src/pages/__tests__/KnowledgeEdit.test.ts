@@ -2,23 +2,27 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import KnowledgeEdit from '../KnowledgeEdit.vue'
-import { createKnowledge } from '../../services/apis/knowledge'
+import { createKnowledge, getKnowledge, updateKnowledge } from '../../services/apis/knowledge'
 vi.mock('../../services/apis/knowledge', () => ({
   createKnowledge: vi.fn(),
+  getKnowledge: vi.fn(),
+  updateKnowledge: vi.fn(),
 }))
 afterEach(() => {
   vi.clearAllMocks()
 })
-async function render() {
+async function render(path = '/') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: KnowledgeEdit },
       { path: '/home/knowledge', component: { template: '<div />' } },
+      { path: '/home/knowledge/new', component: KnowledgeEdit },
+      { path: '/home/knowledge/:id/edit', component: KnowledgeEdit },
       { path: '/home/knowledge/:id', component: { template: '<div />' } },
     ],
   })
-  await router.push('/')
+  await router.push(path)
   await router.isReady()
   const wrapper = mount(KnowledgeEdit, { global: { plugins: [router] } })
   await flushPromises()
@@ -59,6 +63,46 @@ describe('KnowledgeEdit', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('保存失败')
     expect(router.currentRoute.value.path).toBe('/')
+    wrapper.unmount()
+  })
+  it('loads an existing item and saves with the base version', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({
+      id: 7,
+      title: '旧标题',
+      content: '旧正文',
+      version: 3,
+      status: 'ready',
+    } as never)
+    vi.mocked(updateKnowledge).mockResolvedValue({ id: 7 } as never)
+    const { wrapper, router } = await render('/home/knowledge/7/edit')
+    expect(getKnowledge).toHaveBeenCalledWith(7, expect.any(AbortSignal))
+    expect((wrapper.get('#knowledge-title').element as HTMLInputElement).value).toBe('旧标题')
+    expect((wrapper.get('#knowledge-content').element as HTMLTextAreaElement).value).toBe('旧正文')
+    await wrapper.get('#knowledge-title').setValue('新标题')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(updateKnowledge).toHaveBeenCalledWith(7, '新标题', '旧正文', 3, expect.any(AbortSignal))
+    expect(router.currentRoute.value.path).toBe('/home/knowledge/7')
+    wrapper.unmount()
+  })
+  it('keeps the editor open on a version conflict', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({
+      id: 7,
+      title: '旧标题',
+      content: '旧正文',
+      version: 3,
+      status: 'ready',
+    } as never)
+    vi.mocked(updateKnowledge).mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 409, data: { msg: '当前状态不支持该操作' } },
+    })
+    const { wrapper, router } = await render('/home/knowledge/7/edit')
+    await wrapper.get('#knowledge-title').setValue('新标题')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('请刷新后重新编辑')
+    expect(router.currentRoute.value.path).toBe('/home/knowledge/7/edit')
     wrapper.unmount()
   })
 })

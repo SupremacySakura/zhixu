@@ -131,7 +131,7 @@ func TestDeleteKnowledgeRowsReturnsCount(t *testing.T) {
 	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(2, 1))
 	for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
-		mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN").
+		mock.ExpectExec("DELETE FROM `" + table + "` WHERE user_id = .*knowledge_id IN").
 			WillReturnResult(sqlmock.NewResult(0, 2))
 	}
 	mock.ExpectExec("DELETE FROM `knowledge_items` WHERE user_id = .*source_file_id IN").
@@ -161,7 +161,7 @@ func TestDeleteKnowledgeRowsReturnsZeroWhenEmpty(t *testing.T) {
 	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}))
 	for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
-		mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN").
+		mock.ExpectExec("DELETE FROM `" + table + "` WHERE user_id = .*knowledge_id IN").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 	}
 	mock.ExpectExec("DELETE FROM `knowledge_items` WHERE id = .*user_id").
@@ -348,4 +348,76 @@ func TestKnowledgeListLiteralTitle(t *testing.T) {
 	require.Empty(t, items)
 	require.Zero(t, count)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestKnowledgeUpdateTransactional(t *testing.T) {
+	taskRow := func() *sqlmock.Rows {
+		return sqlmock.NewRows([]string{"id", "knowledge_id", "user_id", "status", "collection", "model_id", "embedding_version", "config_version", "attempts", "lease_token"}).
+			AddRow(5, 7, 2, model.VectorRunning, "zhixu_u2_v3", 4, 3, 5, 1, "token")
+	}
+	itemRow := func(version uint) *sqlmock.Rows {
+		return sqlmock.NewRows([]string{"id", "user_id", "title", "content", "status", "version", "embedding_version", "vector_state", "source_hash"}).
+			AddRow(7, 2, "旧标题", "旧正文", model.KnowledgeReady, version, 3, model.VectorReady, "oldhash")
+	}
+
+	t.Run("snapshots then rebuilds vectors", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` WHERE .*FOR UPDATE").
+			WillReturnRows(taskRow())
+		mock.ExpectQuery("SELECT .* FROM `knowledge_items` WHERE .*FOR UPDATE").
+			WillReturnRows(itemRow(1))
+		mock.ExpectExec("INSERT INTO `knowledge_versions`").WillReturnResult(sqlmock.NewResult(30, 1))
+		mock.ExpectQuery("SELECT `id` FROM `knowledge_chunks`").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(11).AddRow(12))
+		mock.ExpectExec("UPDATE `knowledge_items`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec("DELETE FROM `vectorize_tasks`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec("DELETE FROM `knowledge_chunks`").WillReturnResult(sqlmock.NewResult(0, 2))
+		mock.ExpectExec("INSERT INTO `vectorize_tasks`").WillReturnResult(sqlmock.NewResult(20, 1))
+		mock.ExpectExec("UPDATE `knowledge_items`.*vector_state").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec("UPDATE `vectorize_tasks`.*cleanup_collection").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		item, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "新标题", "新正文", "newhash", 1)
+		require.NoError(t, err)
+		require.Equal(t, uint(7), item.ID)
+		require.Equal(t, "新标题", item.Title)
+		require.Equal(t, "新正文", item.Content)
+		require.Equal(t, "newhash", item.SourceHash)
+		require.Equal(t, uint(2), item.Version)
+		require.Equal(t, model.VectorPending, item.VectorState)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("stale version rolls back", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` WHERE .*FOR UPDATE").
+			WillReturnRows(taskRow())
+		mock.ExpectQuery("SELECT .* FROM `knowledge_items` WHERE .*FOR UPDATE").
+			WillReturnRows(itemRow(1))
+		mock.ExpectRollback()
+
+		_, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "新标题", "新正文", "newhash", 2)
+		require.ErrorIs(t, err, ErrKnowledgeConflict)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("snapshot failure rolls back", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` WHERE .*FOR UPDATE").
+			WillReturnRows(taskRow())
+		mock.ExpectQuery("SELECT .* FROM `knowledge_items` WHERE .*FOR UPDATE").
+			WillReturnRows(itemRow(1))
+		mock.ExpectExec("INSERT INTO `knowledge_versions`").WillReturnError(assertionError{})
+		mock.ExpectRollback()
+
+		_, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "新标题", "新正文", "newhash", 1)
+		require.Error(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
 }

@@ -52,7 +52,7 @@ func (h *KnowledgeHandler) fail(c *gin.Context, err error) {
 	case errors.Is(err, service.ErrKnowledgeNotFound):
 		response.FailWithStatus(c, http.StatusNotFound, response.CodeNotFound, "知识或原文件不存在")
 	case errors.Is(err, repository.ErrKnowledgeConflict):
-		response.FailWithStatus(c, http.StatusConflict, response.CodeConflict, "当前状态不支持重试")
+		response.FailWithStatus(c, http.StatusConflict, response.CodeConflict, "当前状态不支持该操作，请刷新后重试")
 	default:
 		c.Error(err)
 		response.FailWithStatus(c, http.StatusInternalServerError, response.CodeServerError, "知识库服务暂时不可用")
@@ -128,6 +128,52 @@ func (h *KnowledgeHandler) Add(c *gin.Context) {
 		return
 	}
 	response.SuccessWithStatus(c, http.StatusAccepted, item)
+}
+
+// UpdateKnowledgeRequest 编辑知识正文；base_version 为乐观锁版本号。
+type UpdateKnowledgeRequest struct {
+	Title       string `json:"title"`
+	Content     string `json:"content"`
+	BaseVersion uint   `json:"base_version"`
+}
+
+// Update godoc
+// @Summary 编辑知识正文并生成版本快照
+// @Description 仅 ready 状态可编辑；base_version 与当前版本不一致返回409，正文更新后重新分块并向量化。
+// @Tags knowledge
+// @Accept json
+// @Produce json
+// @Param id path int true "知识ID"
+// @Param data body UpdateKnowledgeRequest true "新标题、正文与当前版本号"
+// @Success 200 {object} response.Response{data=model.KnowledgeItem}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Failure 409 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id} [put]
+func (h *KnowledgeHandler) Update(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	var req UpdateKnowledgeRequest
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<20)
+	if c.ShouldBindJSON(&req) != nil {
+		response.FailWithStatus(c, 400, response.CodeInvalidParam, "请求格式不正确或超出大小限制")
+		return
+	}
+	item, err := h.Service.Update(c.Request.Context(), userID, id, req.Title, req.Content, req.BaseVersion)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, item)
 }
 
 // List godoc

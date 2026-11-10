@@ -54,6 +54,11 @@ type VectorizeTask struct {
 	ConfigVersion    uint64      `gorm:"not null"`
 	EmbeddingVersion uint64      `gorm:"not null"`
 	Collection       string      `gorm:"size:128;not null"`
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// StaleChunkIDs 记录编辑前旧分块的 Qdrant 点 ID（JSON 数组），任务启动时按 ID 精确清理。
+	// MySQL 不允许 TEXT 列带默认值，因此不设 default；空串由写入方显式提供。
+	StaleChunkIDs string `gorm:"type:text;not null"`
+	// CleanupCollection 是旧向量所在集合，仅与 StaleChunkIDs 配合使用。
+	CleanupCollection string `gorm:"size:128;not null;default:''"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }

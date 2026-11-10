@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"zhixu-backend/internal/model"
+	"zhixu-backend/internal/repository"
 	"zhixu-backend/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -46,6 +47,16 @@ func (knowledgeHandlerStore) Create(_ context.Context, item *model.KnowledgeItem
 func (knowledgeHandlerStore) CreateManual(_ context.Context, item *model.KnowledgeItem) error {
 	item.ID = 11
 	return nil
+}
+
+func (knowledgeHandlerStore) Update(_ context.Context, user, id uint, title, content, sourceHash string, baseVersion uint) (*model.KnowledgeItem, error) {
+	if user != 2 || id != 10 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if baseVersion != 1 {
+		return nil, repository.ErrKnowledgeConflict
+	}
+	return &model.KnowledgeItem{ID: 10, UserID: 2, Title: title, Content: content, Status: model.KnowledgeReady, Version: 2}, nil
 }
 
 func (knowledgeHandlerStore) Get(_ context.Context, user, id uint) (*model.KnowledgeItem, error) {
@@ -169,6 +180,40 @@ func TestKnowledgeHandlerCreateManual(t *testing.T) {
 			require.Equal(t, tc.status, w.Code, w.Body.String())
 			if tc.status == 202 {
 				require.Contains(t, w.Body.String(), "手写笔记")
+			}
+		})
+	}
+}
+
+func TestKnowledgeHandlerUpdate(t *testing.T) {
+	h := &KnowledgeHandler{Service: service.NewKnowledgeService(knowledgeHandlerStore{}, "")}
+	for _, tc := range []struct {
+		name, path, body string
+		user             uint
+		status           int
+	}{
+		{"updated", "/knowledge/10", `{"title":"新标题","content":"# 新正文","base_version":1}`, 2, 200},
+		{"missing base version", "/knowledge/10", `{"title":"新标题","content":"正文"}`, 2, 400},
+		{"stale base version", "/knowledge/10", `{"title":"新标题","content":"正文","base_version":2}`, 2, 409},
+		{"unknown id", "/knowledge/11", `{"title":"新标题","content":"正文","base_version":1}`, 2, 404},
+		{"invalid id", "/knowledge/no", `{"title":"新标题","content":"正文","base_version":1}`, 2, 400},
+		{"unauthorized", "/knowledge/10", `{"title":"新标题","content":"正文","base_version":1}`, 0, 401},
+		{"malformed JSON", "/knowledge/10", `{`, 2, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := gin.New()
+			if tc.user != 0 {
+				r.Use(func(c *gin.Context) { c.Set("user_id", tc.user) })
+			}
+			r.PUT("/knowledge/:id", h.Update)
+			req := httptest.NewRequest("PUT", tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			if tc.status == 200 {
+				require.Contains(t, w.Body.String(), "新标题")
+				require.Contains(t, w.Body.String(), `"version":2`)
 			}
 		})
 	}

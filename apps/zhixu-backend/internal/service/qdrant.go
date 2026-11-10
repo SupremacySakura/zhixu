@@ -171,6 +171,29 @@ func (q *QdrantClient) DeleteKnowledge(ctx context.Context, collection string, u
 	return nil
 }
 
+// DeletePoints 按点 ID 精确删除旧分块向量；只删除调用方明确列出的 ID，不会误删新分块。
+func (q *QdrantClient) DeletePoints(ctx context.Context, collection string, ids []uint) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	data, status, err := q.request(ctx, "POST", "/collections/"+collection+"/points/delete?wait=true", map[string]any{"points": ids})
+	if err != nil {
+		return err
+	}
+	if status == 404 {
+		return nil
+	}
+	var result struct {
+		Result struct {
+			Status string `json:"status"`
+		} `json:"result"`
+	}
+	if status != 200 || json.Unmarshal(data, &result) != nil || result.Result.Status != "completed" {
+		return fmt.Errorf("Qdrant 未确认删除完成（HTTP %d）", status)
+	}
+	return nil
+}
+
 // Search returns chunk matches scoped to one user's collection. The caller must ensure
 // the collection name embeds that user id; the payload filter is defense in depth.
 // minScore maps to Qdrant score_threshold so weak matches never leave the vector store.

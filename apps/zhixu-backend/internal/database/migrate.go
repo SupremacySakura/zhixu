@@ -119,6 +119,7 @@ func Migrate() error {
 		&model.KnowledgeItem{},
 		&model.KnowledgeImportTask{},
 		&model.KnowledgeChunk{},
+		&model.KnowledgeVersion{},
 		&model.VectorizeTask{},
 		&model.VectorCleanupTask{},
 		&model.ModelProvider{},

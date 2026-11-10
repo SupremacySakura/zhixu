@@ -31,6 +31,7 @@ type KnowledgeStore interface {
 	Get(context.Context, uint, uint) (*model.KnowledgeItem, error)
 	Create(context.Context, *model.KnowledgeItem) (*model.KnowledgeItem, bool, error)
 	CreateManual(context.Context, *model.KnowledgeItem) error
+	Update(context.Context, uint, uint, string, string, string, uint) (*model.KnowledgeItem, error)
 	List(context.Context, uint, int, int, string, model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error)
 	Retry(context.Context, uint, uint) error
 	Delete(context.Context, uint, uint) error
@@ -110,8 +111,19 @@ func validateKnowledgeTitle(title string) error {
 	return nil
 }
 
-// ManualContentMaxRunes 手动创建正文上限（字符数）。
+// ManualContentMaxRunes 手动创建与编辑正文上限（字符数）。
 const ManualContentMaxRunes = 2_000_000
+
+// validateKnowledgeContent 校验知识正文：1–2M 字符、合法 UTF-8、不含 NUL。
+func validateKnowledgeContent(content string) error {
+	if !utf8.ValidString(content) || strings.ContainsRune(content, 0) {
+		return fmt.Errorf("%w: 知识正文须为合法 UTF-8 文本", ErrKnowledgeInvalid)
+	}
+	if n := utf8.RuneCountInString(content); n == 0 || n > ManualContentMaxRunes {
+		return fmt.Errorf("%w: 知识正文须为 1–%d 字符", ErrKnowledgeInvalid, ManualContentMaxRunes)
+	}
+	return nil
+}
 
 // CreateManual 手动创建知识：正文即用户输入，直接就绪并排入向量化队列。
 func (s *KnowledgeService) CreateManual(ctx context.Context, userID uint, title, content string) (*model.KnowledgeItem, error) {
@@ -120,22 +132,44 @@ func (s *KnowledgeService) CreateManual(ctx context.Context, userID uint, title,
 		return nil, err
 	}
 	content = strings.TrimSpace(content)
-	if !utf8.ValidString(content) || strings.ContainsRune(content, 0) {
-		return nil, fmt.Errorf("%w: 知识正文须为合法 UTF-8 文本", ErrKnowledgeInvalid)
-	}
-	if n := utf8.RuneCountInString(content); n == 0 || n > ManualContentMaxRunes {
-		return nil, fmt.Errorf("%w: 知识正文须为 1–%d 字符", ErrKnowledgeInvalid, ManualContentMaxRunes)
+	if err := validateKnowledgeContent(content); err != nil {
+		return nil, err
 	}
 	sum := sha256.Sum256([]byte(content))
 	now := time.Now()
 	item := &model.KnowledgeItem{
 		UserID: userID, SourceHash: hex.EncodeToString(sum[:]), SourceType: model.KnowledgeSourceTypeManual,
-		Title: title, Content: content, Status: model.KnowledgeReady, ImportedAt: &now,
+		Title: title, Content: content, Status: model.KnowledgeReady, Version: 1, ImportedAt: &now,
 	}
 	if err := s.store.CreateManual(ctx, item); err != nil {
 		return nil, knowledgeError(err)
 	}
 	s.recordOperation(userID, model.OperationLogActionKnowledgeCreate, item.ID, item.Title, "", nil)
+	return item, nil
+}
+
+// Update 编辑知识正文：乐观锁校验 base_version，服务层只做校验与日志，快照与重建由存储层单事务完成。
+func (s *KnowledgeService) Update(ctx context.Context, userID, id uint, title, content string, baseVersion uint) (*model.KnowledgeItem, error) {
+	if baseVersion == 0 {
+		return nil, fmt.Errorf("%w: 缺少 base_version", ErrKnowledgeInvalid)
+	}
+	title = strings.TrimSpace(title)
+	if err := validateKnowledgeTitle(title); err != nil {
+		return nil, err
+	}
+	content = strings.TrimSpace(content)
+	if err := validateKnowledgeContent(content); err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256([]byte(content))
+	item, err := s.store.Update(ctx, userID, id, title, content, hex.EncodeToString(sum[:]), baseVersion)
+	if err != nil {
+		return nil, knowledgeError(err)
+	}
+	// 标题与正文均未变化时版本号不变，不记编辑日志。
+	if item.Version > baseVersion {
+		s.recordOperation(userID, model.OperationLogActionKnowledgeUpdate, item.ID, item.Title, item.SourceFolderName, map[string]any{"version": item.Version})
+	}
 	return item, nil
 }
 
@@ -169,7 +203,7 @@ func (s *KnowledgeService) Add(ctx context.Context, userID, fileID uint, title s
 	}
 	item, created, err := s.store.Create(ctx, &model.KnowledgeItem{
 		UserID: userID, SourceFileID: &file.ID, SourceFileName: file.Name, SourceFolderID: file.FolderID,
-		SourceFolderName: folder, SourceHash: file.FileHash, SourceType: extractor.SourceType(), Title: title, Status: model.KnowledgePending,
+		SourceFolderName: folder, SourceHash: file.FileHash, SourceType: extractor.SourceType(), Title: title, Status: model.KnowledgePending, Version: 1,
 	})
 	if err != nil {
 		return nil, false, knowledgeError(err)

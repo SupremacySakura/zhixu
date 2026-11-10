@@ -32,6 +32,11 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
       },
       {
+        path: '/home/knowledge/:id/edit',
+        component: () => import('../pages/KnowledgeEdit.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: '/home/knowledge/:id',
         component: () => import('../pages/KnowledgeDetail.vue'),
         meta: { requiresAuth: true },

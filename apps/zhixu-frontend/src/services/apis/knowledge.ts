@@ -12,6 +12,7 @@ export interface KnowledgeItem {
   source_type: string
   title: string
   content: string
+  version: number
   status: KnowledgeStatus
   error_code: string
   error_message: string
@@ -71,6 +72,20 @@ export async function createKnowledge(title: string, content: string, signal?: A
   const res = await request.post<ResponseData<KnowledgeItem>>(
     '/api/knowledge',
     { title, content },
+    { signal },
+  )
+  return unwrap(res.data)
+}
+export async function updateKnowledge(
+  id: number,
+  title: string,
+  content: string,
+  baseVersion: number,
+  signal?: AbortSignal,
+) {
+  const res = await request.put<ResponseData<KnowledgeItem>>(
+    `/api/knowledge/${id}`,
+    { title, content, base_version: baseVersion },
     { signal },
   )
   return unwrap(res.data)

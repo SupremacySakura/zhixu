@@ -28,6 +28,7 @@ type KnowledgeItem struct {
 	SourceType       string          `gorm:"type:varchar(32);not null" json:"source_type"`
 	Title            string          `gorm:"type:varchar(200);not null" json:"title"`
 	Content          string          `gorm:"type:longtext;not null" json:"content"`
+	Version          uint            `gorm:"not null;default:1" json:"version"`
 	Status           KnowledgeStatus `gorm:"type:varchar(16);not null;index" json:"status"`
 	ErrorCode        string          `gorm:"type:varchar(64);not null" json:"error_code"`
 	ErrorMessage     string          `gorm:"type:text;not null" json:"error_message"`

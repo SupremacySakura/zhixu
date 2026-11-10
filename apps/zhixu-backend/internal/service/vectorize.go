@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -34,6 +35,7 @@ type VectorEmbedder interface {
 type VectorDatabase interface {
 	EnsureCollection(context.Context, string, uint) error
 	Upsert(context.Context, string, []VectorPoint) error
+	DeletePoints(context.Context, string, []uint) error
 }
 
 type VectorizeService struct {
@@ -62,6 +64,10 @@ func (s *VectorizeService) ProcessNext(ctx context.Context) (bool, error) {
 	}
 	item, err := s.Knowledge.Get(ctx, task.UserID, task.KnowledgeID)
 	if err != nil {
+		return true, err
+	}
+	// 编辑产生的旧分块向量按 ID 精确清理；只删任务记录的旧 ID，不触碰本次新分块。
+	if err := s.cleanupStaleVectors(ctx, task); err != nil {
 		return true, err
 	}
 	chunks, err := ChunkMarkdown(item.Content, ChunkSize, ChunkOverlap)
@@ -170,6 +176,23 @@ func (s *VectorizeService) ProcessNext(ctx context.Context) (bool, error) {
 		}
 	}
 	return true, s.Store.Finish(ctx, task, failure)
+}
+
+// cleanupStaleVectors 删除编辑前旧分块的向量点：只按任务记录的 ID 删除，不影响本次新分块。
+func (s *VectorizeService) cleanupStaleVectors(ctx context.Context, task *model.VectorizeTask) error {
+	if task.StaleChunkIDs == "" || task.CleanupCollection == "" {
+		return nil
+	}
+	var ids []uint
+	if err := json.Unmarshal([]byte(task.StaleChunkIDs), &ids); err != nil || len(ids) == 0 {
+		// 历史脏数据不阻塞向量化；旧点最多占用检索候选位，RAG 会跳过失效分块。
+		return nil
+	}
+	writeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	return s.Store.WithLiveTask(writeCtx, task, func() error {
+		return s.Vectors.DeletePoints(writeCtx, task.CleanupCollection, ids)
+	})
 }
 
 func (s *VectorizeService) Run(ctx context.Context) {

@@ -66,6 +66,20 @@ func (f *knowledgeFake) CreateManual(_ context.Context, item *model.KnowledgeIte
 	f.item = item
 	return nil
 }
+func (f *knowledgeFake) Update(_ context.Context, user, id uint, title, content, sourceHash string, baseVersion uint) (*model.KnowledgeItem, error) {
+	if f.item == nil || f.item.UserID != user || f.item.ID != id {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if f.item.Status != model.KnowledgeReady || f.item.Version != baseVersion {
+		return nil, repository.ErrKnowledgeConflict
+	}
+	if f.item.Title == title && f.item.Content == content {
+		return f.item, nil
+	}
+	f.item.Title, f.item.Content, f.item.SourceHash = title, content, sourceHash
+	f.item.Version = baseVersion + 1
+	return f.item, nil
+}
 func (f *knowledgeFake) Claim(context.Context, string, time.Time) (*model.KnowledgeImportTask, error) {
 	if f.task == nil {
 		return nil, gorm.ErrRecordNotFound
@@ -451,4 +465,88 @@ func TestKnowledgeCreateManual(t *testing.T) {
 		_, err = s.Retry(context.Background(), 2, item.ID)
 		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
 	})
+}
+
+func TestKnowledgeUpdate(t *testing.T) {
+	newFixture := func() (*knowledgeFake, *operationLogSpy, *KnowledgeService) {
+		f := &knowledgeFake{item: &model.KnowledgeItem{
+			ID: 7, UserID: 2, Title: "旧标题", Content: "旧正文", Status: model.KnowledgeReady,
+			Version: 3, SourceFolderName: "学习资料",
+		}}
+		spy := &operationLogSpy{}
+		s := NewKnowledgeService(f, "")
+		s.Logs = spy
+		return f, spy, s
+	}
+
+	t.Run("bumps version and logs", func(t *testing.T) {
+		f, spy, s := newFixture()
+		item, err := s.Update(context.Background(), 2, 7, "  新标题 ", " # 新正文\n", 3)
+		require.NoError(t, err)
+		require.Equal(t, "新标题", item.Title)
+		require.Equal(t, "# 新正文", item.Content)
+		require.Equal(t, uint(4), item.Version)
+		sum := sha256.Sum256([]byte("# 新正文"))
+		require.Equal(t, hex.EncodeToString(sum[:]), item.SourceHash)
+		require.Equal(t, "新标题", f.item.Title)
+		require.Len(t, spy.entries, 1)
+		entry := spy.entries[0]
+		require.Equal(t, model.OperationLogActionKnowledgeUpdate, entry.Action)
+		require.Equal(t, model.OperationLogTargetTypeKnowledge, entry.TargetType)
+		require.Equal(t, uint(7), entry.TargetID)
+		require.Equal(t, "新标题", entry.TargetName)
+		require.Equal(t, "学习资料", entry.FolderName)
+		require.JSONEq(t, `{"version":4}`, entry.Detail)
+		require.Equal(t, 1, spy.pruned)
+	})
+
+	t.Run("unchanged content keeps version and logs nothing", func(t *testing.T) {
+		_, spy, s := newFixture()
+		item, err := s.Update(context.Background(), 2, 7, "旧标题", "旧正文", 3)
+		require.NoError(t, err)
+		require.Equal(t, uint(3), item.Version)
+		require.Empty(t, spy.entries)
+	})
+
+	t.Run("stale base version conflicts", func(t *testing.T) {
+		_, spy, s := newFixture()
+		_, err := s.Update(context.Background(), 2, 7, "新标题", "新正文", 2)
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+		require.Empty(t, spy.entries)
+	})
+
+	t.Run("unready item conflicts", func(t *testing.T) {
+		f, _, s := newFixture()
+		f.item.Status = model.KnowledgePending
+		_, err := s.Update(context.Background(), 2, 7, "新标题", "新正文", 3)
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+	})
+
+	t.Run("unknown item is not found", func(t *testing.T) {
+		_, _, s := newFixture()
+		_, err := s.Update(context.Background(), 2, 8, "新标题", "新正文", 3)
+		require.ErrorIs(t, err, ErrKnowledgeNotFound)
+	})
+
+	for _, tc := range []struct {
+		name        string
+		title       string
+		content     string
+		baseVersion uint
+	}{
+		{"missing base version", "标题", "正文", 0},
+		{"empty title", "", "正文", 3},
+		{"long title", strings.Repeat("知", 201), "正文", 3},
+		{"empty content", "标题", "", 3},
+		{"invalid UTF-8 content", "标题", "\xff\xfe", 3},
+		{"NUL content", "标题", "abc\x00def", 3},
+		{"oversized content", "标题", strings.Repeat("文", ManualContentMaxRunes+1), 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, spy, s := newFixture()
+			_, err := s.Update(context.Background(), 2, 7, tc.title, tc.content, tc.baseVersion)
+			require.ErrorIs(t, err, ErrKnowledgeInvalid)
+			require.Empty(t, spy.entries)
+		})
+	}
 }

@@ -124,6 +124,22 @@ describe('describeOperationLog', () => {
     expect(d.highlight).toBe('')
   })
 
+  it('maps knowledge_update with the saved version', () => {
+    const d = describeOperationLog(
+      makeLog({
+        action: 'knowledge_update',
+        target_type: 'knowledge',
+        target_name: '手写笔记',
+        detail: '{"version":4}',
+      }),
+    )
+    expect(d.icon).toBe('material-symbols:edit-note-rounded')
+    expect(d.colorClass).toBe('bg-primary-tint text-primary')
+    expect(d.title).toBe('手写笔记')
+    expect(d.subtitle).toBe('编辑知识正文')
+    expect(d.highlight).toBe('第 4 版')
+  })
+
   it('maps knowledge_delete and knowledge_retry', () => {
     const removed = describeOperationLog(
       makeLog({ action: 'knowledge_delete', target_type: 'knowledge', target_name: '笔记' }),

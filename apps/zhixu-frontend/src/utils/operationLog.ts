@@ -176,6 +176,16 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
         subtitle: '手动创建知识',
         highlight: '',
       }
+    case 'knowledge_update': {
+      const version = detailNumber(detail, 'version')
+      return {
+        icon: 'material-symbols:edit-note-rounded',
+        colorClass: 'bg-primary-tint text-primary',
+        title,
+        subtitle: '编辑知识正文',
+        highlight: version > 0 ? `第 ${version} 版` : '',
+      }
+    }
     case 'knowledge_delete':
       return {
         icon: 'material-symbols:bookmark-remove-outline-rounded',
