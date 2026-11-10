@@ -56,10 +56,11 @@ describe('knowledge action menu', () => {
     expect(entries().map(entry => entry.textContent?.trim())).toEqual([
       '查看知识',
       '分块结构',
+      '归档知识',
       '删除知识',
     ])
     expect(menu().querySelector('[role="separator"]')).not.toBeNull()
-    expect(entries()[2]!.classList.contains('text-danger')).toBe(true)
+    expect(entries()[3]!.classList.contains('text-danger')).toBe(true)
     expect(wrapper.emitted('delete')).toBeUndefined()
     entries()[1]!.click()
     await flushPromises()
@@ -74,6 +75,7 @@ describe('knowledge action menu', () => {
       '查看知识',
       '分块结构',
       '重试向量化',
+      '归档知识',
       '删除知识',
     ])
     entries()[2]!.click()
@@ -111,7 +113,7 @@ describe('knowledge action menu', () => {
     document.activeElement!.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'End', bubbles: true }),
     )
-    expect(document.activeElement).toBe(entries()[2])
+    expect(document.activeElement).toBe(entries()[3])
     document.activeElement!.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Home', bubbles: true }),
     )
@@ -124,19 +126,23 @@ describe('knowledge action menu', () => {
     expect(document.activeElement).toBe(wrapper.get('button').element)
     await wrapper.get('button').trigger('keydown', { key: 'ArrowUp' })
     await flushPromises()
-    expect(document.activeElement).toBe(entries()[2])
+    expect(document.activeElement).toBe(entries()[3])
   })
   it('emits status and delete actions and hides unavailable chunks', async () => {
     const { wrapper } = await render({ status: 'failed', chunks_total: 0 })
     await wrapper.get('button').trigger('click')
     await flushPromises()
-    expect(entries().map(entry => entry.textContent?.trim())).toEqual(['查看失败原因', '删除知识'])
+    expect(entries().map(entry => entry.textContent?.trim())).toEqual([
+      '查看失败原因',
+      '归档知识',
+      '删除知识',
+    ])
     entries()[0]!.click()
     await nextTick()
     expect(wrapper.emitted('track')?.[0]?.[0]).toMatchObject({ id: 10, status: 'failed' })
     await wrapper.get('button').trigger('click')
     await flushPromises()
-    entries()[1]!.click()
+    entries()[2]!.click()
     await nextTick()
     expect(wrapper.emitted('delete')?.[0]?.[0]).toMatchObject({ id: 10 })
     expect(menu()).toBeNull()

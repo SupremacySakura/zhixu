@@ -122,6 +122,46 @@ func (r *KnowledgeRepository) CreateManual(ctx context.Context, item *model.Know
 	})
 }
 
+// SetFavorite 幂等设置收藏标记：值未变化时不写库。
+func (r *KnowledgeRepository) SetFavorite(ctx context.Context, userID, id uint, favorite bool) error {
+	db := r.DB.WithContext(ctx)
+	var item model.KnowledgeItem
+	if err := db.Select("id", "is_favorite").Where("id = ? AND user_id = ?", id, userID).Take(&item).Error; err != nil {
+		return err
+	}
+	if item.IsFavorite == favorite {
+		return nil
+	}
+	return db.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", id, userID).Update("is_favorite", favorite).Error
+}
+
+// SetArchived 归档（archived_at 置为当前时间）或恢复归档（清空），返回最新归档时间。
+// 归档只影响列表与检索可见性，不删除分块与向量，恢复后立即重新生效。
+func (r *KnowledgeRepository) SetArchived(ctx context.Context, userID, id uint, archived bool) (*time.Time, error) {
+	db := r.DB.WithContext(ctx)
+	var item model.KnowledgeItem
+	if err := db.Select("id", "archived_at").Where("id = ? AND user_id = ?", id, userID).Take(&item).Error; err != nil {
+		return nil, err
+	}
+	if !archived {
+		if item.ArchivedAt == nil {
+			return nil, nil
+		}
+		if err := db.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", id, userID).Update("archived_at", nil).Error; err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+	if item.ArchivedAt != nil {
+		return item.ArchivedAt, nil
+	}
+	now := time.Now()
+	if err := db.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", id, userID).Update("archived_at", now).Error; err != nil {
+		return nil, err
+	}
+	return &now, nil
+}
+
 // Update 编辑知识正文：先保存编辑前的版本快照，再更新正文并重新排队分块与向量化。
 // 锁序与向量化 worker 一致（先任务、后知识行）；旧分块的点 ID 记录到新任务，由任务启动时清理，
 // 避免旧向量残留占用检索候选位。
@@ -221,7 +261,8 @@ func (r *KnowledgeRepository) List(ctx context.Context, userID uint, page, size 
 }
 
 func (r *KnowledgeRepository) ListVector(ctx context.Context, userID uint, page, size int, query string, status model.KnowledgeStatus, vector model.VectorState) ([]model.KnowledgeItem, int64, error) {
-	db := r.DB.WithContext(ctx).Model(&model.KnowledgeItem{}).Where("user_id = ?", userID)
+	// 归档知识默认不出现在列表中；检索侧另有 archived_at 过滤保证问答不可见。
+	db := r.DB.WithContext(ctx).Model(&model.KnowledgeItem{}).Where("user_id = ? AND archived_at IS NULL", userID)
 	if query != "" {
 		db = db.Where("LOCATE(?, title) > 0", query)
 	}

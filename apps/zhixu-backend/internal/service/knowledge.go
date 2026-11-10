@@ -32,6 +32,8 @@ type KnowledgeStore interface {
 	Create(context.Context, *model.KnowledgeItem) (*model.KnowledgeItem, bool, error)
 	CreateManual(context.Context, *model.KnowledgeItem) error
 	Update(context.Context, uint, uint, string, string, string, uint) (*model.KnowledgeItem, error)
+	SetFavorite(context.Context, uint, uint, bool) error
+	SetArchived(context.Context, uint, uint, bool) (*time.Time, error)
 	ListVersions(context.Context, uint, uint) ([]model.KnowledgeVersion, error)
 	GetVersion(context.Context, uint, uint, uint) (*model.KnowledgeVersion, error)
 	List(context.Context, uint, int, int, string, model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error)
@@ -173,6 +175,53 @@ func (s *KnowledgeService) Update(ctx context.Context, userID, id uint, title, c
 		s.recordOperation(userID, model.OperationLogActionKnowledgeUpdate, item.ID, item.Title, item.SourceFolderName, map[string]any{"version": item.Version})
 	}
 	return item, nil
+}
+
+// SetFavorite 收藏或取消收藏；幂等操作，仅状态变化时记操作日志。
+func (s *KnowledgeService) SetFavorite(ctx context.Context, userID, id uint, favorite bool) error {
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if item.IsFavorite == favorite {
+		return nil
+	}
+	if err := s.store.SetFavorite(ctx, userID, id, favorite); err != nil {
+		return knowledgeError(err)
+	}
+	s.recordOperation(userID, model.OperationLogActionKnowledgeFavorite, item.ID, item.Title, item.SourceFolderName, map[string]any{"favorite": favorite})
+	return nil
+}
+
+// Archive 归档知识：归档后不出现在默认列表与问答检索中；幂等。
+func (s *KnowledgeService) Archive(ctx context.Context, userID, id uint) (*time.Time, error) {
+	return s.setArchived(ctx, userID, id, true)
+}
+
+// Unarchive 恢复归档知识，恢复后重新参与列表与检索。
+func (s *KnowledgeService) Unarchive(ctx context.Context, userID, id uint) error {
+	_, err := s.setArchived(ctx, userID, id, false)
+	return err
+}
+
+func (s *KnowledgeService) setArchived(ctx context.Context, userID, id uint, archived bool) (*time.Time, error) {
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	if archived == (item.ArchivedAt != nil) {
+		return item.ArchivedAt, nil
+	}
+	at, err := s.store.SetArchived(ctx, userID, id, archived)
+	if err != nil {
+		return nil, knowledgeError(err)
+	}
+	action := model.OperationLogActionKnowledgeArchive
+	if !archived {
+		action = model.OperationLogActionKnowledgeUnarchive
+	}
+	s.recordOperation(userID, action, item.ID, item.Title, item.SourceFolderName, nil)
+	return at, nil
 }
 
 // KnowledgeVersionSummary 版本列表项：当前版本由 knowledge_items 实时合成，便于前端标出「当前」。

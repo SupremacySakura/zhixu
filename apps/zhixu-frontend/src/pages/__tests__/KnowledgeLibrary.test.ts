@@ -3,6 +3,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import KnowledgeLibrary from '../KnowledgeLibrary.vue'
 import {
+  favoriteKnowledge,
   listKnowledge,
   deleteKnowledge,
   retryKnowledgeVectorize,
@@ -16,6 +17,9 @@ vi.mock('../../services/apis/knowledge', () => ({
   retryKnowledge: vi.fn(),
   retryKnowledgeVectorize: vi.fn(),
   deleteKnowledge: vi.fn(),
+  favoriteKnowledge: vi.fn(),
+  archiveKnowledge: vi.fn(),
+  unarchiveKnowledge: vi.fn(),
 }))
 vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
 afterEach(() => {
@@ -33,6 +37,32 @@ async function render() {
   return wrapper
 }
 describe('KnowledgeLibrary', () => {
+  it('toggles favorite from the list row', async () => {
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: [
+        {
+          id: 10,
+          title: '笔记',
+          status: 'ready',
+          created_at: '',
+          is_favorite: false,
+          archived_at: null,
+          source_file_id: null,
+          source_file_name: '',
+        } as never,
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    vi.mocked(favoriteKnowledge).mockResolvedValue({ id: 10, is_favorite: true })
+    const wrapper = await render()
+    await wrapper.get('[aria-label="收藏 笔记"]').trigger('click')
+    await flushPromises()
+    expect(favoriteKnowledge).toHaveBeenCalledWith(10, true)
+    expect(wrapper.find('[aria-label="取消收藏 笔记"]').exists()).toBe(true)
+  })
+
   it('uses a custom menu and deletes knowledge without deleting the source', async () => {
     vi.mocked(listKnowledge)
       .mockResolvedValueOnce({

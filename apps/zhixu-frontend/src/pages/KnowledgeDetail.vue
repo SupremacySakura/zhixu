@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { getKnowledge, type KnowledgeItem } from '../services/apis/knowledge'
+import { Icon } from '@iconify/vue'
+import {
+  archiveKnowledge,
+  favoriteKnowledge,
+  getKnowledge,
+  unarchiveKnowledge,
+  type KnowledgeItem,
+} from '../services/apis/knowledge'
 import {
   isKnowledgeActive,
   isKnowledgeVectorActive,
@@ -19,6 +26,7 @@ const item = ref<KnowledgeItem | null>(null)
 const error = ref('')
 const loading = ref(false)
 const showHistory = ref(false)
+const actionBusy = ref('')
 let controller: AbortController | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
 const html = computed(() =>
@@ -57,6 +65,32 @@ onScopeDispose(() => {
   controller?.abort()
   clearTimeout(timer)
 })
+async function toggleFavorite() {
+  if (!item.value || actionBusy.value) return
+  actionBusy.value = 'favorite'
+  try {
+    const state = await favoriteKnowledge(item.value.id, !item.value.is_favorite)
+    item.value.is_favorite = state.is_favorite
+  } catch (e) {
+    error.value = knowledgeError(e)
+  } finally {
+    actionBusy.value = ''
+  }
+}
+async function toggleArchive() {
+  if (!item.value || actionBusy.value) return
+  actionBusy.value = 'archive'
+  try {
+    const state = item.value.archived_at
+      ? await unarchiveKnowledge(item.value.id)
+      : await archiveKnowledge(item.value.id)
+    item.value.archived_at = state.archived_at
+  } catch (e) {
+    error.value = knowledgeError(e)
+  } finally {
+    actionBusy.value = ''
+  }
+}
 function onRestored(restored: KnowledgeItem) {
   item.value = restored
   showHistory.value = false
@@ -83,10 +117,38 @@ function onRestored(restored: KnowledgeItem) {
           <div class="min-w-0">
             <h1 class="break-all text-title-1">{{ item.title }}</h1>
             <p class="mt-2 text-subhead text-label-secondary">
-              {{ item.source_file_id ? `来源于${sourceLabel}文件` : '手动创建' }} · 原始正文
+              {{ item.source_file_id ? `来源于${sourceLabel}文件` : '手动创建' }} ·
+              原始正文<template v-if="item.archived_at"> · 已归档</template>
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              class="knowledge-button-secondary"
+              :aria-pressed="item.is_favorite"
+              @click="toggleFavorite"
+            >
+              <Icon
+                :icon="
+                  item.is_favorite
+                    ? 'material-symbols:star-rounded'
+                    : 'material-symbols:star-outline'
+                "
+                class="text-lg"
+                aria-hidden="true"
+              />{{ item.is_favorite ? '已收藏' : '收藏' }}
+            </button>
+            <button type="button" class="knowledge-button-secondary" @click="toggleArchive">
+              <Icon
+                :icon="
+                  item.archived_at
+                    ? 'material-symbols:unarchive-outline-rounded'
+                    : 'material-symbols:archive-outline-rounded'
+                "
+                class="text-lg"
+                aria-hidden="true"
+              />{{ item.archived_at ? '恢复归档' : '归档' }}
+            </button>
             <button
               v-if="item.status === 'ready'"
               type="button"
@@ -112,6 +174,13 @@ function onRestored(restored: KnowledgeItem) {
             >
           </div>
         </header>
+        <div
+          v-if="item.archived_at"
+          class="mb-5 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
+          role="status"
+        >
+          该知识已归档，不会出现在默认列表与问答检索中。恢复后重新生效。
+        </div>
         <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_15rem]">
           <article
             class="min-w-0 rounded-lg border border-hairline bg-surface p-6 sm:p-9"

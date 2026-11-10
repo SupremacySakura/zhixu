@@ -3,7 +3,9 @@ import { onMounted, onScopeDispose, ref } from 'vue'
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import {
+  archiveKnowledge,
   deleteKnowledge,
+  favoriteKnowledge,
   retryKnowledgeVectorize,
   type KnowledgeItem,
   type KnowledgeStatus,
@@ -73,6 +75,35 @@ async function confirmDelete() {
   }
 }
 onScopeDispose(() => deleteController?.abort())
+const favoriteBusy = new Set<number>()
+async function toggleFavorite(entry: KnowledgeItem) {
+  if (favoriteBusy.has(entry.id)) return
+  favoriteBusy.add(entry.id)
+  try {
+    const state = await favoriteKnowledge(entry.id, !entry.is_favorite)
+    items.value = items.value.map(current =>
+      current.id === entry.id ? { ...current, is_favorite: state.is_favorite } : current,
+    )
+  } catch (e) {
+    displayToast(knowledgeError(e), 'error')
+  } finally {
+    favoriteBusy.delete(entry.id)
+  }
+}
+const archiving = ref(false)
+async function archiveEntry(entry: KnowledgeItem) {
+  if (archiving.value) return
+  archiving.value = true
+  try {
+    await archiveKnowledge(entry.id)
+    displayToast('知识已归档，默认列表不再显示', 'success')
+    await load()
+  } catch (e) {
+    displayToast(knowledgeError(e), 'error')
+  } finally {
+    archiving.value = false
+  }
+}
 const vectorRetryControllers = new Map<number, AbortController>()
 onScopeDispose(() => {
   vectorRetryControllers.forEach(controller => controller.abort())
@@ -208,12 +239,33 @@ onMounted(() => {
               ><time>{{ knowledgeDate(entry.created_at) }}</time>
             </div>
           </div>
-          <KnowledgeActionMenu
-            :item="entry"
-            @track="track"
-            @delete="selectDelete"
-            @retry-vector="retryVector"
-          />
+          <div class="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              class="knowledge-icon-button flex h-11 w-11 items-center justify-center rounded-sm border border-hairline bg-surface text-label-secondary"
+              :class="entry.is_favorite ? 'text-warning' : ''"
+              :aria-label="entry.is_favorite ? `取消收藏 ${entry.title}` : `收藏 ${entry.title}`"
+              :aria-pressed="entry.is_favorite"
+              @click="toggleFavorite(entry)"
+            >
+              <Icon
+                :icon="
+                  entry.is_favorite
+                    ? 'material-symbols:star-rounded'
+                    : 'material-symbols:star-outline'
+                "
+                class="text-xl"
+                aria-hidden="true"
+              />
+            </button>
+            <KnowledgeActionMenu
+              :item="entry"
+              @track="track"
+              @delete="selectDelete"
+              @retry-vector="retryVector"
+              @archive="archiveEntry"
+            />
+          </div>
         </article>
       </div>
       <FilePagination

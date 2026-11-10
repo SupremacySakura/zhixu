@@ -21,7 +21,8 @@ func (r *RagRepository) ChunksByIDs(ctx context.Context, user uint, ids []uint) 
 		return nil, nil
 	}
 	var chunks []model.KnowledgeChunk
-	err := r.DB.WithContext(ctx).Where("user_id = ? AND id IN ? AND state = ? AND EXISTS (SELECT 1 FROM knowledge_items WHERE knowledge_items.id = knowledge_chunks.knowledge_id AND knowledge_items.user_id = knowledge_chunks.user_id AND knowledge_items.status = ?)", user, ids, "ready", model.KnowledgeReady).Find(&chunks).Error
+	// 归档知识不参与问答检索：状态就绪且未归档的条目才会返回候选分块。
+	err := r.DB.WithContext(ctx).Where("user_id = ? AND id IN ? AND state = ? AND EXISTS (SELECT 1 FROM knowledge_items WHERE knowledge_items.id = knowledge_chunks.knowledge_id AND knowledge_items.user_id = knowledge_chunks.user_id AND knowledge_items.status = ? AND knowledge_items.archived_at IS NULL)", user, ids, "ready", model.KnowledgeReady).Find(&chunks).Error
 	return chunks, err
 }
 
@@ -31,7 +32,7 @@ func (r *RagRepository) KnowledgeTitles(ctx context.Context, user uint, ids []ui
 		return titles, nil
 	}
 	var items []model.KnowledgeItem
-	if err := r.DB.WithContext(ctx).Select("id", "title").Where("user_id = ? AND id IN ?", user, ids).Find(&items).Error; err != nil {
+	if err := r.DB.WithContext(ctx).Select("id", "title").Where("user_id = ? AND id IN ? AND archived_at IS NULL", user, ids).Find(&items).Error; err != nil {
 		return nil, err
 	}
 	for _, item := range items {

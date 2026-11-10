@@ -25,6 +25,9 @@ const (
 	OperationLogActionKnowledgeDelete      OperationLogAction = "knowledge_delete"       // 移出知识库
 	OperationLogActionKnowledgeRetry       OperationLogAction = "knowledge_retry"        // 重试知识导入
 	OperationLogActionKnowledgeVectorRetry OperationLogAction = "knowledge_vector_retry" // 重试知识向量化
+	OperationLogActionKnowledgeFavorite    OperationLogAction = "knowledge_favorite"     // 收藏知识
+	OperationLogActionKnowledgeArchive     OperationLogAction = "knowledge_archive"      // 归档知识
+	OperationLogActionKnowledgeUnarchive   OperationLogAction = "knowledge_unarchive"    // 恢复归档
 )
 
 // OperationLogTargetType 操作目标的实体类型

@@ -185,6 +185,103 @@ func (h *KnowledgeHandler) Update(c *gin.Context) {
 	response.Success(c, item)
 }
 
+// FavoriteKnowledgeRequest 收藏目标状态；缺省为 false（取消收藏）。
+type FavoriteKnowledgeRequest struct {
+	Favorite bool `json:"favorite"`
+}
+
+// Favorite godoc
+// @Summary 收藏或取消收藏知识
+// @Description 幂等设置收藏标记，请求体传目标状态。
+// @Tags knowledge
+// @Accept json
+// @Produce json
+// @Param id path int true "知识ID"
+// @Param data body FavoriteKnowledgeRequest true "收藏目标状态"
+// @Success 200 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/favorite [post]
+func (h *KnowledgeHandler) Favorite(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	var req FavoriteKnowledgeRequest
+	if c.ShouldBindJSON(&req) != nil {
+		response.FailWithStatus(c, 400, response.CodeInvalidParam, "请求格式不正确")
+		return
+	}
+	if err := h.Service.SetFavorite(c.Request.Context(), userID, id, req.Favorite); err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, gin.H{"id": id, "is_favorite": req.Favorite})
+}
+
+// Archive godoc
+// @Summary 归档知识
+// @Description 归档后不出现在默认列表与问答检索中，可随时恢复；幂等。
+// @Tags knowledge
+// @Produce json
+// @Param id path int true "知识ID"
+// @Success 200 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/archive [post]
+func (h *KnowledgeHandler) Archive(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	at, err := h.Service.Archive(c.Request.Context(), userID, id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, gin.H{"id": id, "archived": true, "archived_at": at})
+}
+
+// Unarchive godoc
+// @Summary 恢复归档知识
+// @Description 恢复后重新出现在列表与检索中；幂等。
+// @Tags knowledge
+// @Produce json
+// @Param id path int true "知识ID"
+// @Success 200 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/unarchive [post]
+func (h *KnowledgeHandler) Unarchive(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	if err := h.Service.Unarchive(c.Request.Context(), userID, id); err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, gin.H{"id": id, "archived": false, "archived_at": nil})
+}
+
 // Versions godoc
 // @Summary 知识版本历史
 // @Description 当前版本置顶并由条目实时合成，其余为不可变快照；列表不含正文。

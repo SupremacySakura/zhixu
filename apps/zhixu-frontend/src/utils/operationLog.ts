@@ -52,7 +52,7 @@ const UNKNOWN_ACTION_META = {
   colorClass: 'bg-surface-tertiary text-label-secondary',
 } as const
 
-/** 将操作日志条目映射为展示描述（纯函数，15 个 action 全覆盖） */
+/** 将操作日志条目映射为展示描述（纯函数，22 个 action 全覆盖） */
 export const describeOperationLog = (log: OperationLogItem): OperationLogDescription => {
   const detail = parseDetail(log.detail)
   const title = sanitizeFileName(log.target_name) || fallbackTitle(log.target_type)
@@ -218,6 +218,30 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
         colorClass: 'bg-warning-tint text-warning',
         title,
         subtitle: '重试向量化',
+        highlight: '',
+      }
+    case 'knowledge_favorite':
+      return {
+        icon: 'material-symbols:star-rounded',
+        colorClass: 'bg-warning-tint text-warning',
+        title,
+        subtitle: detail.favorite === false ? '取消收藏' : '收藏知识',
+        highlight: '',
+      }
+    case 'knowledge_archive':
+      return {
+        icon: 'material-symbols:archive-outline-rounded',
+        colorClass: 'bg-surface-tertiary text-label-secondary',
+        title,
+        subtitle: '归档知识',
+        highlight: '',
+      }
+    case 'knowledge_unarchive':
+      return {
+        icon: 'material-symbols:unarchive-outline-rounded',
+        colorClass: 'bg-info-tint text-info',
+        title,
+        subtitle: '恢复归档',
         highlight: '',
       }
     default:

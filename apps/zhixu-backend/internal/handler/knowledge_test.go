@@ -60,6 +60,24 @@ func (knowledgeHandlerStore) Update(_ context.Context, user, id uint, title, con
 	return &model.KnowledgeItem{ID: 10, UserID: 2, Title: title, Content: content, Status: model.KnowledgeReady, Version: 2}, nil
 }
 
+func (knowledgeHandlerStore) SetFavorite(_ context.Context, user, id uint, favorite bool) error {
+	if user != 2 || id != 10 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (knowledgeHandlerStore) SetArchived(_ context.Context, user, id uint, archived bool) (*time.Time, error) {
+	if user != 2 || id != 10 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if !archived {
+		return nil, nil
+	}
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	return &now, nil
+}
+
 func (knowledgeHandlerStore) Get(_ context.Context, user, id uint) (*model.KnowledgeItem, error) {
 	if user != 2 || id != 10 {
 		return nil, gorm.ErrRecordNotFound
@@ -285,6 +303,44 @@ func TestKnowledgeHandlerVersions(t *testing.T) {
 			r.GET("/knowledge/:id/versions/:version", h.VersionDetail)
 			r.POST("/knowledge/:id/versions/:version/restore", h.RestoreVersion)
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(""))
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			if tc.contains != "" {
+				require.Contains(t, w.Body.String(), tc.contains)
+			}
+		})
+	}
+}
+
+func TestKnowledgeHandlerFavoriteArchive(t *testing.T) {
+	h := &KnowledgeHandler{Service: service.NewKnowledgeService(knowledgeHandlerStore{}, "")}
+	for _, tc := range []struct {
+		name, method, path, body string
+		user                     uint
+		status                   int
+		contains                 string
+	}{
+		{"favorite", "POST", "/knowledge/10/favorite", `{"favorite":true}`, 2, 200, `"is_favorite":true`},
+		{"unfavorite", "POST", "/knowledge/10/favorite", `{"favorite":false}`, 2, 200, `"is_favorite":false`},
+		{"favorite unknown", "POST", "/knowledge/11/favorite", `{"favorite":true}`, 2, 404, ""},
+		{"favorite unauthorized", "POST", "/knowledge/10/favorite", "", 0, 401, ""},
+		{"favorite bad body", "POST", "/knowledge/10/favorite", `{`, 2, 400, ""},
+		{"archive", "POST", "/knowledge/10/archive", "", 2, 200, `"archived":true`},
+		{"unarchive", "POST", "/knowledge/10/unarchive", "", 2, 200, `"archived":false`},
+		{"archive unknown", "POST", "/knowledge/11/archive", "", 2, 404, ""},
+		{"archive unauthorized", "POST", "/knowledge/10/archive", "", 0, 401, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := gin.New()
+			if tc.user != 0 {
+				r.Use(func(c *gin.Context) { c.Set("user_id", tc.user) })
+			}
+			r.POST("/knowledge/:id/favorite", h.Favorite)
+			r.POST("/knowledge/:id/archive", h.Archive)
+			r.POST("/knowledge/:id/unarchive", h.Unarchive)
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 			require.Equal(t, tc.status, w.Code, w.Body.String())

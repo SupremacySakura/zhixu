@@ -13,6 +13,8 @@ export interface KnowledgeItem {
   title: string
   content: string
   version: number
+  is_favorite: boolean
+  archived_at: string | null
   status: KnowledgeStatus
   error_code: string
   error_message: string
@@ -100,6 +102,39 @@ export async function updateKnowledge(
   const res = await request.put<ResponseData<KnowledgeItem>>(
     `/api/knowledge/${id}`,
     { title, content, base_version: baseVersion },
+    { signal },
+  )
+  return unwrap(res.data)
+}
+export interface KnowledgeFavoriteState {
+  id: number
+  is_favorite: boolean
+}
+export interface KnowledgeArchiveState {
+  id: number
+  archived: boolean
+  archived_at: string | null
+}
+export async function favoriteKnowledge(id: number, favorite: boolean, signal?: AbortSignal) {
+  const res = await request.post<ResponseData<KnowledgeFavoriteState>>(
+    `/api/knowledge/${id}/favorite`,
+    { favorite },
+    { signal },
+  )
+  return unwrap(res.data)
+}
+export async function archiveKnowledge(id: number, signal?: AbortSignal) {
+  const res = await request.post<ResponseData<KnowledgeArchiveState>>(
+    `/api/knowledge/${id}/archive`,
+    {},
+    { signal },
+  )
+  return unwrap(res.data)
+}
+export async function unarchiveKnowledge(id: number, signal?: AbortSignal) {
+  const res = await request.post<ResponseData<KnowledgeArchiveState>>(
+    `/api/knowledge/${id}/unarchive`,
+    {},
     { signal },
   )
   return unwrap(res.data)

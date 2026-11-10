@@ -61,6 +61,27 @@ func (f *knowledgeFake) Create(_ context.Context, item *model.KnowledgeItem) (*m
 	f.item = item
 	return item, true, nil
 }
+func (f *knowledgeFake) SetFavorite(_ context.Context, user, id uint, favorite bool) error {
+	if f.item == nil || f.item.UserID != user || f.item.ID != id {
+		return gorm.ErrRecordNotFound
+	}
+	f.item.IsFavorite = favorite
+	return nil
+}
+
+func (f *knowledgeFake) SetArchived(_ context.Context, user, id uint, archived bool) (*time.Time, error) {
+	if f.item == nil || f.item.UserID != user || f.item.ID != id {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if !archived {
+		f.item.ArchivedAt = nil
+		return nil, nil
+	}
+	now := time.Now()
+	f.item.ArchivedAt = &now
+	return &now, nil
+}
+
 func (f *knowledgeFake) CreateManual(_ context.Context, item *model.KnowledgeItem) error {
 	f.manualCreated = true
 	item.ID = 11
@@ -669,5 +690,55 @@ func TestKnowledgeVersions(t *testing.T) {
 		_, err = s.Restore(context.Background(), 2, 7, 2)
 		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
 		require.Empty(t, spy.entries)
+	})
+}
+
+func TestKnowledgeFavoriteAndArchive(t *testing.T) {
+	ctx := context.Background()
+	newFixture := func() (*knowledgeFake, *operationLogSpy, *KnowledgeService) {
+		item := &model.KnowledgeItem{ID: 7, UserID: 2, Title: "笔记", Status: model.KnowledgeReady}
+		fake := &knowledgeFake{item: item}
+		spy := &operationLogSpy{}
+		s := NewKnowledgeService(fake, "")
+		s.Logs = spy
+		return fake, spy, s
+	}
+
+	t.Run("favorite sets flag once", func(t *testing.T) {
+		fake, spy, s := newFixture()
+		require.NoError(t, s.SetFavorite(ctx, 2, 7, true))
+		require.True(t, fake.item.IsFavorite)
+		require.Len(t, spy.entries, 1)
+		require.Equal(t, model.OperationLogActionKnowledgeFavorite, spy.entries[0].Action)
+
+		// 幂等：状态未变化时不重复记日志。
+		require.NoError(t, s.SetFavorite(ctx, 2, 7, true))
+		require.Len(t, spy.entries, 1)
+	})
+
+	t.Run("archive and unarchive toggle visibility", func(t *testing.T) {
+		fake, spy, s := newFixture()
+		at, err := s.Archive(ctx, 2, 7)
+		require.NoError(t, err)
+		require.NotNil(t, at)
+		require.NotNil(t, fake.item.ArchivedAt)
+		require.Len(t, spy.entries, 1)
+		require.Equal(t, model.OperationLogActionKnowledgeArchive, spy.entries[0].Action)
+
+		_, err = s.Archive(ctx, 2, 7)
+		require.NoError(t, err)
+		require.Len(t, spy.entries, 1)
+
+		require.NoError(t, s.Unarchive(ctx, 2, 7))
+		require.Nil(t, fake.item.ArchivedAt)
+		require.Len(t, spy.entries, 2)
+		require.Equal(t, model.OperationLogActionKnowledgeUnarchive, spy.entries[1].Action)
+	})
+
+	t.Run("unknown knowledge is not found", func(t *testing.T) {
+		_, _, s := newFixture()
+		require.ErrorIs(t, s.SetFavorite(ctx, 2, 99, true), ErrKnowledgeNotFound)
+		_, err := s.Archive(ctx, 2, 99)
+		require.ErrorIs(t, err, ErrKnowledgeNotFound)
 	})
 }

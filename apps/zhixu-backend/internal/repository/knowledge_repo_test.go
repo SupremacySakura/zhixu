@@ -339,9 +339,9 @@ func TestKnowledgeCreateManualAtomic(t *testing.T) {
 func TestKnowledgeListLiteralTitle(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `knowledge_items` WHERE user_id = .*LOCATE.*status =").
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `knowledge_items` WHERE \\(user_id = \\? AND archived_at IS NULL\\).*LOCATE.*status =").
 		WithArgs(uint(2), "%_", model.KnowledgeReady).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-	mock.ExpectQuery("SELECT .* FROM `knowledge_items` WHERE user_id = .*LOCATE.*status = .*ORDER BY created_at DESC, id DESC LIMIT").
+	mock.ExpectQuery("SELECT .* FROM `knowledge_items` WHERE \\(user_id = \\? AND archived_at IS NULL\\).*LOCATE.*status = .*ORDER BY created_at DESC, id DESC LIMIT").
 		WithArgs(uint(2), "%_", model.KnowledgeReady, 20).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	items, count, err := NewKnowledgeRepository(db).List(context.Background(), 2, 1, 20, "%_", model.KnowledgeReady)
 	require.NoError(t, err)
@@ -457,4 +457,96 @@ func TestKnowledgeGetVersion(t *testing.T) {
 	_, err = NewKnowledgeRepository(db).GetVersion(context.Background(), 2, 7, 9)
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestKnowledgeSetFavorite(t *testing.T) {
+	t.Run("updates when the value changes", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT .*is_favorite.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(10), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "is_favorite"}).AddRow(10, false))
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE `knowledge_items` SET `is_favorite`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+		require.NoError(t, NewKnowledgeRepository(db).SetFavorite(context.Background(), 2, 10, true))
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("skips the update when the value is unchanged", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT .*is_favorite.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(10), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "is_favorite"}).AddRow(10, true))
+		require.NoError(t, NewKnowledgeRepository(db).SetFavorite(context.Background(), 2, 10, true))
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("missing knowledge returns record not found", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT .*is_favorite.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(99), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "is_favorite"}))
+		require.ErrorIs(t, NewKnowledgeRepository(db).SetFavorite(context.Background(), 2, 99, true), gorm.ErrRecordNotFound)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestKnowledgeSetArchived(t *testing.T) {
+	t.Run("archives with a timestamp", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT .*archived_at.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(10), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "archived_at"}).AddRow(10, nil))
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE `knowledge_items` SET `archived_at`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+		at, err := NewKnowledgeRepository(db).SetArchived(context.Background(), 2, 10, true)
+		require.NoError(t, err)
+		require.NotNil(t, at)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("unarchive clears the timestamp", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		now := time.Now()
+		mock.ExpectQuery("SELECT .*archived_at.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(10), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "archived_at"}).AddRow(10, now))
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE `knowledge_items` SET `archived_at`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+		at, err := NewKnowledgeRepository(db).SetArchived(context.Background(), 2, 10, false)
+		require.NoError(t, err)
+		require.Nil(t, at)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("archive is idempotent", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		now := time.Now()
+		mock.ExpectQuery("SELECT .*archived_at.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(10), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "archived_at"}).AddRow(10, now))
+		at, err := NewKnowledgeRepository(db).SetArchived(context.Background(), 2, 10, true)
+		require.NoError(t, err)
+		require.NotNil(t, at)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("missing knowledge returns record not found", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT .*archived_at.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(99), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "archived_at"}))
+		_, err := NewKnowledgeRepository(db).SetArchived(context.Background(), 2, 99, true)
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
 }

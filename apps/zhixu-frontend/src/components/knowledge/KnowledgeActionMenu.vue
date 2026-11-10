@@ -10,6 +10,7 @@ const emit = defineEmits<{
   track: [item: KnowledgeItem]
   delete: [item: KnowledgeItem]
   retryVector: [item: KnowledgeItem]
+  archive: [item: KnowledgeItem]
 }>()
 const trigger = ref<HTMLButtonElement | null>(null)
 const menu = ref<HTMLElement | null>(null)
@@ -22,12 +23,16 @@ const canRetryVector = computed(
   () => props.item.status === 'ready' && props.item.vector_state === 'partial',
 )
 const estimatedHeight = computed(() => {
-  const rows = 2 + (props.item.chunks_total > 0 ? 1 : 0) + (canRetryVector.value ? 1 : 0)
+  const rows = 3 + (props.item.chunks_total > 0 ? 1 : 0) + (canRetryVector.value ? 1 : 0)
   return rows * 44 + 23
 })
 
 function entries() {
   return Array.from(menu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') || [])
+}
+function archive() {
+  close(true)
+  emit('archive', props.item)
 }
 function close(restoreFocus = false) {
   open.value = false
@@ -227,6 +232,20 @@ onBeforeUnmount(removeListeners)
                 class="text-lg"
                 aria-hidden="true"
               />重试向量化
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              :aria-label="`归档知识 ${item.title}`"
+              :class="[itemClass, 'knowledge-menu-item text-label']"
+              @click="archive"
+            >
+              <Icon
+                icon="material-symbols:archive-outline-rounded"
+                class="text-lg"
+                aria-hidden="true"
+              />归档知识
             </button>
             <div role="separator" class="mx-1.5 my-[5px] h-px bg-hairline"></div>
             <button

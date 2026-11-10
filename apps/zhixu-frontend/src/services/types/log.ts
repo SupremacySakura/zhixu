@@ -19,6 +19,9 @@ export type OperationLogAction =
   | 'knowledge_delete'
   | 'knowledge_retry'
   | 'knowledge_vector_retry'
+  | 'knowledge_favorite'
+  | 'knowledge_archive'
+  | 'knowledge_unarchive'
 
 export type OperationLogTargetType = 'file' | 'folder' | 'knowledge'
 

@@ -140,6 +140,44 @@ describe('describeOperationLog', () => {
     expect(d.highlight).toBe('第 2 版')
   })
 
+  it('maps knowledge_favorite and its cancellation', () => {
+    const added = describeOperationLog(
+      makeLog({
+        action: 'knowledge_favorite',
+        target_type: 'knowledge',
+        target_name: '手写笔记',
+        detail: '{"favorite":true}',
+      }),
+    )
+    expect(added.icon).toBe('material-symbols:star-rounded')
+    expect(added.colorClass).toBe('bg-warning-tint text-warning')
+    expect(added.subtitle).toBe('收藏知识')
+    const removed = describeOperationLog(
+      makeLog({
+        action: 'knowledge_favorite',
+        target_type: 'knowledge',
+        target_name: '手写笔记',
+        detail: '{"favorite":false}',
+      }),
+    )
+    expect(removed.subtitle).toBe('取消收藏')
+  })
+
+  it('maps knowledge_archive and knowledge_unarchive', () => {
+    const archived = describeOperationLog(
+      makeLog({ action: 'knowledge_archive', target_type: 'knowledge', target_name: '手写笔记' }),
+    )
+    expect(archived.icon).toBe('material-symbols:archive-outline-rounded')
+    expect(archived.colorClass).toBe('bg-surface-tertiary text-label-secondary')
+    expect(archived.subtitle).toBe('归档知识')
+    const restored = describeOperationLog(
+      makeLog({ action: 'knowledge_unarchive', target_type: 'knowledge', target_name: '手写笔记' }),
+    )
+    expect(restored.icon).toBe('material-symbols:unarchive-outline-rounded')
+    expect(restored.colorClass).toBe('bg-info-tint text-info')
+    expect(restored.subtitle).toBe('恢复归档')
+  })
+
   it('maps knowledge_update with the saved version', () => {
     const d = describeOperationLog(
       makeLog({
