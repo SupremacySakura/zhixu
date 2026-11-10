@@ -17,6 +17,8 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+func uintPtr(v uint) *uint { return &v }
+
 func TestKnowledgeClaimIdleQueueAndDatabaseErrorLogs(t *testing.T) {
 	for _, databaseError := range []bool{false, true} {
 		t.Run(map[bool]string{false: "idle queue is silent", true: "database errors remain visible"}[databaseError], func(t *testing.T) {
@@ -66,7 +68,7 @@ func TestKnowledgeCreateAtomic(t *testing.T) {
 				mock.ExpectExec("INSERT INTO `knowledge_import_tasks`").WillReturnResult(sqlmock.NewResult(20, 1))
 				mock.ExpectCommit()
 			}
-			item, created, err := NewKnowledgeRepository(db).Create(context.Background(), &model.KnowledgeItem{UserID: 2, SourceFileID: 1, Status: model.KnowledgePending})
+			item, created, err := NewKnowledgeRepository(db).Create(context.Background(), &model.KnowledgeItem{UserID: 2, SourceFileID: uintPtr(1), Status: model.KnowledgePending})
 			if fail {
 				require.Error(t, err)
 				require.False(t, created)
@@ -186,7 +188,7 @@ func TestKnowledgeCreateRejectsDeletedSource(t *testing.T) {
 	mock.ExpectQuery("SELECT .* FROM `file_models` .*deleted_at.*FOR UPDATE").
 		WithArgs(uint(1), uint(2), 1).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectRollback()
-	_, _, err := NewKnowledgeRepository(db).Create(context.Background(), &model.KnowledgeItem{UserID: 2, SourceFileID: 1})
+	_, _, err := NewKnowledgeRepository(db).Create(context.Background(), &model.KnowledgeItem{UserID: 2, SourceFileID: uintPtr(1)})
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -205,7 +207,7 @@ func TestKnowledgeCreateConcurrentWinner(t *testing.T) {
 	mock.ExpectRollback()
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `knowledge_items` WHERE user_id = ? AND source_file_id = ? LIMIT ?")).
 		WithArgs(uint(2), uint(1), 1).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(99, "winner"))
-	item, created, err := NewKnowledgeRepository(db).Create(context.Background(), &model.KnowledgeItem{UserID: 2, SourceFileID: 1})
+	item, created, err := NewKnowledgeRepository(db).Create(context.Background(), &model.KnowledgeItem{UserID: 2, SourceFileID: uintPtr(1)})
 	require.NoError(t, err)
 	require.False(t, created)
 	require.Equal(t, uint(99), item.ID)
@@ -297,6 +299,37 @@ func TestKnowledgeRetryState(t *testing.T) {
 				require.NoError(t, err)
 			} else {
 				require.ErrorIs(t, err, ErrKnowledgeConflict)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestKnowledgeCreateManualAtomic(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(map[bool]string{false: "item and vector task commit together", true: "vector enqueue failure rolls back item"}[fail], func(t *testing.T) {
+			db, mock, cleanup := setupMockDB(t)
+			defer cleanup()
+			mock.ExpectBegin()
+			mock.ExpectExec("INSERT INTO `knowledge_items`").WillReturnResult(sqlmock.NewResult(10, 1))
+			if fail {
+				mock.ExpectExec("INSERT INTO `vectorize_tasks`").WillReturnError(assertionError{})
+				mock.ExpectRollback()
+			} else {
+				mock.ExpectExec("INSERT INTO `vectorize_tasks`").WillReturnResult(sqlmock.NewResult(20, 1))
+				mock.ExpectExec("UPDATE `knowledge_items`.*vector_state").WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectCommit()
+			}
+			item := &model.KnowledgeItem{
+				UserID: 2, Title: "手写笔记", Content: "正文",
+				SourceType: model.KnowledgeSourceTypeManual, Status: model.KnowledgeReady,
+			}
+			err := NewKnowledgeRepository(db).CreateManual(context.Background(), item)
+			if fail {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, uint(10), item.ID)
 			}
 			require.NoError(t, mock.ExpectationsWereMet())
 		})

@@ -43,6 +43,11 @@ func (knowledgeHandlerStore) Create(_ context.Context, item *model.KnowledgeItem
 	return item, true, nil
 }
 
+func (knowledgeHandlerStore) CreateManual(_ context.Context, item *model.KnowledgeItem) error {
+	item.ID = 11
+	return nil
+}
+
 func (knowledgeHandlerStore) Get(_ context.Context, user, id uint) (*model.KnowledgeItem, error) {
 	if user != 2 || id != 10 {
 		return nil, gorm.ErrRecordNotFound
@@ -139,5 +144,32 @@ func TestKnowledgeHandlerAddAcceptedAndReuse(t *testing.T) {
 			require.Equal(t, 202, w.Code)
 			require.Contains(t, w.Body.String(), `"status":"pending"`)
 		}
+	}
+}
+
+func TestKnowledgeHandlerCreateManual(t *testing.T) {
+	h := &KnowledgeHandler{Service: service.NewKnowledgeService(knowledgeHandlerStore{}, "")}
+	for _, tc := range []struct {
+		name, body string
+		status     int
+	}{
+		{"created", `{"title":"手写笔记","content":"# 正文"}`, 202},
+		{"file_id and content conflict", `{"file_id":1,"title":"标题","content":"正文"}`, 400},
+		{"missing title", `{"content":"正文"}`, 400},
+		{"missing content", `{"title":"标题"}`, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := gin.New()
+			r.Use(func(c *gin.Context) { c.Set("user_id", uint(2)) })
+			r.POST("/knowledge", h.Add)
+			req := httptest.NewRequest("POST", "/knowledge", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			if tc.status == 202 {
+				require.Contains(t, w.Body.String(), "手写笔记")
+			}
+		})
 	}
 }

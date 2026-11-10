@@ -113,6 +113,17 @@ describe('describeOperationLog', () => {
     expect(d.highlight).toBe('工作')
   })
 
+  it('maps knowledge_create for manual knowledge', () => {
+    const d = describeOperationLog(
+      makeLog({ action: 'knowledge_create', target_type: 'knowledge', target_name: '手写笔记' }),
+    )
+    expect(d.icon).toBe('material-symbols:note-add-outline-rounded')
+    expect(d.colorClass).toBe('bg-primary-tint text-primary')
+    expect(d.title).toBe('手写笔记')
+    expect(d.subtitle).toBe('手动创建知识')
+    expect(d.highlight).toBe('')
+  })
+
   it('maps knowledge_delete and knowledge_retry', () => {
     const removed = describeOperationLog(
       makeLog({ action: 'knowledge_delete', target_type: 'knowledge', target_name: '笔记' }),

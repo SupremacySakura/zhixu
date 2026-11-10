@@ -61,7 +61,7 @@ func TestPDFExtractorLifecycle(t *testing.T) {
 		writeSourceFile(t, root, hash, buildTestPDF(t, []string{"Hello World", "Second page text"}))
 		f := &knowledgeFake{
 			file: &model.FileModel{ID: 1, UserID: 2, Name: "report.pdf", FileHash: hash},
-			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: hash, SourceType: "pdf"},
+			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: hash, SourceType: "pdf"},
 			task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 		}
 		processed, err := NewKnowledgeService(f, root).ProcessNext(context.Background())
@@ -89,7 +89,7 @@ func TestPDFExtractorLifecycle(t *testing.T) {
 		writeSourceFile(t, root, hash, buildTestPDF(t, []string{""}))
 		f := &knowledgeFake{
 			file: &model.FileModel{ID: 1, UserID: 2, Name: "scan.pdf", FileHash: hash},
-			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: hash, SourceType: "pdf"},
+			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: hash, SourceType: "pdf"},
 			task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 		}
 		processed, err := NewKnowledgeService(f, root).ProcessNext(context.Background())
@@ -104,7 +104,7 @@ func TestPDFExtractorLifecycle(t *testing.T) {
 		writeSourceFile(t, root, hash, []byte("this is not a pdf at all"))
 		f := &knowledgeFake{
 			file: &model.FileModel{ID: 1, UserID: 2, Name: "broken.pdf", FileHash: hash},
-			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: hash, SourceType: "pdf"},
+			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: hash, SourceType: "pdf"},
 			task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 		}
 		processed, err := NewKnowledgeService(f, root).ProcessNext(context.Background())

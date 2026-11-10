@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +17,8 @@ import (
 	"gorm.io/gorm"
 )
 
+func uintPtr(v uint) *uint { return &v }
+
 type knowledgeFake struct {
 	KnowledgeStore
 	file                   *model.FileModel
@@ -22,6 +26,7 @@ type knowledgeFake struct {
 	task                   *model.KnowledgeImportTask
 	fileErr                error
 	created, finished      bool
+	manualCreated          bool
 	code, message, content string
 }
 
@@ -38,7 +43,7 @@ func (f *knowledgeFake) FolderName(context.Context, uint, uint) (string, error) 
 	return "学习资料", nil
 }
 func (f *knowledgeFake) ByFile(_ context.Context, user, file uint) (*model.KnowledgeItem, error) {
-	if f.item == nil || f.item.UserID != user || f.item.SourceFileID != file {
+	if f.item == nil || f.item.UserID != user || f.item.SourceFileID == nil || *f.item.SourceFileID != file {
 		return nil, gorm.ErrRecordNotFound
 	}
 	return f.item, nil
@@ -54,6 +59,12 @@ func (f *knowledgeFake) Create(_ context.Context, item *model.KnowledgeItem) (*m
 	item.ID = 10
 	f.item = item
 	return item, true, nil
+}
+func (f *knowledgeFake) CreateManual(_ context.Context, item *model.KnowledgeItem) error {
+	f.manualCreated = true
+	item.ID = 11
+	f.item = item
+	return nil
 }
 func (f *knowledgeFake) Claim(context.Context, string, time.Time) (*model.KnowledgeImportTask, error) {
 	if f.task == nil {
@@ -125,7 +136,7 @@ func TestKnowledgeOperationLogs(t *testing.T) {
 
 	t.Run("delete logs snapshot", func(t *testing.T) {
 		f, spy, s := newFixture()
-		f.item = &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceFolderName: "学习资料", Title: "旧知识", Status: model.KnowledgeReady}
+		f.item = &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceFolderName: "学习资料", Title: "旧知识", Status: model.KnowledgeReady}
 		require.NoError(t, s.Delete(context.Background(), 2, 10))
 		require.Len(t, spy.entries, 1)
 		entry := spy.entries[0]
@@ -141,7 +152,7 @@ func TestKnowledgeOperationLogs(t *testing.T) {
 
 	t.Run("retry logs after success", func(t *testing.T) {
 		f, spy, s := newFixture()
-		f.item = &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: "aabbccdd", SourceFolderName: "学习资料", Title: "失败知识", Status: model.KnowledgeFailed}
+		f.item = &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: "aabbccdd", SourceFolderName: "学习资料", Title: "失败知识", Status: model.KnowledgeFailed}
 		_, err := s.Retry(context.Background(), 2, 10)
 		require.NoError(t, err)
 		require.Len(t, spy.entries, 1)
@@ -207,7 +218,7 @@ func TestKnowledgeAdd(t *testing.T) {
 }
 
 func TestKnowledgeAddIsolationAndIdempotency(t *testing.T) {
-	f := &knowledgeFake{file: &model.FileModel{ID: 1, UserID: 2, Name: "note.md"}, item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, Title: "原标题", Status: model.KnowledgeFailed}}
+	f := &knowledgeFake{file: &model.FileModel{ID: 1, UserID: 2, Name: "note.md"}, item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), Title: "原标题", Status: model.KnowledgeFailed}}
 	s := NewKnowledgeService(f, "")
 	_, _, err := s.Add(context.Background(), 3, 1, "")
 	require.ErrorIs(t, err, ErrKnowledgeNotFound)
@@ -280,7 +291,7 @@ func TestKnowledgeProcess(t *testing.T) {
 			writeKnowledgeSource(t, root, "aabbccdd", "", tc.content)
 			f := &knowledgeFake{
 				file: &model.FileModel{ID: 1, UserID: 2, FileHash: tc.hash},
-				item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: "aabbccdd"},
+				item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: "aabbccdd"},
 				task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 			}
 			if tc.deleted {
@@ -299,7 +310,7 @@ func TestKnowledgeProcess(t *testing.T) {
 }
 
 func TestKnowledgeRetryAndValidation(t *testing.T) {
-	f := &knowledgeFake{file: &model.FileModel{ID: 1, UserID: 2, Name: "note.md", FileHash: "aabbccdd"}, item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: "aabbccdd", Status: model.KnowledgeReady}}
+	f := &knowledgeFake{file: &model.FileModel{ID: 1, UserID: 2, Name: "note.md", FileHash: "aabbccdd"}, item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: "aabbccdd", Status: model.KnowledgeReady}}
 	s := NewKnowledgeService(f, "")
 	_, err := s.Retry(context.Background(), 2, 10)
 	require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
@@ -381,5 +392,63 @@ func TestKnowledgeRetryVectorize(t *testing.T) {
 		_, err := s.RetryVectorize(context.Background(), 2, 10)
 		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
 		require.Empty(t, spy.entries)
+	})
+}
+
+func TestKnowledgeCreateManual(t *testing.T) {
+	t.Run("ready hashed and logged", func(t *testing.T) {
+		f := &knowledgeFake{}
+		spy := &operationLogSpy{}
+		s := NewKnowledgeService(f, "")
+		s.Logs = spy
+		item, err := s.CreateManual(context.Background(), 2, "  手写笔记  ", "  # 正文\n内容  ")
+		require.NoError(t, err)
+		require.True(t, f.manualCreated)
+		require.Equal(t, uint(11), item.ID)
+		require.Equal(t, "手写笔记", item.Title)
+		require.Equal(t, "# 正文\n内容", item.Content)
+		require.Equal(t, model.KnowledgeReady, item.Status)
+		require.Equal(t, model.KnowledgeSourceTypeManual, item.SourceType)
+		require.Nil(t, item.SourceFileID)
+		sum := sha256.Sum256([]byte("# 正文\n内容"))
+		require.Equal(t, hex.EncodeToString(sum[:]), item.SourceHash)
+		require.NotNil(t, item.ImportedAt)
+		require.Len(t, spy.entries, 1)
+		require.Equal(t, model.OperationLogActionKnowledgeCreate, spy.entries[0].Action)
+		require.Equal(t, model.OperationLogTargetTypeKnowledge, spy.entries[0].TargetType)
+		require.Equal(t, uint(11), spy.entries[0].TargetID)
+		require.Equal(t, "手写笔记", spy.entries[0].TargetName)
+		require.Equal(t, 1, spy.pruned)
+	})
+
+	t.Run("validation rejects invalid input before persisting", func(t *testing.T) {
+		for _, tc := range []struct{ name, title, content string }{
+			{"empty title", "", "正文"},
+			{"blank title", "   ", "正文"},
+			{"long title", strings.Repeat("知", 201), "正文"},
+			{"NUL title", "标\x00题", "正文"},
+			{"empty content", "标题", ""},
+			{"blank content", "标题", "  \n\t "},
+			{"NUL content", "标题", "abc\x00def"},
+			{"invalid UTF-8 content", "标题", "\xff\xfe"},
+			{"oversized content", "标题", strings.Repeat("文", ManualContentMaxRunes+1)},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := &knowledgeFake{}
+				_, err := NewKnowledgeService(f, "").CreateManual(context.Background(), 2, tc.title, tc.content)
+				require.ErrorIs(t, err, ErrKnowledgeInvalid)
+				require.False(t, f.manualCreated)
+			})
+		}
+	})
+
+	t.Run("manual item has no import retry", func(t *testing.T) {
+		f := &knowledgeFake{}
+		s := NewKnowledgeService(f, "")
+		item, err := s.CreateManual(context.Background(), 2, "手写笔记", "正文")
+		require.NoError(t, err)
+		f.item.Status = model.KnowledgeFailed
+		_, err = s.Retry(context.Background(), 2, item.ID)
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
 	})
 }

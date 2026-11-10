@@ -13,6 +13,7 @@ export type OperationLogAction =
   | 'pickup_code_create'
   | 'pickup_code_delete'
   | 'knowledge_add'
+  | 'knowledge_create'
   | 'knowledge_delete'
   | 'knowledge_retry'
   | 'knowledge_vector_retry'

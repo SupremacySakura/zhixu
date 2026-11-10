@@ -15,9 +15,11 @@ import (
 
 type KnowledgeHandler struct{ Service *service.KnowledgeService }
 
+// AddKnowledgeRequest 二选一：file_id 从文件导入，或 title+content 手动创建。
 type AddKnowledgeRequest struct {
-	FileID uint   `json:"file_id" binding:"required"`
-	Title  string `json:"title"`
+	FileID  uint   `json:"file_id"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
 }
 
 // Delete godoc
@@ -76,12 +78,12 @@ func knowledgeID(c *gin.Context, raw string) (uint, bool) {
 }
 
 // Add godoc
-// @Summary 将文件加入知识库（支持格式由后端能力表决定）
-// @Description 首次加入返回202。重复请求返回原知识条目，不改变标题或重试失败任务。
+// @Summary 创建知识：file_id 从文件导入，或 title+content 手动创建（二选一）
+// @Description 文件导入首次加入返回202，重复请求返回原知识条目；手动创建始终返回202。
 // @Tags knowledge
 // @Accept json
 // @Produce json
-// @Param data body AddKnowledgeRequest true "文件与可选标题"
+// @Param data body AddKnowledgeRequest true "file_id 与可选标题，或 title+content"
 // @Success 202 {object} response.Response{data=model.KnowledgeItem}
 // @Success 200 {object} response.Response{data=model.KnowledgeItem}
 // @Failure 400 {object} response.Response
@@ -96,21 +98,36 @@ func (h *KnowledgeHandler) Add(c *gin.Context) {
 		return
 	}
 	var req AddKnowledgeRequest
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64*1024)
+	// 手动创建正文上限 2M 字符，请求体放宽到 4MB；文件导入只用得到 file_id 与标题。
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<20)
 	if c.ShouldBindJSON(&req) != nil {
-		response.FailWithStatus(c, 400, response.CodeInvalidParam, "请提供 file_id 和可选知识标题")
+		response.FailWithStatus(c, 400, response.CodeInvalidParam, "请求格式不正确或超出大小限制")
 		return
 	}
-	item, created, err := h.Service.Add(c.Request.Context(), userID, req.FileID, req.Title)
+	if req.FileID > 0 {
+		if req.Content != "" {
+			response.FailWithStatus(c, 400, response.CodeInvalidParam, "file_id 与 content 只能二选一")
+			return
+		}
+		item, created, err := h.Service.Add(c.Request.Context(), userID, req.FileID, req.Title)
+		if err != nil {
+			h.fail(c, err)
+			return
+		}
+		status := http.StatusOK
+		if created {
+			status = http.StatusAccepted
+		}
+		response.SuccessWithStatus(c, status, item)
+		return
+	}
+	// 手动创建：标题与正文的完整校验在服务层。
+	item, err := h.Service.CreateManual(c.Request.Context(), userID, req.Title, req.Content)
 	if err != nil {
 		h.fail(c, err)
 		return
 	}
-	status := http.StatusOK
-	if created {
-		status = http.StatusAccepted
-	}
-	response.SuccessWithStatus(c, status, item)
+	response.SuccessWithStatus(c, http.StatusAccepted, item)
 }
 
 // List godoc

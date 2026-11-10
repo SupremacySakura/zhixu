@@ -9,7 +9,12 @@ import {
   type KnowledgeStatus,
   type KnowledgeVectorState,
 } from '../services/apis/knowledge'
-import { hasKnowledgeVector, knowledgeDescription, knowledgeError } from '../utils/knowledge'
+import {
+  hasKnowledgeVector,
+  knowledgeDescription,
+  knowledgeError,
+  knowledgeSourceLabel,
+} from '../utils/knowledge'
 import { Icon } from '@iconify/vue'
 import { useKnowledgeLibrary } from '../composables/useKnowledgeLibrary'
 import { useKnowledgeImport } from '../composables/useKnowledgeImport'
@@ -108,9 +113,14 @@ onMounted(() => {
             从文件中沉淀的内容，在这里继续阅读与积累。
           </p>
         </div>
-        <RouterLink to="/home/files" class="knowledge-button-primary"
-          ><Icon icon="material-symbols:note-add-outline" />从文件加入</RouterLink
-        >
+        <div class="flex flex-wrap gap-3">
+          <RouterLink to="/home/knowledge/new" class="knowledge-button-primary"
+            ><Icon icon="material-symbols:edit-square-outline" />新建知识</RouterLink
+          >
+          <RouterLink to="/home/files" class="knowledge-button-secondary"
+            ><Icon icon="material-symbols:note-add-outline" />从文件加入</RouterLink
+          >
+        </div>
       </header>
       <div class="mb-5 flex flex-wrap gap-3">
         <div class="relative min-w-48 flex-1">
@@ -189,7 +199,12 @@ onMounted(() => {
               {{ knowledgeDescription(entry) }}
             </p>
             <div class="mt-3 flex flex-wrap gap-3 text-caption text-label-secondary">
-              <span>Markdown 文件</span><span class="break-all">{{ entry.source_file_name }}</span
+              <span
+                >{{ knowledgeSourceLabel(entry.source_type)
+                }}{{ entry.source_file_id ? '文件' : '' }}</span
+              ><span v-if="entry.source_file_id" class="break-all">{{
+                entry.source_file_name
+              }}</span
               ><time>{{ knowledgeDate(entry.created_at) }}</time>
             </div>
           </div>

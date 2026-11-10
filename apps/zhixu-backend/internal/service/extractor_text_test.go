@@ -63,7 +63,7 @@ func TestTextExtractorLifecycle(t *testing.T) {
 	t.Run("process normalizes newlines", func(t *testing.T) {
 		f := &knowledgeFake{
 			file: &model.FileModel{ID: 1, UserID: 2, Name: "note.txt", FileHash: "aabbccdd"},
-			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: "aabbccdd", SourceType: "text"},
+			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: "aabbccdd", SourceType: "text"},
 			task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 		}
 		processed, err := NewKnowledgeService(f, root).ProcessNext(context.Background())
@@ -86,7 +86,7 @@ func TestTextExtractorLifecycle(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "aabbccdd"), []byte(strings.Repeat(" \n", 3)), 0600))
 		f := &knowledgeFake{
 			file: &model.FileModel{ID: 1, UserID: 2, Name: "empty.txt", FileHash: "aabbccdd"},
-			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: "aabbccdd", SourceType: "text"},
+			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: "aabbccdd", SourceType: "text"},
 			task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 		}
 		processed, err := NewKnowledgeService(f, empty).ProcessNext(context.Background())

@@ -5,7 +5,7 @@ export type KnowledgeStatus = 'pending' | 'running' | 'ready' | 'failed'
 export type KnowledgeVectorState = '' | 'pending' | 'running' | 'ready' | 'partial'
 export interface KnowledgeItem {
   id: number
-  source_file_id: number
+  source_file_id: number | null
   source_file_name: string
   source_folder_id: number
   source_folder_name: string
@@ -63,6 +63,14 @@ export async function addKnowledge(fileId: number, title: string, signal?: Abort
   const res = await request.post<ResponseData<KnowledgeItem>>(
     '/api/knowledge',
     { file_id: fileId, title },
+    { signal },
+  )
+  return unwrap(res.data)
+}
+export async function createKnowledge(title: string, content: string, signal?: AbortSignal) {
+  const res = await request.post<ResponseData<KnowledgeItem>>(
+    '/api/knowledge',
+    { title, content },
     { signal },
   )
   return unwrap(res.data)

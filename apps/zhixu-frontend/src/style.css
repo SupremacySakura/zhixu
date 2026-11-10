@@ -177,6 +177,10 @@
     @apply min-h-11 rounded-sm border border-hairline bg-surface px-3 text-body text-label outline-none focus:border-primary focus:ring-2 focus:ring-primary-tint disabled:opacity-50;
   }
 
+  .knowledge-textarea {
+    @apply w-full resize-y rounded-sm border border-hairline bg-surface px-3 py-3 text-body leading-7 text-label outline-none focus:border-primary focus:ring-2 focus:ring-primary-tint;
+  }
+
   .knowledge-dialog {
     @apply fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-xl border-0 bg-transparent p-0 text-label;
   }

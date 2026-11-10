@@ -37,7 +37,7 @@ func writeZipSource(t *testing.T, root, hash string, parts map[string]string) {
 func docxFakeTask(hash string) *knowledgeFake {
 	return &knowledgeFake{
 		file: &model.FileModel{ID: 1, UserID: 2, Name: "report.docx", FileHash: hash},
-		item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: hash, SourceType: "docx"},
+		item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: hash, SourceType: "docx"},
 		task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 	}
 }
@@ -45,7 +45,7 @@ func docxFakeTask(hash string) *knowledgeFake {
 func xlsxFakeTask(hash string) *knowledgeFake {
 	return &knowledgeFake{
 		file: &model.FileModel{ID: 1, UserID: 2, Name: "data.xlsx", FileHash: hash},
-		item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: hash, SourceType: "xlsx"},
+		item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: hash, SourceType: "xlsx"},
 		task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 	}
 }
@@ -202,7 +202,7 @@ func TestXlsxExtractorLifecycle(t *testing.T) {
 		writeZipSource(t, root, hash, xlsxFixture())
 		f := &knowledgeFake{
 			file: &model.FileModel{ID: 1, UserID: 2, Name: "销售表.xlsx", FileHash: hash},
-			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: hash, SourceType: "xlsx"},
+			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: hash, SourceType: "xlsx"},
 			task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 		}
 		processed, err := NewKnowledgeService(f, root).ProcessNext(context.Background())
@@ -279,7 +279,7 @@ func TestXlsxExtractorLifecycle(t *testing.T) {
 		writeZipSource(t, root, hash, map[string]string{"xl/sharedStrings.xml": "<sst/>"})
 		f := &knowledgeFake{
 			file: &model.FileModel{ID: 1, UserID: 2, Name: "broken.xlsx", FileHash: hash},
-			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: hash, SourceType: "xlsx"},
+			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: hash, SourceType: "xlsx"},
 			task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 		}
 		processed, err := NewKnowledgeService(f, root).ProcessNext(context.Background())
@@ -297,7 +297,7 @@ func TestXlsxExtractorLifecycle(t *testing.T) {
 		})
 		f := &knowledgeFake{
 			file: &model.FileModel{ID: 1, UserID: 2, Name: "empty.xlsx", FileHash: hash},
-			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: hash, SourceType: "xlsx"},
+			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: hash, SourceType: "xlsx"},
 			task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 		}
 		processed, err := NewKnowledgeService(f, root).ProcessNext(context.Background())
@@ -311,7 +311,7 @@ func TestCSVExtractorLifecycle(t *testing.T) {
 	csvFakeTask := func(hash string) *knowledgeFake {
 		return &knowledgeFake{
 			file: &model.FileModel{ID: 1, UserID: 2, Name: "数据.csv", FileHash: hash},
-			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: 1, SourceHash: hash, SourceType: "csv"},
+			item: &model.KnowledgeItem{ID: 10, UserID: 2, SourceFileID: uintPtr(1), SourceHash: hash, SourceType: "csv"},
 			task: &model.KnowledgeImportTask{ID: 20, KnowledgeID: 10, UserID: 2},
 		}
 	}

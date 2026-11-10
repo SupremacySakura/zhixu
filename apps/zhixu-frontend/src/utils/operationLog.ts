@@ -168,6 +168,14 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
         subtitle: '加入知识库',
         highlight: folderLabel(log.folder_name),
       }
+    case 'knowledge_create':
+      return {
+        icon: 'material-symbols:note-add-outline-rounded',
+        colorClass: 'bg-primary-tint text-primary',
+        title,
+        subtitle: '手动创建知识',
+        highlight: '',
+      }
     case 'knowledge_delete':
       return {
         icon: 'material-symbols:bookmark-remove-outline-rounded',

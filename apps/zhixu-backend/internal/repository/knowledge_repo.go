@@ -92,7 +92,7 @@ func (r *KnowledgeRepository) Create(ctx context.Context, item *model.KnowledgeI
 	err := r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var source model.FileModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("id = ? AND user_id = ?", item.SourceFileID, item.UserID).Take(&source).Error; err != nil {
+			Where("id = ? AND user_id = ?", *item.SourceFileID, item.UserID).Take(&source).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(item).Error; err != nil {
@@ -105,10 +105,20 @@ func (r *KnowledgeRepository) Create(ctx context.Context, item *model.KnowledgeI
 	}
 	var duplicate *mysqlDriver.MySQLError
 	if errors.Is(err, gorm.ErrDuplicatedKey) || (errors.As(err, &duplicate) && duplicate.Number == 1062) {
-		existing, lookupErr := r.ByFile(ctx, item.UserID, item.SourceFileID)
+		existing, lookupErr := r.ByFile(ctx, item.UserID, *item.SourceFileID)
 		return existing, false, lookupErr
 	}
 	return nil, false, err
+}
+
+// CreateManual 落库手动创建的知识：正文已定稿，直接就绪并排入向量化队列，不走导入任务。
+func (r *KnowledgeRepository) CreateManual(ctx context.Context, item *model.KnowledgeItem) error {
+	return r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(item).Error; err != nil {
+			return err
+		}
+		return EnqueueVectorization(tx, item.UserID, item.ID)
+	})
 }
 
 func (r *KnowledgeRepository) List(ctx context.Context, userID uint, page, size int, query string, status model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error) {

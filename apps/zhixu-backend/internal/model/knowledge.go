@@ -11,11 +11,16 @@ const (
 	KnowledgeFailed  KnowledgeStatus = "failed"
 )
 
+// KnowledgeSourceTypeManual 标记手动创建的知识：无来源文件，正文即用户输入。
+// 与 extractor.SourceType() 的文件格式值（markdown/pdf/...）共存于 source_type。
+const KnowledgeSourceTypeManual = "manual"
+
 // KnowledgeItem preserves a source snapshot even if the original file is deleted.
 type KnowledgeItem struct {
-	ID               uint            `gorm:"primaryKey" json:"id"`
-	UserID           uint            `gorm:"not null;uniqueIndex:uniq_knowledge_source;index:idx_knowledge_user_created" json:"-"`
-	SourceFileID     uint            `gorm:"not null;uniqueIndex:uniq_knowledge_source" json:"source_file_id"`
+	ID     uint `gorm:"primaryKey" json:"id"`
+	UserID uint `gorm:"not null;uniqueIndex:uniq_knowledge_source;index:idx_knowledge_user_created" json:"-"`
+	// 手动创建无来源文件，SourceFileID 为 NULL；MySQL 唯一索引容许多个 NULL，不影响文件来源幂等。
+	SourceFileID     *uint           `gorm:"uniqueIndex:uniq_knowledge_source" json:"source_file_id"`
 	SourceFileName   string          `gorm:"type:varchar(255);not null" json:"source_file_name"`
 	SourceFolderID   uint            `json:"source_folder_id"`
 	SourceFolderName string          `gorm:"type:text" json:"source_folder_name"`

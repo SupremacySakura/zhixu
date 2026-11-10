@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ type KnowledgeStore interface {
 	ByFile(context.Context, uint, uint) (*model.KnowledgeItem, error)
 	Get(context.Context, uint, uint) (*model.KnowledgeItem, error)
 	Create(context.Context, *model.KnowledgeItem) (*model.KnowledgeItem, bool, error)
+	CreateManual(context.Context, *model.KnowledgeItem) error
 	List(context.Context, uint, int, int, string, model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error)
 	Retry(context.Context, uint, uint) error
 	Delete(context.Context, uint, uint) error
@@ -100,6 +102,43 @@ func knowledgeError(err error) error {
 	return err
 }
 
+// validateKnowledgeTitle 校验知识标题：1–200 字符、合法 UTF-8、不含 NUL。
+func validateKnowledgeTitle(title string) error {
+	if !utf8.ValidString(title) || utf8.RuneCountInString(title) == 0 || utf8.RuneCountInString(title) > 200 || strings.ContainsRune(title, 0) {
+		return fmt.Errorf("%w: 知识标题须为 1–200 字符", ErrKnowledgeInvalid)
+	}
+	return nil
+}
+
+// ManualContentMaxRunes 手动创建正文上限（字符数）。
+const ManualContentMaxRunes = 2_000_000
+
+// CreateManual 手动创建知识：正文即用户输入，直接就绪并排入向量化队列。
+func (s *KnowledgeService) CreateManual(ctx context.Context, userID uint, title, content string) (*model.KnowledgeItem, error) {
+	title = strings.TrimSpace(title)
+	if err := validateKnowledgeTitle(title); err != nil {
+		return nil, err
+	}
+	content = strings.TrimSpace(content)
+	if !utf8.ValidString(content) || strings.ContainsRune(content, 0) {
+		return nil, fmt.Errorf("%w: 知识正文须为合法 UTF-8 文本", ErrKnowledgeInvalid)
+	}
+	if n := utf8.RuneCountInString(content); n == 0 || n > ManualContentMaxRunes {
+		return nil, fmt.Errorf("%w: 知识正文须为 1–%d 字符", ErrKnowledgeInvalid, ManualContentMaxRunes)
+	}
+	sum := sha256.Sum256([]byte(content))
+	now := time.Now()
+	item := &model.KnowledgeItem{
+		UserID: userID, SourceHash: hex.EncodeToString(sum[:]), SourceType: model.KnowledgeSourceTypeManual,
+		Title: title, Content: content, Status: model.KnowledgeReady, ImportedAt: &now,
+	}
+	if err := s.store.CreateManual(ctx, item); err != nil {
+		return nil, knowledgeError(err)
+	}
+	s.recordOperation(userID, model.OperationLogActionKnowledgeCreate, item.ID, item.Title, "", nil)
+	return item, nil
+}
+
 func (s *KnowledgeService) Add(ctx context.Context, userID, fileID uint, title string) (*model.KnowledgeItem, bool, error) {
 	file, err := s.store.File(ctx, userID, fileID)
 	if err != nil {
@@ -121,15 +160,15 @@ func (s *KnowledgeService) Add(ctx context.Context, userID, fileID uint, title s
 	if title == "" {
 		title = strings.TrimSpace(strings.TrimSuffix(file.Name, filepath.Ext(file.Name)))
 	}
-	if !utf8.ValidString(title) || utf8.RuneCountInString(title) == 0 || utf8.RuneCountInString(title) > 200 || strings.ContainsRune(title, 0) {
-		return nil, false, fmt.Errorf("%w: 知识标题须为 1–200 字符", ErrKnowledgeInvalid)
+	if err := validateKnowledgeTitle(title); err != nil {
+		return nil, false, err
 	}
 	folder, err := s.store.FolderName(ctx, userID, file.FolderID)
 	if err != nil {
 		return nil, false, knowledgeError(err)
 	}
 	item, created, err := s.store.Create(ctx, &model.KnowledgeItem{
-		UserID: userID, SourceFileID: file.ID, SourceFileName: file.Name, SourceFolderID: file.FolderID,
+		UserID: userID, SourceFileID: &file.ID, SourceFileName: file.Name, SourceFolderID: file.FolderID,
 		SourceFolderName: folder, SourceHash: file.FileHash, SourceType: extractor.SourceType(), Title: title, Status: model.KnowledgePending,
 	})
 	if err != nil {
@@ -188,7 +227,11 @@ func (s *KnowledgeService) Retry(ctx context.Context, userID, id uint) (*model.K
 	if item.Status != model.KnowledgeFailed {
 		return nil, repository.ErrKnowledgeConflict
 	}
-	file, err := s.store.File(ctx, userID, item.SourceFileID)
+	// 手动创建的知识没有来源文件，不存在可重试的导入任务。
+	if item.SourceFileID == nil {
+		return nil, repository.ErrKnowledgeConflict
+	}
+	file, err := s.store.File(ctx, userID, *item.SourceFileID)
 	if err != nil {
 		return nil, knowledgeError(err)
 	}
@@ -249,7 +292,13 @@ func (s *KnowledgeService) ProcessNext(ctx context.Context) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	file, err := s.store.File(ctx, task.UserID, item.SourceFileID)
+	// 导入任务只可能属于文件来源；空指针防御性按来源缺失处理。
+	var file *model.FileModel
+	if item.SourceFileID == nil {
+		err = gorm.ErrRecordNotFound
+	} else {
+		file, err = s.store.File(ctx, task.UserID, *item.SourceFileID)
+	}
 	var content string
 	var code, message string
 	if errors.Is(err, gorm.ErrRecordNotFound) {

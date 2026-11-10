@@ -75,10 +75,11 @@ onScopeDispose(() => {
           <div class="min-w-0">
             <h1 class="break-all text-title-1">{{ item.title }}</h1>
             <p class="mt-2 text-subhead text-label-secondary">
-              来源于{{ sourceLabel }}文件 · 原始正文
+              {{ item.source_file_id ? `来源于${sourceLabel}文件` : '手动创建' }} · 原始正文
             </p>
           </div>
           <RouterLink
+            v-if="item.source_file_id"
             :to="{
               path: '/home/files',
               query: { folder: item.source_folder_id, folder_name: item.source_folder_name },
@@ -117,17 +118,19 @@ onScopeDispose(() => {
             <aside class="rounded-lg border border-hairline bg-surface p-5">
               <h2 class="mb-5 text-body font-semibold">来源信息</h2>
               <dl class="space-y-5">
-                <div>
+                <div v-if="item.source_file_id">
                   <dt class="text-caption text-label-secondary">原文件</dt>
                   <dd class="mt-1.5 break-all text-subhead">{{ item.source_file_name }}</dd>
                 </div>
-                <div>
+                <div v-if="item.source_file_id">
                   <dt class="text-caption text-label-secondary">来源目录（加入时）</dt>
                   <dd class="mt-1.5 text-subhead">{{ item.source_folder_name }}</dd>
                 </div>
                 <div>
                   <dt class="text-caption text-label-secondary">来源类型</dt>
-                  <dd class="mt-1.5 text-subhead">{{ sourceLabel }}文件</dd>
+                  <dd class="mt-1.5 text-subhead">
+                    {{ sourceLabel }}{{ item.source_file_id ? '文件' : '' }}
+                  </dd>
                 </div>
                 <div>
                   <dt class="text-caption text-label-secondary">加入时间</dt>
