@@ -117,8 +117,14 @@ function onRestored(restored: KnowledgeItem) {
           <div class="min-w-0">
             <h1 class="break-all text-title-1">{{ item.title }}</h1>
             <p class="mt-2 text-subhead text-label-secondary">
-              {{ item.source_file_id ? `来源于${sourceLabel}文件` : '手动创建' }} ·
-              原始正文<template v-if="item.archived_at"> · 已归档</template>
+              {{
+                item.source_url
+                  ? '来源于网页'
+                  : item.source_file_id
+                    ? `来源于${sourceLabel}文件`
+                    : '手动创建'
+              }}
+              · 原始正文<template v-if="item.archived_at"> · 已归档</template>
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-3">
@@ -228,6 +234,18 @@ function onRestored(restored: KnowledgeItem) {
                   <dt class="text-caption text-label-secondary">来源类型</dt>
                   <dd class="mt-1.5 text-subhead">
                     {{ sourceLabel }}{{ item.source_file_id ? '文件' : '' }}
+                  </dd>
+                </div>
+                <div v-if="item.source_url">
+                  <dt class="text-caption text-label-secondary">来源链接</dt>
+                  <dd class="mt-1.5 break-all text-subhead">
+                    <a
+                      :href="item.source_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-primary-pressed"
+                      >{{ item.source_url }}</a
+                    >
                   </dd>
                 </div>
                 <div>

@@ -385,3 +385,59 @@ func TestKnowledgeHandlerFavoriteArchive(t *testing.T) {
 		})
 	}
 }
+
+type webImportFetcherFake struct {
+	document *service.WebDocument
+	err      error
+}
+
+func (f webImportFetcherFake) Fetch(context.Context, string) (*service.WebDocument, error) {
+	return f.document, f.err
+}
+
+func TestKnowledgeHandlerImportWeb(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		body    string
+		user    uint
+		fetcher service.WebFetcher
+		status  int
+	}{
+		{
+			"created", `{"url":"https://example.com/post"}`, 2,
+			webImportFetcherFake{document: &service.WebDocument{
+				URL: "https://example.com/post", Title: "示例文章", Content: "# 正文\n内容",
+			}}, 202,
+		},
+		{"malformed JSON", `{`, 2, service.NewWebFetcher(), 400},
+		{"missing url", `{"url":""}`, 2, service.NewWebFetcher(), 400},
+		{"non http url", `{"url":"file:///etc/passwd"}`, 2, service.NewWebFetcher(), 400},
+		{"blocked address", `{"url":"http://127.0.0.1/"}`, 2, webImportFetcherFake{err: service.ErrWebFetchBlocked}, 400},
+		{"fetch failure", `{"url":"https://example.com/post"}`, 2, webImportFetcherFake{err: service.ErrWebFetchFailed}, 502},
+		{
+			"unauthorized", `{"url":"https://example.com/post"}`, 0,
+			webImportFetcherFake{document: &service.WebDocument{
+				URL: "https://example.com/post", Title: "示例文章", Content: "正文",
+			}}, 401,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := &KnowledgeHandler{Service: service.NewKnowledgeService(knowledgeHandlerStore{}, "")}
+			h.Service.Fetcher = tc.fetcher
+			r := gin.New()
+			if tc.user != 0 {
+				r.Use(func(c *gin.Context) { c.Set("user_id", tc.user) })
+			}
+			r.POST("/knowledge/import-web", h.ImportWeb)
+			req := httptest.NewRequest("POST", "/knowledge/import-web", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			if tc.status == 202 {
+				require.Contains(t, w.Body.String(), "示例文章")
+				require.Contains(t, w.Body.String(), `"source_url":"https://example.com/post"`)
+			}
+		})
+	}
+}

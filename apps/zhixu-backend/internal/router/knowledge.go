@@ -12,6 +12,7 @@ func RegisterKnowledgeRouter(r *gin.Engine, svc *service.KnowledgeService) {
 	h := &handler.KnowledgeHandler{Service: svc}
 	group := r.Group("/knowledge", middleware.AuthMiddleware())
 	group.POST("", h.Add)
+	group.POST("/import-web", h.ImportWeb)
 	group.GET("", h.List)
 	group.GET("/by-file/:file_id", h.ByFile)
 	group.GET("/:id", h.Get)

@@ -28,6 +28,7 @@ const (
 	OperationLogActionKnowledgeFavorite    OperationLogAction = "knowledge_favorite"     // 收藏知识
 	OperationLogActionKnowledgeArchive     OperationLogAction = "knowledge_archive"      // 归档知识
 	OperationLogActionKnowledgeUnarchive   OperationLogAction = "knowledge_unarchive"    // 恢复归档
+	OperationLogActionKnowledgeWebImport   OperationLogAction = "knowledge_web_import"   // 从网页导入知识
 )
 
 // OperationLogTargetType 操作目标的实体类型

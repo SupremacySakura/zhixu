@@ -787,3 +787,54 @@ func TestKnowledgeFavoriteAndArchive(t *testing.T) {
 		require.ErrorIs(t, err, ErrKnowledgeNotFound)
 	})
 }
+
+func TestKnowledgeImportWeb(t *testing.T) {
+	t.Run("creates ready web knowledge and logs", func(t *testing.T) {
+		fake := &knowledgeFake{}
+		logs := &operationLogSpy{}
+		s := NewKnowledgeService(fake, "")
+		s.Fetcher = &webFetcherFake{document: &WebDocument{
+			URL: "https://example.com/post", Title: "  示例文章  ", Content: "# 正文\n内容",
+		}}
+		s.Logs = logs
+		item, err := s.ImportWeb(context.Background(), 7, "https://example.com/post")
+		require.NoError(t, err)
+		require.True(t, fake.manualCreated)
+		require.Equal(t, uint(7), item.UserID)
+		require.Equal(t, "示例文章", item.Title)
+		require.Equal(t, model.KnowledgeSourceTypeWeb, item.SourceType)
+		require.Equal(t, "https://example.com/post", item.SourceURL)
+		require.Equal(t, model.KnowledgeReady, item.Status)
+		require.NotNil(t, item.ImportedAt)
+		hash := sha256.Sum256([]byte("# 正文\n内容"))
+		require.Equal(t, hex.EncodeToString(hash[:]), item.SourceHash)
+		require.Len(t, logs.entries, 1)
+		require.Equal(t, model.OperationLogActionKnowledgeWebImport, logs.entries[0].Action)
+	})
+	t.Run("falls back to host when title missing", func(t *testing.T) {
+		s := NewKnowledgeService(&knowledgeFake{}, "")
+		s.Fetcher = &webFetcherFake{document: &WebDocument{URL: "https://example.com/post", Content: "正文"}}
+		item, err := s.ImportWeb(context.Background(), 7, "https://example.com/post")
+		require.NoError(t, err)
+		require.Equal(t, "example.com", item.Title)
+	})
+	t.Run("truncates overly long titles", func(t *testing.T) {
+		s := NewKnowledgeService(&knowledgeFake{}, "")
+		s.Fetcher = &webFetcherFake{document: &WebDocument{
+			URL: "https://example.com/post", Title: strings.Repeat("题", 201), Content: "正文",
+		}}
+		item, err := s.ImportWeb(context.Background(), 7, "https://example.com/post")
+		require.NoError(t, err)
+		require.Len(t, []rune(item.Title), 200)
+	})
+	t.Run("propagates fetch errors", func(t *testing.T) {
+		s := NewKnowledgeService(&knowledgeFake{}, "")
+		s.Fetcher = &webFetcherFake{err: ErrWebFetchBlocked}
+		_, err := s.ImportWeb(context.Background(), 7, "http://127.0.0.1/")
+		require.ErrorIs(t, err, ErrWebFetchBlocked)
+	})
+	t.Run("requires a fetcher", func(t *testing.T) {
+		_, err := NewKnowledgeService(&knowledgeFake{}, "").ImportWeb(context.Background(), 7, "https://example.com/post")
+		require.ErrorIs(t, err, ErrWebFetchFailed)
+	})
+}

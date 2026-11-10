@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -20,6 +21,43 @@ type AddKnowledgeRequest struct {
 	FileID  uint   `json:"file_id"`
 	Title   string `json:"title"`
 	Content string `json:"content"`
+}
+
+// ImportWeb godoc
+// @Summary 从网页导入知识
+// @Description 抓取公开网页正文并创建知识条目，随后异步分块与向量化。
+// @Tags knowledge
+// @Accept json
+// @Produce json
+// @Param data body ImportWebRequest true "网页链接"
+// @Success 202 {object} response.Response{data=model.KnowledgeItem}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 502 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/import-web [post]
+func (h *KnowledgeHandler) ImportWeb(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+	var req ImportWebRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.fail(c, fmt.Errorf("%w: 请求格式不正确或超出大小限制", service.ErrKnowledgeInvalid))
+		return
+	}
+	item, err := h.Service.ImportWeb(c.Request.Context(), userID, req.URL)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.SuccessWithStatus(c, http.StatusAccepted, item)
+}
+
+// ImportWebRequest 网页导入：提交公开网页链接。
+type ImportWebRequest struct {
+	URL string `json:"url"`
 }
 
 // Delete godoc
@@ -82,6 +120,10 @@ func (h *KnowledgeHandler) fail(c *gin.Context, err error) {
 		response.FailWithStatus(c, http.StatusNotFound, response.CodeNotFound, "知识或原文件不存在")
 	case errors.Is(err, repository.ErrKnowledgeConflict):
 		response.FailWithStatus(c, http.StatusConflict, response.CodeConflict, "当前状态不支持该操作，请刷新后重试")
+	case errors.Is(err, service.ErrWebURLInvalid), errors.Is(err, service.ErrWebFetchBlocked):
+		response.FailWithStatus(c, http.StatusBadRequest, response.CodeInvalidParam, err.Error())
+	case errors.Is(err, service.ErrWebFetchFailed):
+		response.FailWithStatus(c, http.StatusBadGateway, response.CodeServerError, err.Error())
 	default:
 		c.Error(err)
 		response.FailWithStatus(c, http.StatusInternalServerError, response.CodeServerError, "知识库服务暂时不可用")

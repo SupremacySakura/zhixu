@@ -10,6 +10,7 @@ export interface KnowledgeItem {
   source_folder_id: number
   source_folder_name: string
   source_type: string
+  source_url: string
   title: string
   content: string
   version: number
@@ -89,6 +90,14 @@ export async function createKnowledge(title: string, content: string, signal?: A
     '/api/knowledge',
     { title, content },
     { signal },
+  )
+  return unwrap(res.data)
+}
+export async function importKnowledgeFromWeb(url: string, signal?: AbortSignal) {
+  const res = await request.post<ResponseData<KnowledgeItem>>(
+    '/api/knowledge/import-web',
+    { url },
+    { signal, timeout: 45_000 },
   )
   return unwrap(res.data)
 }

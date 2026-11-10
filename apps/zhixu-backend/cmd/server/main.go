@@ -60,6 +60,7 @@ func main() {
 	vectorStore := &repository.VectorizeRepository{DB: database.DB}
 	knowledgeService.Vectors = vectorStore
 	knowledgeService.Logs = repository.NewOperationLogRepository(database.DB)
+	knowledgeService.Fetcher = service.NewWebFetcher()
 	vectorService := &service.VectorizeService{
 		Store: vectorStore, Knowledge: repository.NewKnowledgeRepository(database.DB), Chat: chat.Service,
 		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},

@@ -79,6 +79,7 @@ export const isMarkdownFile = (file: { type: string; name: string }) =>
 // 非文件来源的展示名；文件格式仍由 KNOWLEDGE_FORMATS 驱动。
 const NON_FILE_SOURCE_LABELS: Record<string, string> = {
   manual: '手动创建',
+  web: '网页导入',
 }
 // 详情页来源展示名；未知历史类型原样透出。
 export const knowledgeSourceLabel = (sourceType: string) =>

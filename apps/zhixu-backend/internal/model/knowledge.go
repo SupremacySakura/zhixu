@@ -15,6 +15,9 @@ const (
 // 与 extractor.SourceType() 的文件格式值（markdown/pdf/...）共存于 source_type。
 const KnowledgeSourceTypeManual = "manual"
 
+// KnowledgeSourceTypeWeb 标记从网页导入的知识：来源地址记录在 source_url。
+const KnowledgeSourceTypeWeb = "web"
+
 // KnowledgeItem preserves a source snapshot even if the original file is deleted.
 type KnowledgeItem struct {
 	ID     uint `gorm:"primaryKey" json:"id"`
@@ -26,9 +29,11 @@ type KnowledgeItem struct {
 	SourceFolderName string `gorm:"type:text" json:"source_folder_name"`
 	SourceHash       string `gorm:"type:varchar(128);not null" json:"-"`
 	SourceType       string `gorm:"type:varchar(32);not null" json:"source_type"`
-	Title            string `gorm:"type:varchar(200);not null" json:"title"`
-	Content          string `gorm:"type:longtext;not null" json:"content"`
-	Version          uint   `gorm:"not null;default:1" json:"version"`
+	// SourceURL 网页导入的来源地址；文件与手动创建为空。
+	SourceURL string `gorm:"type:varchar(2048);not null;default:''" json:"source_url"`
+	Title     string `gorm:"type:varchar(200);not null" json:"title"`
+	Content   string `gorm:"type:longtext;not null" json:"content"`
+	Version   uint   `gorm:"not null;default:1" json:"version"`
 	// IsFavorite 收藏标记；ArchivedAt 非空表示已归档，归档知识不参与检索与默认列表。
 	IsFavorite       bool            `gorm:"not null;default:false" json:"is_favorite"`
 	ArchivedAt       *time.Time      `gorm:"index" json:"archived_at"`

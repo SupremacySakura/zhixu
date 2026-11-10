@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -47,6 +48,8 @@ type KnowledgeService struct {
 	store       KnowledgeStore
 	storagePath string
 	Vectors     VectorizeStore
+	// Fetcher 网页导入的抓取器；为 nil 时网页导入不可用，不影响其余功能。
+	Fetcher WebFetcher
 	// Logs 为可选依赖：为 nil 时跳过操作日志记录，不影响主流程。
 	Logs OperationLogWriter
 }
@@ -170,8 +173,8 @@ func validateKnowledgeContent(content string) error {
 	return nil
 }
 
-// CreateManual 手动创建知识：正文即用户输入，直接就绪并排入向量化队列。
-func (s *KnowledgeService) CreateManual(ctx context.Context, userID uint, title, content string) (*model.KnowledgeItem, error) {
+// buildInlineKnowledge 组装正文已定稿的知识条目：手动创建与网页导入共用。
+func buildInlineKnowledge(userID uint, title, content, sourceType, sourceURL string) (*model.KnowledgeItem, error) {
 	title = strings.TrimSpace(title)
 	if err := validateKnowledgeTitle(title); err != nil {
 		return nil, err
@@ -182,15 +185,70 @@ func (s *KnowledgeService) CreateManual(ctx context.Context, userID uint, title,
 	}
 	sum := sha256.Sum256([]byte(content))
 	now := time.Now()
-	item := &model.KnowledgeItem{
-		UserID: userID, SourceHash: hex.EncodeToString(sum[:]), SourceType: model.KnowledgeSourceTypeManual,
+	return &model.KnowledgeItem{
+		UserID: userID, SourceHash: hex.EncodeToString(sum[:]), SourceType: sourceType, SourceURL: sourceURL,
 		Title: title, Content: content, Status: model.KnowledgeReady, Version: 1, ImportedAt: &now,
+	}, nil
+}
+
+// CreateManual 手动创建知识：正文即用户输入，直接就绪并排入向量化队列。
+func (s *KnowledgeService) CreateManual(ctx context.Context, userID uint, title, content string) (*model.KnowledgeItem, error) {
+	item, err := buildInlineKnowledge(userID, title, content, model.KnowledgeSourceTypeManual, "")
+	if err != nil {
+		return nil, err
 	}
 	if err := s.store.CreateManual(ctx, item); err != nil {
 		return nil, knowledgeError(err)
 	}
 	s.recordOperation(userID, model.OperationLogActionKnowledgeCreate, item.ID, item.Title, "", nil)
 	return item, nil
+}
+
+// ImportWeb 从网页导入知识：抓取正文 → 落库（source_type=web）→ 复用分块向量化管线。
+func (s *KnowledgeService) ImportWeb(ctx context.Context, userID uint, rawURL string) (*model.KnowledgeItem, error) {
+	if s.Fetcher == nil {
+		return nil, fmt.Errorf("%w: 网页导入未配置", ErrWebFetchFailed)
+	}
+	document, err := s.Fetcher.Fetch(ctx, rawURL)
+	if err != nil {
+		return nil, err
+	}
+	title := strings.TrimSpace(document.Title)
+	if title == "" {
+		title = webTitleFallback(document.URL)
+	}
+	item, err := buildInlineKnowledge(
+		userID,
+		truncateRunes(title, 200),
+		truncateRunes(document.Content, ManualContentMaxRunes),
+		model.KnowledgeSourceTypeWeb,
+		document.URL,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.CreateManual(ctx, item); err != nil {
+		return nil, knowledgeError(err)
+	}
+	s.recordOperation(userID, model.OperationLogActionKnowledgeWebImport, item.ID, item.Title, "", nil)
+	return item, nil
+}
+
+// truncateRunes 按字符数截断，避免网页标题或正文超限导致导入失败。
+func truncateRunes(value string, limit int) string {
+	if utf8.RuneCountInString(value) <= limit {
+		return value
+	}
+	return string([]rune(value)[:limit])
+}
+
+// webTitleFallback 网页没有标题时用域名兜底。
+func webTitleFallback(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return "网页导入"
+	}
+	return parsed.Host
 }
 
 // Update 编辑知识正文：乐观锁校验 base_version，服务层只做校验与日志，快照与重建由存储层单事务完成。

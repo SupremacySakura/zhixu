@@ -21,6 +21,7 @@ import {
   knowledgeSourceLabel,
 } from '../utils/knowledge'
 import { Icon } from '@iconify/vue'
+import { useRouter } from 'vue-router'
 import { useKnowledgeLibrary } from '../composables/useKnowledgeLibrary'
 import { useKnowledgeImport } from '../composables/useKnowledgeImport'
 import { useToast } from '../composables/useToast'
@@ -29,6 +30,7 @@ import KnowledgeActionMenu from '../components/knowledge/KnowledgeActionMenu.vue
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
 import KnowledgeVectorBadge from '../components/knowledge/KnowledgeVectorBadge.vue'
 import KnowledgeTaskPanel from '../components/knowledge/KnowledgeTaskPanel.vue'
+import WebImportDialog from '../components/knowledge/WebImportDialog.vue'
 import FilePagination from '../components/file-management/FilePagination.vue'
 import ToastNotice from '../components/file-management/ToastNotice.vue'
 const {
@@ -52,6 +54,13 @@ const {
 } = useKnowledgeLibrary()
 const { displayToast, showToast, toastMessage, toastType } = useToast()
 const { item, panelOpen, panelError, busy, track, retry, poll } = useKnowledgeImport(displayToast)
+const router = useRouter()
+const showWebImport = ref(false)
+function onWebImported(created: KnowledgeItem) {
+  showWebImport.value = false
+  displayToast('已从网页创建知识，正在自动分块向量化', 'success')
+  void router.push(`/home/knowledge/${created.id}`)
+}
 const statusOptions = [
   { key: '', label: '全部状态' },
   { key: 'ready', label: '已加入' },
@@ -228,6 +237,9 @@ onMounted(() => {
           <RouterLink to="/home/files" class="knowledge-button-secondary"
             ><Icon icon="material-symbols:note-add-outline" />从文件加入</RouterLink
           >
+          <button type="button" class="knowledge-button-secondary" @click="showWebImport = true">
+            <Icon icon="material-symbols:language" />从网页导入
+          </button>
         </div>
       </header>
       <div class="mb-5 flex flex-wrap gap-3">
@@ -405,6 +417,11 @@ onMounted(() => {
       @refresh="poll"
     />
     <ToastNotice :visible="showToast" :message="toastMessage" :type="toastType" />
+    <WebImportDialog
+      v-if="showWebImport"
+      @close="showWebImport = false"
+      @imported="onWebImported"
+    />
     <ConfirmDialog
       :model-value="Boolean(deleteTarget)"
       title="删除知识条目"
