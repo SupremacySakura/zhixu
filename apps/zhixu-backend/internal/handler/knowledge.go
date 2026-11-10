@@ -45,6 +45,35 @@ func (h *KnowledgeHandler) Delete(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// optionalUintQuery 解析可选的无符号整数查询参数；空串视为未提供。
+func optionalUintQuery(c *gin.Context, key string) (uint, bool) {
+	raw := c.Query(key)
+	if raw == "" {
+		return 0, true
+	}
+	value, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return uint(value), true
+}
+
+// optionalBoolQuery 解析可选布尔查询参数；空串返回 nil（不筛选）。
+func optionalBoolQuery(c *gin.Context, key string) (*bool, bool) {
+	switch raw := c.Query(key); raw {
+	case "":
+		return nil, true
+	case "true", "1":
+		value := true
+		return &value, true
+	case "false", "0":
+		value := false
+		return &value, true
+	default:
+		return nil, false
+	}
+}
+
 func (h *KnowledgeHandler) fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, service.ErrKnowledgeInvalid):
@@ -410,7 +439,28 @@ func (h *KnowledgeHandler) List(c *gin.Context) {
 		h.fail(c, service.ErrKnowledgeInvalid)
 		return
 	}
-	items, total, err := h.Service.ListFiltered(c.Request.Context(), userID, page, size, c.Query("q"), model.KnowledgeStatus(c.Query("status")), model.VectorState(c.Query("vector")))
+	tagID, ok := optionalUintQuery(c, "tag_id")
+	if !ok {
+		h.fail(c, service.ErrKnowledgeInvalid)
+		return
+	}
+	favorite, ok := optionalBoolQuery(c, "favorite")
+	if !ok {
+		h.fail(c, service.ErrKnowledgeInvalid)
+		return
+	}
+	archived, ok := optionalBoolQuery(c, "archived")
+	if !ok {
+		h.fail(c, service.ErrKnowledgeInvalid)
+		return
+	}
+	items, total, err := h.Service.ListFiltered(c.Request.Context(), userID, page, size, c.Query("q"), model.KnowledgeStatus(c.Query("status")), model.VectorState(c.Query("vector")), service.KnowledgeListOptions{
+		SourceType: c.Query("source_type"),
+		TagID:      tagID,
+		Favorite:   favorite,
+		Archived:   archived != nil && *archived,
+		Sort:       c.Query("sort"),
+	})
 	if err != nil {
 		h.fail(c, err)
 		return

@@ -256,28 +256,64 @@ func (r *KnowledgeRepository) GetVersion(ctx context.Context, userID, knowledgeI
 	return &version, err
 }
 
-func (r *KnowledgeRepository) List(ctx context.Context, userID uint, page, size int, query string, status model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error) {
-	return r.ListVector(ctx, userID, page, size, query, status, "")
+// KnowledgeListFilter 汇总知识列表的筛选、排序与分页条件。
+type KnowledgeListFilter struct {
+	Page        int
+	Size        int
+	Query       string
+	Status      model.KnowledgeStatus
+	VectorState model.VectorState
+	SourceType  string
+	TagID       uint
+	Favorite    *bool
+	Archived    bool
+	Sort        string
 }
 
-func (r *KnowledgeRepository) ListVector(ctx context.Context, userID uint, page, size int, query string, status model.KnowledgeStatus, vector model.VectorState) ([]model.KnowledgeItem, int64, error) {
+func (r *KnowledgeRepository) List(ctx context.Context, userID uint, page, size int, query string, status model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error) {
+	return r.ListVector(ctx, userID, KnowledgeListFilter{Page: page, Size: size, Query: query, Status: status})
+}
+
+func (r *KnowledgeRepository) ListVector(ctx context.Context, userID uint, filter KnowledgeListFilter) ([]model.KnowledgeItem, int64, error) {
 	// 归档知识默认不出现在列表中；检索侧另有 archived_at 过滤保证问答不可见。
-	db := r.DB.WithContext(ctx).Model(&model.KnowledgeItem{}).Where("user_id = ? AND archived_at IS NULL", userID)
-	if query != "" {
-		db = db.Where("LOCATE(?, title) > 0", query)
+	db := r.DB.WithContext(ctx).Model(&model.KnowledgeItem{}).Where("user_id = ?", userID)
+	if filter.Archived {
+		db = db.Where("archived_at IS NOT NULL")
+	} else {
+		db = db.Where("archived_at IS NULL")
 	}
-	if status != "" {
-		db = db.Where("status = ?", status)
+	if filter.Query != "" {
+		db = db.Where("LOCATE(?, title) > 0", filter.Query)
 	}
-	if vector != "" {
-		db = db.Where("vector_state = ?", vector)
+	if filter.Status != "" {
+		db = db.Where("status = ?", filter.Status)
+	}
+	if filter.VectorState != "" {
+		db = db.Where("vector_state = ?", filter.VectorState)
+	}
+	if filter.SourceType != "" {
+		db = db.Where("source_type = ?", filter.SourceType)
+	}
+	if filter.TagID > 0 {
+		db = db.Joins("JOIN knowledge_tags ON knowledge_tags.knowledge_id = knowledge_items.id AND knowledge_tags.user_id = knowledge_items.user_id").
+			Where("knowledge_tags.tag_id = ?", filter.TagID)
+	}
+	if filter.Favorite != nil {
+		db = db.Where("is_favorite = ?", *filter.Favorite)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
+	order := "created_at DESC, id DESC"
+	switch filter.Sort {
+	case "updated":
+		order = "updated_at DESC, id DESC"
+	case "title":
+		order = "title ASC, id ASC"
+	}
 	items := make([]model.KnowledgeItem, 0)
-	err := db.Omit("content", "source_hash").Order("created_at DESC, id DESC").Offset((page - 1) * size).Limit(size).Find(&items).Error
+	err := db.Omit("content", "source_hash").Order(order).Offset((filter.Page - 1) * filter.Size).Limit(filter.Size).Find(&items).Error
 	return items, total, err
 }
 

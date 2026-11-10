@@ -19,6 +19,42 @@ import (
 
 func uintPtr(v uint) *uint { return &v }
 
+func TestKnowledgeListVectorFilters(t *testing.T) {
+	favorite := true
+	t.Run("tag, archived and favorite filters with updated sort", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `knowledge_items` JOIN knowledge_tags ON knowledge_tags.knowledge_id = knowledge_items.id AND knowledge_tags.user_id = knowledge_items.user_id WHERE user_id = \\? AND archived_at IS NOT NULL AND status = \\? AND source_type = \\? AND knowledge_tags.tag_id = \\? AND is_favorite = \\?").
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+		mock.ExpectQuery("SELECT .* FROM `knowledge_items` JOIN knowledge_tags ON knowledge_tags.knowledge_id = knowledge_items.id AND knowledge_tags.user_id = knowledge_items.user_id WHERE user_id = \\? AND archived_at IS NOT NULL AND status = \\? AND source_type = \\? AND knowledge_tags.tag_id = \\? AND is_favorite = \\? ORDER BY updated_at DESC, id DESC LIMIT").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}))
+		items, count, err := NewKnowledgeRepository(db).ListVector(context.Background(), 2, KnowledgeListFilter{
+			Page: 1, Size: 20, Status: model.KnowledgeReady, SourceType: "manual",
+			TagID: 3, Favorite: &favorite, Archived: true, Sort: "updated",
+		})
+		require.NoError(t, err)
+		require.Empty(t, items)
+		require.Zero(t, count)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("title sort keeps default archived exclusion", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `knowledge_items` WHERE user_id = \\? AND archived_at IS NULL").
+			WithArgs(uint(2)).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+		mock.ExpectQuery("SELECT .* FROM `knowledge_items` WHERE user_id = \\? AND archived_at IS NULL ORDER BY title ASC, id ASC LIMIT").
+			WithArgs(uint(2), 20).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+		items, count, err := NewKnowledgeRepository(db).ListVector(context.Background(), 2, KnowledgeListFilter{
+			Page: 1, Size: 20, Sort: "title",
+		})
+		require.NoError(t, err)
+		require.Empty(t, items)
+		require.Zero(t, count)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
 func TestKnowledgeClaimIdleQueueAndDatabaseErrorLogs(t *testing.T) {
 	for _, databaseError := range []bool{false, true} {
 		t.Run(map[bool]string{false: "idle queue is silent", true: "database errors remain visible"}[databaseError], func(t *testing.T) {
@@ -339,9 +375,9 @@ func TestKnowledgeCreateManualAtomic(t *testing.T) {
 func TestKnowledgeListLiteralTitle(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `knowledge_items` WHERE \\(user_id = \\? AND archived_at IS NULL\\).*LOCATE.*status =").
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `knowledge_items` WHERE user_id = \\? AND archived_at IS NULL.*LOCATE.*status =").
 		WithArgs(uint(2), "%_", model.KnowledgeReady).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-	mock.ExpectQuery("SELECT .* FROM `knowledge_items` WHERE \\(user_id = \\? AND archived_at IS NULL\\).*LOCATE.*status = .*ORDER BY created_at DESC, id DESC LIMIT").
+	mock.ExpectQuery("SELECT .* FROM `knowledge_items` WHERE user_id = \\? AND archived_at IS NULL.*LOCATE.*status = .*ORDER BY created_at DESC, id DESC LIMIT").
 		WithArgs(uint(2), "%_", model.KnowledgeReady, 20).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	items, count, err := NewKnowledgeRepository(db).List(context.Background(), 2, 1, 20, "%_", model.KnowledgeReady)
 	require.NoError(t, err)

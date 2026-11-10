@@ -7,6 +7,7 @@ import {
   listKnowledge,
   deleteKnowledge,
   retryKnowledgeVectorize,
+  unarchiveKnowledge,
   type KnowledgeItem,
 } from '../../services/apis/knowledge'
 import KnowledgeActionMenu from '../../components/knowledge/KnowledgeActionMenu.vue'
@@ -20,6 +21,9 @@ vi.mock('../../services/apis/knowledge', () => ({
   favoriteKnowledge: vi.fn(),
   archiveKnowledge: vi.fn(),
   unarchiveKnowledge: vi.fn(),
+}))
+vi.mock('../../services/apis/tag', () => ({
+  listTags: vi.fn().mockResolvedValue({ items: [] }),
 }))
 vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
 afterEach(() => {
@@ -61,6 +65,68 @@ describe('KnowledgeLibrary', () => {
     await flushPromises()
     expect(favoriteKnowledge).toHaveBeenCalledWith(10, true)
     expect(wrapper.find('[aria-label="取消收藏 笔记"]').exists()).toBe(true)
+  })
+
+  it('sends archive and favorite filters to the list request', async () => {
+    vi.mocked(listKnowledge).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
+    const wrapper = await render()
+    await wrapper.get('[aria-label="筛选归档"]').trigger('click')
+    const archivedOption = wrapper
+      .findAll('[role="menuitemradio"]')
+      .find(option => option.text() === '仅已归档')!
+    await archivedOption.trigger('click')
+    await flushPromises()
+    expect(listKnowledge).toHaveBeenLastCalledWith(
+      1,
+      '',
+      '',
+      '',
+      expect.objectContaining({ archived: true, sort: 'created' }),
+      expect.any(AbortSignal),
+    )
+    await wrapper.get('[aria-label="筛选收藏"]').trigger('click')
+    const favoriteOption = wrapper
+      .findAll('[role="menuitemradio"]')
+      .find(option => option.text() === '仅收藏')!
+    await favoriteOption.trigger('click')
+    await flushPromises()
+    expect(listKnowledge).toHaveBeenLastCalledWith(
+      1,
+      '',
+      '',
+      '',
+      expect.objectContaining({ archived: true, favorite: true }),
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('restores an archived knowledge from the menu', async () => {
+    const archivedItem = {
+      id: 12,
+      title: '旧笔记',
+      status: 'ready',
+      source_type: 'manual',
+      source_file_id: null,
+      source_file_name: '',
+      created_at: '',
+      archived_at: '2026-11-10T12:00:00+08:00',
+    } as KnowledgeItem
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: [archivedItem],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    vi.mocked(unarchiveKnowledge).mockResolvedValue({ id: 12, archived: false, archived_at: null })
+    const wrapper = await render()
+    await wrapper.get('[aria-label="更多操作 旧笔记"]').trigger('click')
+    await flushPromises()
+    const restore = document.querySelector<HTMLButtonElement>('[aria-label="恢复归档 旧笔记"]')!
+    expect(restore).toBeTruthy()
+    restore.click()
+    await flushPromises()
+    expect(unarchiveKnowledge).toHaveBeenCalledWith(12)
+    expect(wrapper.text()).toContain('已恢复归档')
   })
 
   it('uses a custom menu and deletes knowledge without deleting the source', async () => {

@@ -29,6 +29,7 @@ type knowledgeFake struct {
 	manualCreated          bool
 	code, message, content string
 	versions               []model.KnowledgeVersion
+	listFilter             *repository.KnowledgeListFilter
 }
 
 func (f *knowledgeFake) File(_ context.Context, user, id uint) (*model.FileModel, error) {
@@ -101,6 +102,13 @@ func (f *knowledgeFake) Update(_ context.Context, user, id uint, title, content,
 	f.item.Title, f.item.Content, f.item.SourceHash = title, content, sourceHash
 	f.item.Version = baseVersion + 1
 	return f.item, nil
+}
+func (f *knowledgeFake) ListVector(_ context.Context, _ uint, filter repository.KnowledgeListFilter) ([]model.KnowledgeItem, int64, error) {
+	f.listFilter = &filter
+	if f.item == nil {
+		return nil, 0, nil
+	}
+	return []model.KnowledgeItem{*f.item}, 1, nil
 }
 func (f *knowledgeFake) Claim(context.Context, string, time.Time) (*model.KnowledgeImportTask, error) {
 	if f.task == nil {
@@ -374,6 +382,43 @@ func TestKnowledgeRetryAndValidation(t *testing.T) {
 	processed, err := s.ProcessNext(context.Background())
 	require.NoError(t, err)
 	require.False(t, processed)
+}
+
+func TestKnowledgeListFiltered(t *testing.T) {
+	f := &knowledgeFake{item: &model.KnowledgeItem{ID: 10, UserID: 2, Title: "笔记"}}
+	s := NewKnowledgeService(f, "")
+	favorite := true
+	items, total, err := s.ListFiltered(context.Background(), 2, 2, 10, "  笔记 ", model.KnowledgeReady, model.VectorReady, KnowledgeListOptions{
+		SourceType: "manual",
+		TagID:      3,
+		Favorite:   &favorite,
+		Archived:   true,
+		Sort:       "updated",
+	})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, int64(1), total)
+	require.NotNil(t, f.listFilter)
+	require.Equal(t, repository.KnowledgeListFilter{
+		Page:        2,
+		Size:        10,
+		Query:       "笔记",
+		Status:      model.KnowledgeReady,
+		VectorState: model.VectorReady,
+		SourceType:  "manual",
+		TagID:       3,
+		Favorite:    &favorite,
+		Archived:    true,
+		Sort:        "updated",
+	}, *f.listFilter)
+
+	for _, opts := range []KnowledgeListOptions{{SourceType: "unknown"}, {Sort: "random"}} {
+		_, _, err = s.ListFiltered(context.Background(), 2, 1, 20, "", "", "", opts)
+		require.ErrorIs(t, err, ErrKnowledgeInvalid)
+	}
+	_, _, err = s.ListFiltered(context.Background(), 2, 1, 20, "", "", "", KnowledgeListOptions{})
+	require.NoError(t, err)
+	require.Nil(t, f.listFilter.Favorite)
 }
 
 func TestKnowledgeRetryVectorize(t *testing.T) {

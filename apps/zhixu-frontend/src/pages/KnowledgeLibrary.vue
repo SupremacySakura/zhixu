@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onScopeDispose, ref } from 'vue'
+import { computed, onMounted, onScopeDispose, ref } from 'vue'
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import {
@@ -7,11 +7,14 @@ import {
   deleteKnowledge,
   favoriteKnowledge,
   retryKnowledgeVectorize,
+  unarchiveKnowledge,
   type KnowledgeItem,
+  type KnowledgeSort,
   type KnowledgeStatus,
   type KnowledgeVectorState,
 } from '../services/apis/knowledge'
 import {
+  KNOWLEDGE_FORMATS,
   hasKnowledgeVector,
   knowledgeDescription,
   knowledgeError,
@@ -28,8 +31,25 @@ import KnowledgeVectorBadge from '../components/knowledge/KnowledgeVectorBadge.v
 import KnowledgeTaskPanel from '../components/knowledge/KnowledgeTaskPanel.vue'
 import FilePagination from '../components/file-management/FilePagination.vue'
 import ToastNotice from '../components/file-management/ToastNotice.vue'
-const { items, total, page, search, status, vector, loading, error, load, changePage } =
-  useKnowledgeLibrary()
+const {
+  items,
+  total,
+  page,
+  search,
+  status,
+  vector,
+  sourceType,
+  tagId,
+  favorite,
+  archived,
+  sort,
+  tags,
+  loading,
+  error,
+  load,
+  loadTags,
+  changePage,
+} = useKnowledgeLibrary()
 const { displayToast, showToast, toastMessage, toastType } = useToast()
 const { item, panelOpen, panelError, busy, track, retry, poll } = useKnowledgeImport(displayToast)
 const statusOptions = [
@@ -46,6 +66,49 @@ const vectorOptions = [
   { key: 'partial', label: '部分失败' },
   { key: 'pending', label: '待向量化' },
 ]
+const sourceOptions = [
+  { key: '', label: '全部来源' },
+  { key: 'manual', label: '手动创建' },
+  { key: 'web', label: '网页导入' },
+  ...KNOWLEDGE_FORMATS.map(format => ({ key: format.type, label: format.label })),
+]
+const tagOptions = computed(() => [
+  { key: '', label: '全部标签' },
+  ...tags.value.map(tag => ({ key: String(tag.id), label: tag.name })),
+])
+const favoriteOptions = [
+  { key: '', label: '全部收藏' },
+  { key: 'true', label: '仅收藏' },
+]
+const archivedOptions = [
+  { key: '', label: '默认列表' },
+  { key: 'true', label: '仅已归档' },
+]
+const sortOptions = [
+  { key: 'created', label: '最近创建' },
+  { key: 'updated', label: '最近更新' },
+  { key: 'title', label: '标题排序' },
+]
+const hasFilters = computed(() =>
+  Boolean(
+    search.value ||
+    status.value ||
+    vector.value ||
+    sourceType.value ||
+    tagId.value ||
+    favorite.value ||
+    archived.value,
+  ),
+)
+function clearFilters() {
+  search.value = ''
+  status.value = ''
+  vector.value = ''
+  sourceType.value = ''
+  tagId.value = 0
+  favorite.value = ''
+  archived.value = ''
+}
 const deleteTarget = ref<KnowledgeItem | null>(null)
 const deleting = ref(false)
 const deleteError = ref('')
@@ -104,6 +167,19 @@ async function archiveEntry(entry: KnowledgeItem) {
     archiving.value = false
   }
 }
+async function unarchiveEntry(entry: KnowledgeItem) {
+  if (archiving.value) return
+  archiving.value = true
+  try {
+    await unarchiveKnowledge(entry.id)
+    displayToast('已恢复归档', 'success')
+    await load()
+  } catch (e) {
+    displayToast(knowledgeError(e), 'error')
+  } finally {
+    archiving.value = false
+  }
+}
 const vectorRetryControllers = new Map<number, AbortController>()
 onScopeDispose(() => {
   vectorRetryControllers.forEach(controller => controller.abort())
@@ -131,6 +207,7 @@ function closePanel() {
 }
 onMounted(() => {
   void load()
+  void loadTags()
 })
 </script>
 <template>
@@ -178,6 +255,39 @@ onMounted(() => {
           label="筛选向量状态"
           @update:model-value="vector = $event as KnowledgeVectorState"
         />
+        <FilterMenu
+          :model-value="sourceType"
+          :options="sourceOptions"
+          label="筛选来源类型"
+          @update:model-value="sourceType = $event"
+        />
+        <FilterMenu
+          :model-value="tagId ? String(tagId) : ''"
+          :options="tagOptions"
+          label="筛选标签"
+          @update:model-value="tagId = Number($event) || 0"
+        />
+        <FilterMenu
+          :model-value="favorite"
+          :options="favoriteOptions"
+          label="筛选收藏"
+          @update:model-value="favorite = $event as '' | 'true'"
+        />
+        <FilterMenu
+          :model-value="archived"
+          :options="archivedOptions"
+          label="筛选归档"
+          @update:model-value="archived = $event as '' | 'true'"
+        />
+        <FilterMenu
+          :model-value="sort"
+          :options="sortOptions"
+          label="排序方式"
+          @update:model-value="sort = $event as KnowledgeSort"
+        />
+        <button v-if="hasFilters" type="button" class="knowledge-text-action" @click="clearFilters">
+          清除筛选
+        </button>
       </div>
       <div
         v-if="error"
@@ -198,11 +308,11 @@ onMounted(() => {
           >MD</span
         >
         <h2 class="text-title-3">
-          {{ search || status || vector ? '没有匹配的知识' : '让第一份资料成为知识' }}
+          {{ hasFilters ? '没有匹配的知识' : '让第一份资料成为知识' }}
         </h2>
         <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
           {{
-            search || status || vector
+            hasFilters
               ? '试试其他关键词或切换筛选状态。'
               : '选择已经上传的 Markdown 文件，保留原件，同时获得清晰可读的知识正文。'
           }}
@@ -236,6 +346,7 @@ onMounted(() => {
               ><span v-if="entry.source_file_id" class="break-all">{{
                 entry.source_file_name
               }}</span
+              ><span v-if="entry.archived_at" class="text-warning">已归档</span
               ><time>{{ knowledgeDate(entry.created_at) }}</time>
             </div>
           </div>
@@ -264,6 +375,7 @@ onMounted(() => {
               @delete="selectDelete"
               @retry-vector="retryVector"
               @archive="archiveEntry"
+              @unarchive="unarchiveEntry"
             />
           </div>
         </article>

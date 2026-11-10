@@ -150,17 +150,38 @@ export async function getKnowledgeByFile(fileId: number, signal?: AbortSignal) {
       .data,
   )
 }
+export type KnowledgeSort = 'created' | 'updated' | 'title'
+export interface KnowledgeListOptions {
+  sourceType?: string
+  tagId?: number
+  favorite?: boolean
+  archived?: boolean
+  sort?: KnowledgeSort
+}
 export async function listKnowledge(
   page = 1,
   q = '',
   status: KnowledgeStatus | '' = '',
   vector: KnowledgeVectorState = '',
+  options: KnowledgeListOptions = {},
   signal?: AbortSignal,
 ) {
+  const params: Record<string, string | number | boolean> = {
+    page,
+    page_size: 20,
+    q,
+    status,
+    vector,
+  }
+  if (options.sourceType) params.source_type = options.sourceType
+  if (options.tagId) params.tag_id = options.tagId
+  if (options.favorite !== undefined) params.favorite = options.favorite
+  if (options.archived !== undefined) params.archived = options.archived
+  if (options.sort) params.sort = options.sort
   return unwrap(
     (
       await request.get<ResponseData<KnowledgePage>>('/api/knowledge', {
-        params: { page, page_size: 20, q, status, vector },
+        params,
         signal,
       })
     ).data,

@@ -19,7 +19,15 @@ import (
 
 type knowledgeHandlerStore struct {
 	service.KnowledgeStore
-	existing bool
+	existing   bool
+	listFilter *repository.KnowledgeListFilter
+}
+
+func (f knowledgeHandlerStore) ListVector(_ context.Context, _ uint, filter repository.KnowledgeListFilter) ([]model.KnowledgeItem, int64, error) {
+	if f.listFilter != nil {
+		*f.listFilter = filter
+	}
+	return []model.KnowledgeItem{{ID: 10, UserID: 2, Title: "笔记", Status: model.KnowledgeReady}}, 1, nil
 }
 
 func (knowledgeHandlerStore) File(_ context.Context, user, id uint) (*model.FileModel, error) {
@@ -109,6 +117,33 @@ func TestKnowledgeDeleteHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest("DELETE", "/knowledge/"+tc.id, nil))
 		require.Equal(t, tc.status, w.Code)
+	}
+}
+
+func TestKnowledgeHandlerListFilters(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var captured repository.KnowledgeListFilter
+	h := &KnowledgeHandler{Service: service.NewKnowledgeService(knowledgeHandlerStore{listFilter: &captured}, "")}
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set("user_id", uint(2)) })
+	r.GET("/knowledge", h.List)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("GET", "/knowledge?source_type=manual&tag_id=3&favorite=true&archived=true&sort=updated&q=笔记&page=2&page_size=10", nil))
+	require.Equal(t, 200, w.Code)
+	require.Equal(t, "manual", captured.SourceType)
+	require.Equal(t, uint(3), captured.TagID)
+	require.NotNil(t, captured.Favorite)
+	require.True(t, *captured.Favorite)
+	require.True(t, captured.Archived)
+	require.Equal(t, "updated", captured.Sort)
+	require.Equal(t, "笔记", captured.Query)
+	require.Equal(t, 2, captured.Page)
+	require.Equal(t, 10, captured.Size)
+
+	for _, query := range []string{"tag_id=x", "favorite=maybe", "source_type=unknown", "sort=random"} {
+		w = httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest("GET", "/knowledge?"+query, nil))
+		require.Equal(t, 400, w.Code, query)
 	}
 }
 

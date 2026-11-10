@@ -11,6 +11,7 @@ const emit = defineEmits<{
   delete: [item: KnowledgeItem]
   retryVector: [item: KnowledgeItem]
   archive: [item: KnowledgeItem]
+  unarchive: [item: KnowledgeItem]
 }>()
 const trigger = ref<HTMLButtonElement | null>(null)
 const menu = ref<HTMLElement | null>(null)
@@ -33,6 +34,10 @@ function entries() {
 function archive() {
   close(true)
   emit('archive', props.item)
+}
+function unarchive() {
+  close(true)
+  emit('unarchive', props.item)
 }
 function close(restoreFocus = false) {
   open.value = false
@@ -234,6 +239,22 @@ onBeforeUnmount(removeListeners)
               />重试向量化
             </button>
             <button
+              v-if="item.archived_at"
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              :aria-label="`恢复归档 ${item.title}`"
+              :class="[itemClass, 'knowledge-menu-item text-label']"
+              @click="unarchive"
+            >
+              <Icon
+                icon="material-symbols:unarchive-outline-rounded"
+                class="text-lg"
+                aria-hidden="true"
+              />恢复归档
+            </button>
+            <button
+              v-else
               type="button"
               role="menuitem"
               tabindex="-1"

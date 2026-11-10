@@ -2,9 +2,11 @@ import { onScopeDispose, ref, watch } from 'vue'
 import {
   listKnowledge,
   type KnowledgeItem,
+  type KnowledgeSort,
   type KnowledgeStatus,
   type KnowledgeVectorState,
 } from '../services/apis/knowledge'
+import { listTags, type Tag } from '../services/apis/tag'
 import { isKnowledgeActive, isKnowledgeVectorActive, knowledgeError } from '../utils/knowledge'
 
 export function useKnowledgeLibrary() {
@@ -14,12 +16,25 @@ export function useKnowledgeLibrary() {
   const search = ref('')
   const status = ref<KnowledgeStatus | ''>('')
   const vector = ref<KnowledgeVectorState>('')
+  const sourceType = ref('')
+  const tagId = ref(0)
+  const favorite = ref<'' | 'true'>('')
+  const archived = ref<'' | 'true'>('')
+  const sort = ref<KnowledgeSort>('created')
+  const tags = ref<Tag[]>([])
   const loading = ref(false)
   const error = ref('')
   let controller: AbortController | null = null
   let debounce: ReturnType<typeof setTimeout> | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   let query = ''
+  async function loadTags() {
+    try {
+      tags.value = (await listTags()).items
+    } catch {
+      tags.value = []
+    }
+  }
   async function load(background = false) {
     controller?.abort()
     clearTimeout(timer)
@@ -33,6 +48,13 @@ export function useKnowledgeLibrary() {
         query,
         status.value,
         vector.value,
+        {
+          sourceType: sourceType.value || undefined,
+          tagId: tagId.value || undefined,
+          favorite: favorite.value === 'true' ? true : undefined,
+          archived: archived.value === 'true',
+          sort: sort.value,
+        },
         current.signal,
       )
       if (current.signal.aborted) return
@@ -70,11 +92,7 @@ export function useKnowledgeLibrary() {
       void load()
     }, 300)
   })
-  watch(status, () => {
-    page.value = 1
-    void load()
-  })
-  watch(vector, () => {
+  watch([status, vector, sourceType, tagId, favorite, archived, sort], () => {
     page.value = 1
     void load()
   })
@@ -87,5 +105,23 @@ export function useKnowledgeLibrary() {
     clearTimeout(debounce)
     clearTimeout(timer)
   })
-  return { items, total, page, search, status, vector, loading, error, load, changePage }
+  return {
+    items,
+    total,
+    page,
+    search,
+    status,
+    vector,
+    sourceType,
+    tagId,
+    favorite,
+    archived,
+    sort,
+    tags,
+    loading,
+    error,
+    load,
+    loadTags,
+    changePage,
+  }
 }

@@ -61,15 +61,32 @@ func (s *KnowledgeService) Chunks(ctx context.Context, user, id uint) ([]model.K
 	return s.Vectors.Chunks(ctx, user, id)
 }
 
-func (s *KnowledgeService) ListFiltered(ctx context.Context, user uint, page, size int, q string, status model.KnowledgeStatus, vector model.VectorState) ([]model.KnowledgeItem, int64, error) {
+// KnowledgeListOptions 汇总知识列表的附加筛选与排序参数。
+type KnowledgeListOptions struct {
+	SourceType string
+	TagID      uint
+	Favorite   *bool
+	Archived   bool
+	Sort       string
+}
+
+// knowledgeSourceTypes 是列表中允许筛选的来源类型；新增提取格式时需同步登记。
+var knowledgeSourceTypes = map[string]struct{}{
+	"manual":   {},
+	"web":      {},
+	"markdown": {},
+	"text":     {},
+	"pdf":      {},
+	"docx":     {},
+	"csv":      {},
+	"xlsx":     {},
+}
+
+func (s *KnowledgeService) ListFiltered(ctx context.Context, user uint, page, size int, q string, status model.KnowledgeStatus, vector model.VectorState, opts KnowledgeListOptions) ([]model.KnowledgeItem, int64, error) {
 	switch vector {
 	case "", model.VectorPending, model.VectorRunning, model.VectorReady, model.VectorPartial:
 	default:
 		return nil, 0, ErrKnowledgeInvalid
-	}
-	// Retain the original store contract for import-only consumers and test doubles.
-	if vector == "" {
-		return s.List(ctx, user, page, size, q, status)
 	}
 	if page < 1 || page > 1000000 || size < 1 || size > 100 || utf8.RuneCountInString(q) > 200 {
 		return nil, 0, ErrKnowledgeInvalid
@@ -79,13 +96,37 @@ func (s *KnowledgeService) ListFiltered(ctx context.Context, user uint, page, si
 	default:
 		return nil, 0, ErrKnowledgeInvalid
 	}
-	store, ok := s.store.(interface {
-		ListVector(context.Context, uint, int, int, string, model.KnowledgeStatus, model.VectorState) ([]model.KnowledgeItem, int64, error)
-	})
-	if !ok {
+	if opts.SourceType != "" {
+		if _, ok := knowledgeSourceTypes[opts.SourceType]; !ok {
+			return nil, 0, ErrKnowledgeInvalid
+		}
+	}
+	switch opts.Sort {
+	case "", "created", "updated", "title":
+	default:
 		return nil, 0, ErrKnowledgeInvalid
 	}
-	return store.ListVector(ctx, user, page, size, strings.TrimSpace(q), status, vector)
+	if store, ok := s.store.(interface {
+		ListVector(context.Context, uint, repository.KnowledgeListFilter) ([]model.KnowledgeItem, int64, error)
+	}); ok {
+		return store.ListVector(ctx, user, repository.KnowledgeListFilter{
+			Page:        page,
+			Size:        size,
+			Query:       strings.TrimSpace(q),
+			Status:      status,
+			VectorState: vector,
+			SourceType:  opts.SourceType,
+			TagID:       opts.TagID,
+			Favorite:    opts.Favorite,
+			Archived:    opts.Archived,
+			Sort:        opts.Sort,
+		})
+	}
+	// Retain the original store contract for import-only consumers and test doubles.
+	if opts == (KnowledgeListOptions{}) && vector == "" {
+		return s.List(ctx, user, page, size, q, status)
+	}
+	return nil, 0, ErrKnowledgeInvalid
 }
 
 func NewKnowledgeService(store KnowledgeStore, storagePath string) *KnowledgeService {
