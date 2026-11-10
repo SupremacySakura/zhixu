@@ -186,6 +186,16 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
         highlight: version > 0 ? `第 ${version} 版` : '',
       }
     }
+    case 'knowledge_restore': {
+      const restoredFrom = detailNumber(detail, 'restored_from')
+      return {
+        icon: 'material-symbols:history-rounded',
+        colorClass: 'bg-purple-tint text-purple',
+        title,
+        subtitle: '恢复历史版本',
+        highlight: restoredFrom > 0 ? `第 ${restoredFrom} 版` : '',
+      }
+    }
     case 'knowledge_delete':
       return {
         icon: 'material-symbols:bookmark-remove-outline-rounded',

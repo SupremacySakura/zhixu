@@ -421,3 +421,40 @@ func TestKnowledgeUpdateTransactional(t *testing.T) {
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 }
+
+func TestKnowledgeListVersions(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery("SELECT .* FROM `knowledge_versions` WHERE user_id = .*knowledge_id = .*ORDER BY version_number DESC").
+		WithArgs(uint(2), uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "knowledge_id", "version_number", "title", "change_source", "created_at"}).
+			AddRow(2, 2, 7, 2, "第二版", "manual", time.Now()).
+			AddRow(1, 2, 7, 1, "第一版", "ai", time.Now()))
+	versions, err := NewKnowledgeRepository(db).ListVersions(context.Background(), 2, 7)
+	require.NoError(t, err)
+	require.Len(t, versions, 2)
+	require.Equal(t, uint(2), versions[0].VersionNumber)
+	require.Equal(t, "第二版", versions[0].Title)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestKnowledgeGetVersion(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery("SELECT .* FROM `knowledge_versions` WHERE user_id = .*knowledge_id = .*version_number = .*LIMIT").
+		WithArgs(uint(2), uint(7), uint(1), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "knowledge_id", "version_number", "title", "content", "change_source", "created_at"}).
+			AddRow(1, 2, 7, 1, "第一版", "# 第一版正文", "ai", time.Now()))
+	version, err := NewKnowledgeRepository(db).GetVersion(context.Background(), 2, 7, 1)
+	require.NoError(t, err)
+	require.Equal(t, uint(1), version.VersionNumber)
+	require.Equal(t, "# 第一版正文", version.Content)
+	require.NoError(t, mock.ExpectationsWereMet())
+
+	mock.ExpectQuery("SELECT .* FROM `knowledge_versions` WHERE user_id = .*knowledge_id = .*version_number = .*LIMIT").
+		WithArgs(uint(2), uint(7), uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	_, err = NewKnowledgeRepository(db).GetVersion(context.Background(), 2, 7, 9)
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

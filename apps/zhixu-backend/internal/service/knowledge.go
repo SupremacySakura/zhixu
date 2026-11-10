@@ -32,6 +32,8 @@ type KnowledgeStore interface {
 	Create(context.Context, *model.KnowledgeItem) (*model.KnowledgeItem, bool, error)
 	CreateManual(context.Context, *model.KnowledgeItem) error
 	Update(context.Context, uint, uint, string, string, string, uint) (*model.KnowledgeItem, error)
+	ListVersions(context.Context, uint, uint) ([]model.KnowledgeVersion, error)
+	GetVersion(context.Context, uint, uint, uint) (*model.KnowledgeVersion, error)
 	List(context.Context, uint, int, int, string, model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error)
 	Retry(context.Context, uint, uint) error
 	Delete(context.Context, uint, uint) error
@@ -171,6 +173,115 @@ func (s *KnowledgeService) Update(ctx context.Context, userID, id uint, title, c
 		s.recordOperation(userID, model.OperationLogActionKnowledgeUpdate, item.ID, item.Title, item.SourceFolderName, map[string]any{"version": item.Version})
 	}
 	return item, nil
+}
+
+// KnowledgeVersionSummary 版本列表项：当前版本由 knowledge_items 实时合成，便于前端标出「当前」。
+type KnowledgeVersionSummary struct {
+	VersionNumber uint      `json:"version_number"`
+	Title         string    `json:"title"`
+	ChangeSource  string    `json:"change_source"`
+	CreatedAt     time.Time `json:"created_at"`
+	Current       bool      `json:"current"`
+}
+
+// KnowledgeVersionDetail 单个版本的完整内容。
+type KnowledgeVersionDetail struct {
+	KnowledgeVersionSummary
+	Content string `json:"content"`
+}
+
+// Versions 返回版本历史：当前版本置顶，其余为不可变快照；列表不含正文。
+func (s *KnowledgeService) Versions(ctx context.Context, userID, id uint) ([]KnowledgeVersionSummary, error) {
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	versions, err := s.store.ListVersions(ctx, userID, id)
+	if err != nil {
+		return nil, knowledgeError(err)
+	}
+	summaries := make([]KnowledgeVersionSummary, 0, len(versions)+1)
+	summaries = append(summaries, KnowledgeVersionSummary{
+		VersionNumber: item.Version, Title: item.Title,
+		ChangeSource: string(model.KnowledgeChangeSourceManual), CreatedAt: item.UpdatedAt, Current: true,
+	})
+	for _, version := range versions {
+		summaries = append(summaries, KnowledgeVersionSummary{
+			VersionNumber: version.VersionNumber, Title: version.Title,
+			ChangeSource: string(version.ChangeSource), CreatedAt: version.CreatedAt,
+		})
+	}
+	return summaries, nil
+}
+
+// VersionDetail 返回指定版本正文；版本号等于当前版本时返回条目实时内容。
+func (s *KnowledgeService) VersionDetail(ctx context.Context, userID, id, versionNumber uint) (*KnowledgeVersionDetail, error) {
+	if versionNumber == 0 {
+		return nil, fmt.Errorf("%w: 版本号无效", ErrKnowledgeInvalid)
+	}
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	if versionNumber > item.Version {
+		return nil, ErrKnowledgeNotFound
+	}
+	if versionNumber == item.Version {
+		return &KnowledgeVersionDetail{
+			KnowledgeVersionSummary: KnowledgeVersionSummary{
+				VersionNumber: item.Version, Title: item.Title,
+				ChangeSource: string(model.KnowledgeChangeSourceManual), CreatedAt: item.UpdatedAt, Current: true,
+			},
+			Content: item.Content,
+		}, nil
+	}
+	version, err := s.store.GetVersion(ctx, userID, id, versionNumber)
+	if err != nil {
+		return nil, knowledgeError(err)
+	}
+	return &KnowledgeVersionDetail{
+		KnowledgeVersionSummary: KnowledgeVersionSummary{
+			VersionNumber: version.VersionNumber, Title: version.Title,
+			ChangeSource: string(version.ChangeSource), CreatedAt: version.CreatedAt,
+		},
+		Content: version.Content,
+	}, nil
+}
+
+// Restore 恢复历史版本：以目标版本内容生成新版本（当前正文先写入快照），历史记录不被篡改。
+func (s *KnowledgeService) Restore(ctx context.Context, userID, id, versionNumber uint) (*model.KnowledgeItem, error) {
+	if versionNumber == 0 {
+		return nil, fmt.Errorf("%w: 版本号无效", ErrKnowledgeInvalid)
+	}
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	if item.Status != model.KnowledgeReady {
+		return nil, repository.ErrKnowledgeConflict
+	}
+	if versionNumber > item.Version {
+		return nil, ErrKnowledgeNotFound
+	}
+	// 恢复当前版本无需任何变更。
+	if versionNumber == item.Version {
+		return item, nil
+	}
+	target, err := s.store.GetVersion(ctx, userID, id, versionNumber)
+	if err != nil {
+		return nil, knowledgeError(err)
+	}
+	sum := sha256.Sum256([]byte(target.Content))
+	baseVersion := item.Version
+	updated, err := s.store.Update(ctx, userID, id, target.Title, target.Content, hex.EncodeToString(sum[:]), baseVersion)
+	if err != nil {
+		return nil, knowledgeError(err)
+	}
+	if updated.Version > baseVersion {
+		s.recordOperation(userID, model.OperationLogActionKnowledgeRestore, updated.ID, updated.Title, updated.SourceFolderName,
+			map[string]any{"version": updated.Version, "restored_from": versionNumber})
+	}
+	return updated, nil
 }
 
 func (s *KnowledgeService) Add(ctx context.Context, userID, fileID uint, title string) (*model.KnowledgeItem, bool, error) {

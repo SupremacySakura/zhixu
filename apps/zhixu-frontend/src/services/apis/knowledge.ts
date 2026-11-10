@@ -52,6 +52,20 @@ export interface KnowledgeChunkPage {
   items: KnowledgeChunk[]
   total: number
 }
+export interface KnowledgeVersionSummary {
+  version_number: number
+  title: string
+  change_source: string
+  created_at: string
+  current: boolean
+}
+export interface KnowledgeVersionDetail extends KnowledgeVersionSummary {
+  content: string
+}
+export interface KnowledgeVersionPage {
+  items: KnowledgeVersionSummary[]
+  total: number
+}
 function unwrap<T>(data: ResponseData<T>): T {
   if (data.code !== 0 || data.data == null) throw new Error(data.msg || '知识库请求失败')
   return data.data
@@ -123,6 +137,36 @@ export async function getKnowledgeChunks(id: number, signal?: AbortSignal) {
       await request.get<ResponseData<KnowledgeChunkPage>>(`/api/knowledge/${id}/chunks`, {
         signal,
       })
+    ).data,
+  )
+}
+export async function listKnowledgeVersions(id: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.get<ResponseData<KnowledgeVersionPage>>(`/api/knowledge/${id}/versions`, {
+        signal,
+      })
+    ).data,
+  )
+}
+export async function getKnowledgeVersion(id: number, version: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.get<ResponseData<KnowledgeVersionDetail>>(
+        `/api/knowledge/${id}/versions/${version}`,
+        { signal },
+      )
+    ).data,
+  )
+}
+export async function restoreKnowledgeVersion(id: number, version: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.post<ResponseData<KnowledgeItem>>(
+        `/api/knowledge/${id}/versions/${version}/restore`,
+        undefined,
+        { signal },
+      )
     ).data,
   )
 }

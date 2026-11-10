@@ -28,6 +28,7 @@ type knowledgeFake struct {
 	created, finished      bool
 	manualCreated          bool
 	code, message, content string
+	versions               []model.KnowledgeVersion
 }
 
 func (f *knowledgeFake) File(_ context.Context, user, id uint) (*model.FileModel, error) {
@@ -100,6 +101,17 @@ func (f *knowledgeFake) Delete(_ context.Context, user, id uint) error {
 	}
 	f.item = nil
 	return nil
+}
+func (f *knowledgeFake) ListVersions(context.Context, uint, uint) ([]model.KnowledgeVersion, error) {
+	return f.versions, nil
+}
+func (f *knowledgeFake) GetVersion(_ context.Context, _, _, version uint) (*model.KnowledgeVersion, error) {
+	for i := range f.versions {
+		if f.versions[i].VersionNumber == version {
+			return &f.versions[i], nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 // operationLogSpy 捕获写入的操作日志，供知识域日志断言。
@@ -549,4 +561,113 @@ func TestKnowledgeUpdate(t *testing.T) {
 			require.Empty(t, spy.entries)
 		})
 	}
+}
+
+func TestKnowledgeVersions(t *testing.T) {
+	newFixture := func() (*knowledgeFake, *operationLogSpy, *KnowledgeService) {
+		f := &knowledgeFake{
+			item: &model.KnowledgeItem{
+				ID: 7, UserID: 2, Title: "当前标题", Content: "# 当前正文", Status: model.KnowledgeReady,
+				Version: 3, UpdatedAt: time.Date(2026, 11, 10, 10, 0, 0, 0, time.UTC),
+			},
+			versions: []model.KnowledgeVersion{
+				{ID: 2, UserID: 2, KnowledgeID: 7, VersionNumber: 2, Title: "第二版标题", Content: "# 第二版正文", ChangeSource: model.KnowledgeChangeSourceManual, CreatedAt: time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)},
+				{ID: 1, UserID: 2, KnowledgeID: 7, VersionNumber: 1, Title: "第一版标题", Content: "# 第一版正文", ChangeSource: model.KnowledgeChangeSourceAI, CreatedAt: time.Date(2026, 11, 10, 8, 0, 0, 0, time.UTC)},
+			},
+		}
+		spy := &operationLogSpy{}
+		s := NewKnowledgeService(f, "")
+		s.Logs = spy
+		return f, spy, s
+	}
+
+	t.Run("lists current then snapshots", func(t *testing.T) {
+		_, _, s := newFixture()
+		versions, err := s.Versions(context.Background(), 2, 7)
+		require.NoError(t, err)
+		require.Len(t, versions, 3)
+		require.Equal(t, uint(3), versions[0].VersionNumber)
+		require.Equal(t, "当前标题", versions[0].Title)
+		require.True(t, versions[0].Current)
+		require.False(t, versions[1].Current)
+		require.Equal(t, uint(2), versions[1].VersionNumber)
+		require.Equal(t, "ai", versions[2].ChangeSource)
+	})
+
+	t.Run("unknown item is not found", func(t *testing.T) {
+		_, _, s := newFixture()
+		_, err := s.Versions(context.Background(), 2, 8)
+		require.ErrorIs(t, err, ErrKnowledgeNotFound)
+	})
+
+	t.Run("detail returns current and snapshot content", func(t *testing.T) {
+		_, _, s := newFixture()
+		current, err := s.VersionDetail(context.Background(), 2, 7, 3)
+		require.NoError(t, err)
+		require.True(t, current.Current)
+		require.Equal(t, "# 当前正文", current.Content)
+		snapshot, err := s.VersionDetail(context.Background(), 2, 7, 2)
+		require.NoError(t, err)
+		require.False(t, snapshot.Current)
+		require.Equal(t, "第二版标题", snapshot.Title)
+		require.Equal(t, "# 第二版正文", snapshot.Content)
+	})
+
+	t.Run("detail rejects invalid versions", func(t *testing.T) {
+		_, _, s := newFixture()
+		_, err := s.VersionDetail(context.Background(), 2, 7, 0)
+		require.ErrorIs(t, err, ErrKnowledgeInvalid)
+		_, err = s.VersionDetail(context.Background(), 2, 7, 4)
+		require.ErrorIs(t, err, ErrKnowledgeNotFound)
+		_, err = s.VersionDetail(context.Background(), 2, 8, 1)
+		require.ErrorIs(t, err, ErrKnowledgeNotFound)
+	})
+
+	t.Run("restore creates a new version and logs", func(t *testing.T) {
+		f, spy, s := newFixture()
+		item, err := s.Restore(context.Background(), 2, 7, 2)
+		require.NoError(t, err)
+		require.Equal(t, uint(4), item.Version)
+		require.Equal(t, "第二版标题", item.Title)
+		require.Equal(t, "# 第二版正文", item.Content)
+		sum := sha256.Sum256([]byte("# 第二版正文"))
+		require.Equal(t, hex.EncodeToString(sum[:]), item.SourceHash)
+		require.Equal(t, uint(4), f.item.Version)
+		require.Len(t, spy.entries, 1)
+		entry := spy.entries[0]
+		require.Equal(t, model.OperationLogActionKnowledgeRestore, entry.Action)
+		require.Equal(t, model.OperationLogTargetTypeKnowledge, entry.TargetType)
+		require.Equal(t, uint(7), entry.TargetID)
+		require.Equal(t, "第二版标题", entry.TargetName)
+		require.JSONEq(t, `{"version":4,"restored_from":2}`, entry.Detail)
+		require.Equal(t, 1, spy.pruned)
+	})
+
+	t.Run("restoring current version is a no-op", func(t *testing.T) {
+		_, spy, s := newFixture()
+		item, err := s.Restore(context.Background(), 2, 7, 3)
+		require.NoError(t, err)
+		require.Equal(t, uint(3), item.Version)
+		require.Empty(t, spy.entries)
+	})
+
+	t.Run("missing snapshot is not found", func(t *testing.T) {
+		f, spy, s := newFixture()
+		f.item.Version = 4
+		_, err := s.Restore(context.Background(), 2, 7, 3)
+		require.ErrorIs(t, err, ErrKnowledgeNotFound)
+		require.Empty(t, spy.entries)
+	})
+
+	t.Run("restore rejects invalid versions and unready items", func(t *testing.T) {
+		f, spy, s := newFixture()
+		_, err := s.Restore(context.Background(), 2, 7, 0)
+		require.ErrorIs(t, err, ErrKnowledgeInvalid)
+		_, err = s.Restore(context.Background(), 2, 7, 4)
+		require.ErrorIs(t, err, ErrKnowledgeNotFound)
+		f.item.Status = model.KnowledgePending
+		_, err = s.Restore(context.Background(), 2, 7, 2)
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+		require.Empty(t, spy.entries)
+	})
 }

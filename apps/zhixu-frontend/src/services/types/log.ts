@@ -15,6 +15,7 @@ export type OperationLogAction =
   | 'knowledge_add'
   | 'knowledge_create'
   | 'knowledge_update'
+  | 'knowledge_restore'
   | 'knowledge_delete'
   | 'knowledge_retry'
   | 'knowledge_vector_retry'

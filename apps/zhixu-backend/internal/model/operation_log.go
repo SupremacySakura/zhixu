@@ -21,6 +21,7 @@ const (
 	OperationLogActionKnowledgeAdd         OperationLogAction = "knowledge_add"          // 加入知识库
 	OperationLogActionKnowledgeCreate      OperationLogAction = "knowledge_create"       // 手动创建知识
 	OperationLogActionKnowledgeUpdate      OperationLogAction = "knowledge_update"       // 编辑知识正文
+	OperationLogActionKnowledgeRestore     OperationLogAction = "knowledge_restore"      // 恢复历史版本
 	OperationLogActionKnowledgeDelete      OperationLogAction = "knowledge_delete"       // 移出知识库
 	OperationLogActionKnowledgeRetry       OperationLogAction = "knowledge_retry"        // 重试知识导入
 	OperationLogActionKnowledgeVectorRetry OperationLogAction = "knowledge_vector_retry" // 重试知识向量化

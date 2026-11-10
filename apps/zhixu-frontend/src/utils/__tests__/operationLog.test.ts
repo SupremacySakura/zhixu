@@ -124,6 +124,22 @@ describe('describeOperationLog', () => {
     expect(d.highlight).toBe('')
   })
 
+  it('maps knowledge_restore with the restored version', () => {
+    const d = describeOperationLog(
+      makeLog({
+        action: 'knowledge_restore',
+        target_type: 'knowledge',
+        target_name: '手写笔记',
+        detail: '{"version":4,"restored_from":2}',
+      }),
+    )
+    expect(d.icon).toBe('material-symbols:history-rounded')
+    expect(d.colorClass).toBe('bg-purple-tint text-purple')
+    expect(d.title).toBe('手写笔记')
+    expect(d.subtitle).toBe('恢复历史版本')
+    expect(d.highlight).toBe('第 2 版')
+  })
+
   it('maps knowledge_update with the saved version', () => {
     const d = describeOperationLog(
       makeLog({

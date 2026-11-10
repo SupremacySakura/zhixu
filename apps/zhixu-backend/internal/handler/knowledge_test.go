@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"zhixu-backend/internal/model"
 	"zhixu-backend/internal/repository"
@@ -214,6 +215,81 @@ func TestKnowledgeHandlerUpdate(t *testing.T) {
 			if tc.status == 200 {
 				require.Contains(t, w.Body.String(), "新标题")
 				require.Contains(t, w.Body.String(), `"version":2`)
+			}
+		})
+	}
+}
+
+type knowledgeVersionHandlerStore struct {
+	knowledgeHandlerStore
+}
+
+func (knowledgeVersionHandlerStore) Get(_ context.Context, user, id uint) (*model.KnowledgeItem, error) {
+	if user != 2 || id != 10 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &model.KnowledgeItem{ID: 10, UserID: 2, Title: "笔记", Content: "# 当前正文", Status: model.KnowledgeReady, Version: 2}, nil
+}
+
+func (knowledgeVersionHandlerStore) ListVersions(_ context.Context, user, id uint) ([]model.KnowledgeVersion, error) {
+	if user != 2 || id != 10 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return []model.KnowledgeVersion{
+		{ID: 1, UserID: 2, KnowledgeID: 10, VersionNumber: 1, Title: "第一版", Content: "# 第一版正文", ChangeSource: model.KnowledgeChangeSourceManual, CreatedAt: time.Date(2026, 11, 10, 8, 0, 0, 0, time.UTC)},
+	}, nil
+}
+
+func (knowledgeVersionHandlerStore) GetVersion(_ context.Context, user, id, version uint) (*model.KnowledgeVersion, error) {
+	if user != 2 || id != 10 || version != 1 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &model.KnowledgeVersion{ID: 1, UserID: 2, KnowledgeID: 10, VersionNumber: 1, Title: "第一版", Content: "# 第一版正文", ChangeSource: model.KnowledgeChangeSourceManual}, nil
+}
+
+func (knowledgeVersionHandlerStore) Update(_ context.Context, user, id uint, title, content, sourceHash string, baseVersion uint) (*model.KnowledgeItem, error) {
+	if user != 2 || id != 10 || baseVersion != 2 {
+		return nil, repository.ErrKnowledgeConflict
+	}
+	return &model.KnowledgeItem{ID: 10, UserID: 2, Title: title, Content: content, Status: model.KnowledgeReady, Version: 3}, nil
+}
+
+func TestKnowledgeHandlerVersions(t *testing.T) {
+	h := &KnowledgeHandler{Service: service.NewKnowledgeService(knowledgeVersionHandlerStore{}, "")}
+	for _, tc := range []struct {
+		name, method, path string
+		user               uint
+		status             int
+		contains           string
+	}{
+		{"list", "GET", "/knowledge/10/versions", 2, 200, `"current":true`},
+		{"list unauthorized", "GET", "/knowledge/10/versions", 0, 401, ""},
+		{"list unknown", "GET", "/knowledge/11/versions", 2, 404, ""},
+		{"detail current", "GET", "/knowledge/10/versions/2", 2, 200, "# 当前正文"},
+		{"detail snapshot", "GET", "/knowledge/10/versions/1", 2, 200, "# 第一版正文"},
+		{"detail zero", "GET", "/knowledge/10/versions/0", 2, 400, ""},
+		{"detail invalid", "GET", "/knowledge/10/versions/x", 2, 400, ""},
+		{"detail missing", "GET", "/knowledge/10/versions/3", 2, 404, ""},
+		{"restore", "POST", "/knowledge/10/versions/1/restore", 2, 200, `"version":3`},
+		{"restore current", "POST", "/knowledge/10/versions/2/restore", 2, 200, `"version":2`},
+		{"restore missing", "POST", "/knowledge/10/versions/3/restore", 2, 404, ""},
+		{"restore zero", "POST", "/knowledge/10/versions/0/restore", 2, 400, ""},
+		{"restore unauthorized", "POST", "/knowledge/10/versions/1/restore", 0, 401, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := gin.New()
+			if tc.user != 0 {
+				r.Use(func(c *gin.Context) { c.Set("user_id", tc.user) })
+			}
+			r.GET("/knowledge/:id/versions", h.Versions)
+			r.GET("/knowledge/:id/versions/:version", h.VersionDetail)
+			r.POST("/knowledge/:id/versions/:version/restore", h.RestoreVersion)
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(""))
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			if tc.contains != "" {
+				require.Contains(t, w.Body.String(), tc.contains)
 			}
 		})
 	}

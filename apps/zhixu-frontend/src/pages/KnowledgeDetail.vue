@@ -11,11 +11,13 @@ import {
 } from '../utils/knowledge'
 import { renderKnowledgeContent } from '../utils/markdown'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
+import KnowledgeHistoryDialog from '../components/knowledge/KnowledgeHistoryDialog.vue'
 import KnowledgeVectorPanel from '../components/knowledge/KnowledgeVectorPanel.vue'
 const route = useRoute()
 const item = ref<KnowledgeItem | null>(null)
 const error = ref('')
 const loading = ref(false)
+const showHistory = ref(false)
 let controller: AbortController | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
 const html = computed(() =>
@@ -54,6 +56,11 @@ onScopeDispose(() => {
   controller?.abort()
   clearTimeout(timer)
 })
+function onRestored(restored: KnowledgeItem) {
+  item.value = restored
+  showHistory.value = false
+  load(true)
+}
 </script>
 <template>
   <main class="overflow-y-auto p-4 sm:p-6 lg:p-8">
@@ -79,6 +86,14 @@ onScopeDispose(() => {
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-3">
+            <button
+              v-if="item.status === 'ready'"
+              type="button"
+              class="knowledge-button-secondary"
+              @click="showHistory = true"
+            >
+              版本历史
+            </button>
             <RouterLink
               v-if="item.status === 'ready'"
               :to="`/home/knowledge/${item.id}/edit`"
@@ -135,6 +150,10 @@ onScopeDispose(() => {
                   <dd class="mt-1.5 text-subhead">{{ item.source_folder_name }}</dd>
                 </div>
                 <div>
+                  <dt class="text-caption text-label-secondary">当前版本</dt>
+                  <dd class="mt-1.5 text-subhead">第 {{ item.version }} 版</dd>
+                </div>
+                <div>
                   <dt class="text-caption text-label-secondary">来源类型</dt>
                   <dd class="mt-1.5 text-subhead">
                     {{ sourceLabel }}{{ item.source_file_id ? '文件' : '' }}
@@ -153,6 +172,12 @@ onScopeDispose(() => {
             </aside>
           </div>
         </div>
+        <KnowledgeHistoryDialog
+          v-if="showHistory"
+          :knowledge-id="item.id"
+          @close="showHistory = false"
+          @restored="onRestored"
+        />
       </template>
     </div>
   </main>

@@ -77,6 +77,15 @@ func knowledgeID(c *gin.Context, raw string) (uint, bool) {
 	return uint(id), true
 }
 
+func knowledgeVersion(c *gin.Context, raw string) (uint, bool) {
+	version, err := strconv.ParseUint(raw, 10, strconv.IntSize)
+	if err != nil || version == 0 {
+		response.FailWithStatus(c, 400, response.CodeInvalidParam, "版本参数无效")
+		return 0, false
+	}
+	return uint(version), true
+}
+
 // Add godoc
 // @Summary 创建知识：file_id 从文件导入，或 title+content 手动创建（二选一）
 // @Description 文件导入首次加入返回202，重复请求返回原知识条目；手动创建始终返回202。
@@ -169,6 +178,104 @@ func (h *KnowledgeHandler) Update(c *gin.Context) {
 		return
 	}
 	item, err := h.Service.Update(c.Request.Context(), userID, id, req.Title, req.Content, req.BaseVersion)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, item)
+}
+
+// Versions godoc
+// @Summary 知识版本历史
+// @Description 当前版本置顶并由条目实时合成，其余为不可变快照；列表不含正文。
+// @Tags knowledge
+// @Produce json
+// @Param id path int true "知识ID"
+// @Success 200 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/versions [get]
+func (h *KnowledgeHandler) Versions(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	versions, err := h.Service.Versions(c.Request.Context(), userID, id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, gin.H{"items": versions, "total": len(versions)})
+}
+
+// VersionDetail godoc
+// @Summary 查看指定版本正文
+// @Description 版本号等于当前版本时返回条目实时内容。
+// @Tags knowledge
+// @Produce json
+// @Param id path int true "知识ID"
+// @Param version path int true "版本号"
+// @Success 200 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/versions/{version} [get]
+func (h *KnowledgeHandler) VersionDetail(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	version, ok := knowledgeVersion(c, c.Param("version"))
+	if !ok {
+		return
+	}
+	detail, err := h.Service.VersionDetail(c.Request.Context(), userID, id, version)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, detail)
+}
+
+// RestoreVersion godoc
+// @Summary 恢复历史版本
+// @Description 以目标版本内容生成新版本并重新向量化，当前正文先写入快照，历史记录不被篡改。
+// @Tags knowledge
+// @Produce json
+// @Param id path int true "知识ID"
+// @Param version path int true "版本号"
+// @Success 200 {object} response.Response{data=model.KnowledgeItem}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Failure 409 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/versions/{version}/restore [post]
+func (h *KnowledgeHandler) RestoreVersion(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	version, ok := knowledgeVersion(c, c.Param("version"))
+	if !ok {
+		return
+	}
+	item, err := h.Service.Restore(c.Request.Context(), userID, id, version)
 	if err != nil {
 		h.fail(c, err)
 		return

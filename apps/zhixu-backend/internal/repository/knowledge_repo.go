@@ -198,6 +198,24 @@ func (r *KnowledgeRepository) Update(ctx context.Context, userID, id uint, title
 	return &updated, nil
 }
 
+// ListVersions 返回版本快照摘要（不含正文），按版本号倒序；当前版本由服务层用条目实时合成。
+func (r *KnowledgeRepository) ListVersions(ctx context.Context, userID, knowledgeID uint) ([]model.KnowledgeVersion, error) {
+	versions := make([]model.KnowledgeVersion, 0)
+	err := r.DB.WithContext(ctx).Omit("content").
+		Where("user_id = ? AND knowledge_id = ?", userID, knowledgeID).
+		Order("version_number DESC").Find(&versions).Error
+	return versions, err
+}
+
+// GetVersion 返回指定版本快照（含正文）。
+func (r *KnowledgeRepository) GetVersion(ctx context.Context, userID, knowledgeID, versionNumber uint) (*model.KnowledgeVersion, error) {
+	var version model.KnowledgeVersion
+	err := r.DB.WithContext(ctx).
+		Where("user_id = ? AND knowledge_id = ? AND version_number = ?", userID, knowledgeID, versionNumber).
+		Take(&version).Error
+	return &version, err
+}
+
 func (r *KnowledgeRepository) List(ctx context.Context, userID uint, page, size int, query string, status model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error) {
 	return r.ListVector(ctx, userID, page, size, query, status, "")
 }
