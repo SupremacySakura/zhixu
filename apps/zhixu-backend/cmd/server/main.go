@@ -69,6 +69,8 @@ func main() {
 		Store: &repository.VectorCleanupRepository{DB: database.DB}, Vectors: qdrant,
 	}
 	router.RegisterKnowledgeRouter(r, knowledgeService)
+	tagService := service.NewTagService(repository.NewTagRepository(database.DB))
+	router.RegisterTagRouter(r, &handler.TagHandler{Service: tagService})
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})
 	go func() {

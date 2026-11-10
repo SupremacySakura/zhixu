@@ -12,6 +12,7 @@ import {
 import { renderKnowledgeContent } from '../utils/markdown'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
 import KnowledgeHistoryDialog from '../components/knowledge/KnowledgeHistoryDialog.vue'
+import KnowledgeTagEditor from '../components/knowledge/KnowledgeTagEditor.vue'
 import KnowledgeVectorPanel from '../components/knowledge/KnowledgeVectorPanel.vue'
 const route = useRoute()
 const item = ref<KnowledgeItem | null>(null)
@@ -138,6 +139,7 @@ function onRestored(restored: KnowledgeItem) {
           </article>
           <div class="space-y-5">
             <KnowledgeVectorPanel :item="item" @retried="item = $event" />
+            <KnowledgeTagEditor :knowledge-id="item.id" />
             <aside class="rounded-lg border border-hairline bg-surface p-5">
               <h2 class="mb-5 text-body font-semibold">来源信息</h2>
               <dl class="space-y-5">

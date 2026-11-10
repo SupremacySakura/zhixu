@@ -42,7 +42,7 @@ func DeleteKnowledgeRows(tx *gorm.DB, userID uint, query *gorm.DB) (int, error) 
 			return 0, err
 		}
 	}
-	for _, row := range []any{&model.VectorizeTask{}, &model.KnowledgeChunk{}} {
+	for _, row := range []any{&model.VectorizeTask{}, &model.KnowledgeChunk{}, &model.KnowledgeTag{}} {
 		if err := tx.Where("user_id = ? AND knowledge_id IN (?)", userID, query.Select("id")).Delete(row).Error; err != nil {
 			return 0, err
 		}

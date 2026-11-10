@@ -94,7 +94,7 @@ func TestKnowledgeDeleteAtomicAndScoped(t *testing.T) {
 			mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(20))
 			mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(10))
 			mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(1, 1))
-			for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+			for _, table := range []string{"vectorize_tasks", "knowledge_chunks", "knowledge_tags"} {
 				mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN .*user_id").
 					WithArgs(uint(2), uint(10), uint(2)).WillReturnResult(sqlmock.NewResult(0, 1))
 			}
@@ -130,7 +130,7 @@ func TestDeleteKnowledgeRowsReturnsCount(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(9, 2).AddRow(10, 2))
 	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("INSERT INTO `vector_cleanup_tasks`").WillReturnResult(sqlmock.NewResult(2, 1))
-	for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+	for _, table := range []string{"vectorize_tasks", "knowledge_chunks", "knowledge_tags"} {
 		mock.ExpectExec("DELETE FROM `" + table + "` WHERE user_id = .*knowledge_id IN").
 			WillReturnResult(sqlmock.NewResult(0, 2))
 	}
@@ -160,7 +160,7 @@ func TestDeleteKnowledgeRowsReturnsZeroWhenEmpty(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectQuery("SELECT .* FROM `knowledge_items` .*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}))
-	for _, table := range []string{"vectorize_tasks", "knowledge_chunks"} {
+	for _, table := range []string{"vectorize_tasks", "knowledge_chunks", "knowledge_tags"} {
 		mock.ExpectExec("DELETE FROM `" + table + "` WHERE user_id = .*knowledge_id IN").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 	}

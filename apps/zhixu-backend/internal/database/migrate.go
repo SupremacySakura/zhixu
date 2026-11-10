@@ -120,6 +120,8 @@ func Migrate() error {
 		&model.KnowledgeImportTask{},
 		&model.KnowledgeChunk{},
 		&model.KnowledgeVersion{},
+		&model.Tag{},
+		&model.KnowledgeTag{},
 		&model.VectorizeTask{},
 		&model.VectorCleanupTask{},
 		&model.ModelProvider{},
