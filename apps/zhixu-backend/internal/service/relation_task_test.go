@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -16,16 +18,42 @@ import (
 	"gorm.io/gorm"
 )
 
+// relationTaskResolverFake 分别提供对话与嵌入能力，且 model_id 不同：
+// 任何拿错能力的调用都会被测试直接暴露。
 type relationTaskResolverFake struct {
-	cap *ChatCapability
-	err error
+	chat       *ChatCapability
+	embedding  *ChatCapability
+	chatErr    error
+	embedErr   error
+	chatCalls  int
+	embedCalls int
+}
+
+func (f *relationTaskResolverFake) ResolveChatModel(context.Context, uint) (*ChatCapability, error) {
+	f.chatCalls++
+	if f.chatErr != nil {
+		return nil, f.chatErr
+	}
+	return f.chat, nil
 }
 
 func (f *relationTaskResolverFake) ResolveEmbedding(context.Context, uint) (*ChatCapability, uint64, uint64, error) {
-	if f.err != nil {
-		return nil, 0, 0, f.err
+	f.embedCalls++
+	if f.embedErr != nil {
+		return nil, 0, 0, f.embedErr
 	}
-	return f.cap, 3, 1, nil
+	return f.embedding, 3, 1, nil
+}
+
+// relationTaskEmbedderFake 记录向量化时拿到的能力，证明嵌入走的是 embedding 一侧。
+type relationTaskEmbedderFake struct {
+	vectorEmbedderFake
+	caps []*ChatCapability
+}
+
+func (f *relationTaskEmbedderFake) Embed(ctx context.Context, cap *ChatCapability, texts []string) ([][]float64, error) {
+	f.caps = append(f.caps, cap)
+	return f.vectorEmbedderFake.Embed(ctx, cap, texts)
 }
 
 type relationTaskKnowledgeFake struct {
@@ -106,10 +134,12 @@ type relationTaskSuggesterFake struct {
 	gotTitle       string
 	gotExcerpt     string
 	gotCandidates  []RelateCandidate
+	gotCap         *ChatCapability
 }
 
-func (f *relationTaskSuggesterFake) Relate(_ context.Context, _ *ChatCapability, taskID, knowledgeID uint, title, excerpt string, candidates []RelateCandidate) ([]RelateRelation, error) {
+func (f *relationTaskSuggesterFake) Relate(_ context.Context, snapshot *ChatCapability, taskID, knowledgeID uint, title, excerpt string, candidates []RelateCandidate) ([]RelateRelation, error) {
 	f.calls++
+	f.gotCap = snapshot
 	f.gotTaskID, f.gotKnowledgeID = taskID, knowledgeID
 	f.gotTitle, f.gotExcerpt = title, excerpt
 	f.gotCandidates = append([]RelateCandidate(nil), candidates...)
@@ -124,7 +154,7 @@ type relationTaskFixture struct {
 	resolver  *relationTaskResolverFake
 	knowledge *relationTaskKnowledgeFake
 	pairs     *relationTaskPairFake
-	embedder  *vectorEmbedderFake
+	embedder  *relationTaskEmbedderFake
 	searcher  *relationTaskSearcherFake
 	suggester *relationTaskSuggesterFake
 	task      *model.AiTask
@@ -133,14 +163,21 @@ type relationTaskFixture struct {
 func newRelationTaskFixture() *relationTaskFixture {
 	now := time.Now()
 	f := &relationTaskFixture{
-		resolver: &relationTaskResolverFake{cap: &ChatCapability{
-			Model:    model.ProviderModel{ModelID: "text-embedding-3-small", Kind: "embedding", Dimension: 2},
-			Provider: model.ModelProvider{Protocol: "chat", BaseURL: "https://api.example.com/v1"},
-			Key:      "sk-test",
-		}},
+		resolver: &relationTaskResolverFake{
+			chat: &ChatCapability{
+				Model:    model.ProviderModel{ID: 11, ModelID: "deepseek-chat", Kind: "chat"},
+				Provider: model.ModelProvider{ID: 3, Protocol: "chat", BaseURL: "https://api.example.com/v1"},
+				Key:      "sk-chat",
+			},
+			embedding: &ChatCapability{
+				Model:    model.ProviderModel{ID: 12, ModelID: "text-embedding-3-small", Kind: "embedding", Dimension: 2},
+				Provider: model.ModelProvider{ID: 3, Protocol: "chat", BaseURL: "https://api.example.com/v1"},
+				Key:      "sk-embed",
+			},
+		},
 		knowledge: &relationTaskKnowledgeFake{items: map[uint]*model.KnowledgeItem{}},
 		pairs:     &relationTaskPairFake{},
-		embedder:  &vectorEmbedderFake{},
+		embedder:  &relationTaskEmbedderFake{},
 		searcher:  &relationTaskSearcherFake{},
 		suggester: &relationTaskSuggesterFake{},
 	}
@@ -187,7 +224,7 @@ func newRelationTaskFixture() *relationTaskFixture {
 	}
 	f.task = &model.AiTask{ID: 5, UserID: 2, TaskType: model.AiTaskTypeRelation, TargetID: 12, Status: model.AiTaskRunning}
 	f.processor = &RelationProcessor{
-		Chat: f.resolver, Knowledge: f.knowledge, Relations: f.pairs,
+		Chat: f.resolver, Embedding: f.resolver, Knowledge: f.knowledge, Relations: f.pairs,
 		Embedder: f.embedder, Vectors: f.searcher, Client: f.suggester,
 	}
 	return f
@@ -208,6 +245,9 @@ func TestRelationProcessorCreatesSuggestions(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, f.embedder.texts, 1)
+	require.Len(t, f.embedder.caps, 1)
+	require.Equal(t, "embedding", f.embedder.caps[0].Model.Kind)
+	require.Equal(t, "text-embedding-3-small", f.embedder.caps[0].Model.ModelID)
 	require.Contains(t, f.embedder.texts[0], "源标题")
 	require.Contains(t, f.embedder.texts[0], "源摘要")
 	require.NotContains(t, f.embedder.texts[0], "源正文", "有摘要时不嵌入正文")
@@ -222,6 +262,8 @@ func TestRelationProcessorCreatesSuggestions(t *testing.T) {
 	require.Equal(t, uint(12), f.suggester.gotKnowledgeID)
 	require.Equal(t, "源标题", f.suggester.gotTitle)
 	require.Equal(t, "源摘要", f.suggester.gotExcerpt)
+	require.Equal(t, "chat", f.suggester.gotCap.Model.Kind)
+	require.Equal(t, "deepseek-chat", f.suggester.gotCap.Model.ModelID)
 	require.Len(t, f.suggester.gotCandidates, 3)
 	require.Equal(t, uint(21), f.suggester.gotCandidates[0].KnowledgeID)
 	require.InDelta(t, 0.90, f.suggester.gotCandidates[0].Score, 1e-9)
@@ -252,6 +294,35 @@ func TestRelationProcessorCreatesSuggestions(t *testing.T) {
 	require.Equal(t, 2, result.SuggestionCount)
 }
 
+// /relate 请求体必须携带对话模型：embedding 模型只能用于向量化，不能拿去调对话接口。
+func TestRelationProcessorSendsChatModelToRelate(t *testing.T) {
+	f := newRelationTaskFixture()
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Errorf("解码 /relate 请求体失败: %v", err)
+		}
+		_, _ = w.Write([]byte(`{"relations":[{"target_id":21,"relation_type":"related","confidence":0.90,"evidence":{"reason":"主题相近","source_quote":"源","target_quote":"候选"}}]}`))
+	}))
+	defer server.Close()
+	f.processor.Client = &RelateClient{AIURL: server.URL, Secret: "internal-secret"}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+	require.NoError(t, err)
+
+	// 向量化拿到的必须是 embedding 能力。
+	require.Len(t, f.embedder.caps, 1)
+	require.Equal(t, "embedding", f.embedder.caps[0].Model.Kind)
+	require.Equal(t, "text-embedding-3-small", f.embedder.caps[0].Model.ModelID)
+
+	// /relate 请求体里的 model_id 必须来自 chat 能力。
+	modelBody, ok := body["model"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "deepseek-chat", modelBody["model_id"])
+	require.Equal(t, "sk-chat", modelBody["api_key"])
+	require.NotEqual(t, "text-embedding-3-small", modelBody["model_id"])
+}
+
 // 候选最多 10 条，分数 <0.55 的连详情都不查。
 func TestRelationProcessorCapsCandidatesAndDropsLowScores(t *testing.T) {
 	f := newRelationTaskFixture()
@@ -280,13 +351,14 @@ func TestRelationProcessorCapsCandidatesAndDropsLowScores(t *testing.T) {
 	require.Zero(t, result.SuggestionCount)
 }
 
-// 没有摘要时嵌入正文前 1000 字，发给 AI 的候选摘录最多 1200 字。
-func TestRelationProcessorFallsBackToBodyExcerpts(t *testing.T) {
+// 没有摘要时嵌入正文前 1000 字；送 /relate 的判定摘录单独按 2000 字上限截断，
+// 候选摘录仍按 1200 字上限。
+func TestRelationProcessorSeparatesEmbeddingAndJudgementExcerpts(t *testing.T) {
 	f := newRelationTaskFixture()
 	f.pairs.rows = nil
 	f.suggester.relations = nil
 	f.knowledge.items[12].Summary = ""
-	f.knowledge.items[12].Content = strings.Repeat("源", 1500)
+	f.knowledge.items[12].Content = strings.Repeat("源", 2500)
 	f.knowledge.items[21].Summary = ""
 	f.knowledge.items[21].Content = strings.Repeat("候", 1500)
 	f.searcher.matches = []VectorMatch{
@@ -300,8 +372,10 @@ func TestRelationProcessorFallsBackToBodyExcerpts(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, f.embedder.texts, 1)
 	embedBody := strings.TrimPrefix(f.embedder.texts[0], "源标题\n")
-	require.Equal(t, 1000, len([]rune(embedBody)))
-	require.Equal(t, 1000, len([]rune(f.suggester.gotExcerpt)))
+	require.Equal(t, RelationEmbeddingBodyMaxRunes, len([]rune(embedBody)))
+	require.Equal(t, 2000, len([]rune(f.suggester.gotExcerpt)))
+	require.LessOrEqual(t, len([]rune(f.suggester.gotExcerpt)), RelationKnowledgeExcerptMaxRunes)
+	require.LessOrEqual(t, RelationKnowledgeExcerptMaxRunes, 2000, "判定侧摘录不得超过 /relate 契约")
 	require.Len(t, f.suggester.gotCandidates, 2)
 	require.Equal(t, 1200, len([]rune(f.suggester.gotCandidates[0].Excerpt)))
 }
@@ -334,9 +408,20 @@ func TestRelationProcessorTerminalKnowledgeFailures(t *testing.T) {
 	}
 }
 
+func TestRelationProcessorTerminalWhenChatModelMissing(t *testing.T) {
+	f := newRelationTaskFixture()
+	f.resolver.chatErr = errors.New("未配置模型")
+	_, err := f.processor.Process(context.Background(), f.task)
+	terminal := requireTerminalError(t, err)
+	require.Contains(t, terminal.Message, "未配置可用的对话模型")
+	require.Zero(t, f.resolver.embedCalls, "对话模型缺失时不应再解析 Embedding")
+	require.Empty(t, f.embedder.texts)
+	require.Zero(t, f.suggester.calls)
+}
+
 func TestRelationProcessorTerminalWhenEmbeddingModelMissing(t *testing.T) {
 	f := newRelationTaskFixture()
-	f.resolver.err = errors.New("未配置模型")
+	f.resolver.embedErr = errors.New("未配置模型")
 	_, err := f.processor.Process(context.Background(), f.task)
 	terminal := requireTerminalError(t, err)
 	require.Contains(t, terminal.Message, "未配置可用的 Embedding 模型")

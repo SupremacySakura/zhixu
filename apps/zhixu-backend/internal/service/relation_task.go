@@ -15,6 +15,11 @@ import (
 )
 
 // 依赖保持最小接口，便于服务层测试注入 fake。
+// 对话与嵌入是两种不同的模型能力：判定关联必须用对话模型，向量召回必须用嵌入模型。
+type relationChatResolver interface {
+	ResolveChatModel(context.Context, uint) (*ChatCapability, error)
+}
+
 type relationEmbeddingResolver interface {
 	ResolveEmbedding(context.Context, uint) (*ChatCapability, uint64, uint64, error)
 }
@@ -39,7 +44,8 @@ type relationSuggester interface {
 
 // RelationProcessor 执行 relation 任务：代表文本嵌入 → 向量召回 → 归并过滤 → AI 判定 → 落建议。
 type RelationProcessor struct {
-	Chat      relationEmbeddingResolver
+	Chat      relationChatResolver
+	Embedding relationEmbeddingResolver
 	Knowledge relationKnowledgeSource
 	Relations relationPairStore
 	Embedder  VectorEmbedder
@@ -50,7 +56,7 @@ type RelationProcessor struct {
 func (p *RelationProcessor) TaskType() string { return model.AiTaskTypeRelation }
 
 func (p *RelationProcessor) Process(ctx context.Context, task *model.AiTask) (json.RawMessage, error) {
-	if p == nil || p.Chat == nil || p.Knowledge == nil || p.Relations == nil ||
+	if p == nil || p.Chat == nil || p.Embedding == nil || p.Knowledge == nil || p.Relations == nil ||
 		p.Embedder == nil || p.Vectors == nil || p.Client == nil {
 		return nil, TerminalTaskError("AI 关联未配置")
 	}
@@ -68,17 +74,24 @@ func (p *RelationProcessor) Process(ctx context.Context, task *model.AiTask) (js
 	if source.Status != model.KnowledgeReady {
 		return nil, TerminalTaskError("知识尚未就绪，无法生成关联建议")
 	}
-	representative := relationSourceBody(source, RelationEmbeddingBodyMaxRunes)
-	if representative == "" {
+	// 嵌入与判定都从同一份代表文本派生，但长度上限分开：嵌入只需要前 1000 字，
+	// 判定侧可以拿到 /relate 契约允许的 2000 字。
+	embeddingBody := relationSourceBody(source, RelationEmbeddingBodyMaxRunes)
+	if embeddingBody == "" {
 		return nil, TerminalTaskError("知识尚未就绪，无法生成关联建议")
 	}
 
-	snapshot, version, _, err := p.Chat.ResolveEmbedding(ctx, userID)
+	// 模型配置先解析对话能力：它缺失时直接终止，不发起任何付费调用。
+	chat, err := p.Chat.ResolveChatModel(ctx, userID)
+	if err != nil {
+		return nil, TerminalTaskError("未配置可用的对话模型，请前往模型设置")
+	}
+	snapshot, version, _, err := p.Embedding.ResolveEmbedding(ctx, userID)
 	if err != nil {
 		return nil, TerminalTaskError("未配置可用的 Embedding 模型，请前往模型设置")
 	}
 	embedCtx, cancel := context.WithTimeout(ctx, 110*time.Second)
-	vectors, err := p.Embedder.Embed(embedCtx, snapshot, []string{source.Title + "\n" + representative})
+	vectors, err := p.Embedder.Embed(embedCtx, snapshot, []string{source.Title + "\n" + embeddingBody})
 	cancel()
 	if err != nil {
 		return nil, err
@@ -162,7 +175,8 @@ func (p *RelationProcessor) Process(ctx context.Context, task *model.AiTask) (js
 		return nil, TerminalTaskError("可用候选知识不足，暂时无法生成关联建议")
 	}
 
-	relations, err := p.Client.Relate(ctx, snapshot, task.ID, source.ID, source.Title, representative, candidates)
+	judgeExcerpt := relationSourceBody(source, RelationKnowledgeExcerptMaxRunes)
+	relations, err := p.Client.Relate(ctx, chat, task.ID, source.ID, source.Title, judgeExcerpt, candidates)
 	if err != nil {
 		if errors.Is(err, ErrRelateInvalidOutput) || errors.Is(err, ErrRelateRejected) {
 			return nil, TerminalTaskError(err.Error())
