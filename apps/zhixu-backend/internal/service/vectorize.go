@@ -38,9 +38,10 @@ type VectorDatabase interface {
 	DeletePoints(context.Context, string, []uint) error
 }
 
-// RelationEnqueuer 在向量化就绪后排入关联建议任务（*AiTaskService 满足）。
+// RelationEnqueuer 在向量化就绪后按需排入关联建议任务（*AiTaskService 满足）。
 type RelationEnqueuer interface {
 	EnqueueRelation(context.Context, uint, uint, uint) error
+	HasTaskForTarget(context.Context, uint, string, uint) (bool, error)
 }
 
 type VectorizeService struct {
@@ -185,10 +186,17 @@ func (s *VectorizeService) ProcessNext(ctx context.Context) (bool, error) {
 	if err := s.Store.Finish(ctx, task, failure); err != nil {
 		return true, err
 	}
-	// 向量化成功就绪后再触发关联建议；入队失败只记日志，不回滚已完成的向量化。
+	// 向量化成功就绪后只在“这个知识从未跑过关联任务”时自动入队一次。
+	// 编辑正文同样会重新向量化，但规格不允许它顺带重跑推荐；手动“查找相关知识”走显式入队。
+	// 查询或入队失败只记日志，不回滚已完成的向量化。
 	if failure == "" && s.Relations != nil {
-		if err := s.Relations.EnqueueRelation(ctx, task.UserID, task.KnowledgeID, item.Version); err != nil {
-			log.Warn().Err(err).Uint("knowledge_id", task.KnowledgeID).Msg("关联任务入队失败")
+		exists, err := s.Relations.HasTaskForTarget(ctx, task.UserID, model.AiTaskTypeRelation, task.KnowledgeID)
+		if err != nil {
+			log.Warn().Err(err).Uint("knowledge_id", task.KnowledgeID).Msg("关联任务查询失败，跳过自动入队")
+		} else if !exists {
+			if err := s.Relations.EnqueueRelation(ctx, task.UserID, task.KnowledgeID, item.Version); err != nil {
+				log.Warn().Err(err).Uint("knowledge_id", task.KnowledgeID).Msg("关联任务入队失败")
+			}
 		}
 	}
 	return true, nil

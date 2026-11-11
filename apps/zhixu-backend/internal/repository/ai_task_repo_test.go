@@ -87,7 +87,7 @@ func TestAiTaskRepositoryRecycleExpired(t *testing.T) {
 	now := time.Now()
 	// 先收敛超过重试上限的任务，再把其余过期任务退回 pending。
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE .ai_tasks. SET").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE .ai_tasks. SET .*retry_count \\+ 1 > \\?.*").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE .ai_tasks. SET").WillReturnResult(sqlmock.NewResult(0, 2))
@@ -95,6 +95,75 @@ func TestAiTaskRepositoryRecycleExpired(t *testing.T) {
 
 	require.NoError(t, (&AiTaskRepository{DB: db}).RecycleExpired(context.Background(), now))
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 失败重试按 30s/60s/120s 退避：前三次失败保持 pending，第 4 次才进入终态。
+func TestAiTaskRepositoryFailSchedulesBackoff(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		retryCount int
+		want       time.Duration
+	}{
+		{"第一次失败", 0, 30 * time.Second},
+		{"第二次失败", 1, 60 * time.Second},
+		{"第三次失败", 2, 120 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, cleanup := setupMockDB(t)
+			defer cleanup()
+			now := time.Now()
+			task := &model.AiTask{ID: 5, UserID: 2, RetryCount: tc.retryCount, LeaseToken: "tok"}
+			mock.ExpectBegin()
+			mock.ExpectExec("UPDATE .ai_tasks. SET").
+				WithArgs("boom", nil, "", now.Add(tc.want), tc.retryCount+1, model.AiTaskPending, sqlmock.AnyArg(), uint(5), model.AiTaskRunning, "tok").
+				WillReturnResult(sqlmock.NewResult(0, 1))
+			mock.ExpectCommit()
+
+			require.NoError(t, (&AiTaskRepository{DB: db}).Fail(context.Background(), task, "boom", true, now))
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+// 第 4 次失败（首次执行 + 3 次重试之后）终止任务并释放幂等键。
+func TestAiTaskRepositoryFailStopsAfterThreeRetries(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	now := time.Now()
+	task := &model.AiTask{ID: 5, UserID: 2, RetryCount: 3, LeaseToken: "tok"}
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE .ai_tasks. SET").
+		WithArgs(nil, "boom", nil, "", 4, model.AiTaskFailed, sqlmock.AnyArg(), uint(5), model.AiTaskRunning, "tok").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	require.NoError(t, (&AiTaskRepository{DB: db}).Fail(context.Background(), task, "boom", true, now))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// HasTaskForTarget 统计该知识在任意状态下的任务，供自动入队判断是否已经跑过。
+func TestAiTaskRepositoryHasTaskForTarget(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		count int
+		want  bool
+	}{
+		{"已有任务", 1, true},
+		{"从未有任务", 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, cleanup := setupMockDB(t)
+			defer cleanup()
+			mock.ExpectQuery("SELECT count.*FROM .ai_tasks.").
+				WithArgs(uint(2), model.AiTaskTypeRelation, uint(12)).
+				WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(tc.count))
+
+			found, err := (&AiTaskRepository{DB: db}).HasTaskForTarget(context.Background(), 2, model.AiTaskTypeRelation, 12)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, found)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }
 
 func TestAiTaskRepositoryUpdatePayload(t *testing.T) {

@@ -183,9 +183,13 @@ func (p *RelationProcessor) Process(ctx context.Context, task *model.AiTask) (js
 		}
 		return nil, err
 	}
-	// 高置信度优先，保证同一对只保留最强的一条建议。
+	// 高置信度优先，保证同一对同类型只保留最强的一条建议；不同类型可以共存。
 	sort.SliceStable(relations, func(i, j int) bool { return relations[i].Confidence > relations[j].Confidence })
-	seen := make(map[[2]uint]bool, RelationSuggestionMax)
+	type suggestionPair struct {
+		low, high    uint
+		relationType model.RelationType
+	}
+	seen := make(map[suggestionPair]bool, RelationSuggestionMax)
 	accepted := make([]RelateRelation, 0, RelationSuggestionMax)
 	for _, relation := range relations {
 		if len(accepted) == RelationSuggestionMax {
@@ -203,7 +207,7 @@ func (p *RelationProcessor) Process(ctx context.Context, task *model.AiTask) (js
 		if low > high {
 			low, high = high, low
 		}
-		key := [2]uint{low, high}
+		key := suggestionPair{low: low, high: high, relationType: relation.RelationType}
 		if seen[key] {
 			continue
 		}

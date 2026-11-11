@@ -108,6 +108,49 @@ func TestCreateRelationReusesExistingRow(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+// 手动添加命中尚未确认的 AI 建议：只提升状态，保留 AI 来源（用户只是确认建议）。
+func TestCreateRelationReusesSuggestedRowKeepsAISource(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery(relationPairQuery).WillReturnRows(sqlmock.NewRows([]string{
+		"id", "user_id", "source_id", "target_id", "relation_type", "status", "source",
+	}).AddRow(8, 2, 3, 9, "related", "suggested", "ai"))
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `knowledge_relations` SET .* WHERE id = \\? AND user_id = \\?").
+		WithArgs(sqlmock.AnyArg(), "confirmed", sqlmock.AnyArg(), 8, 2).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	row, err := NewRelationRepository(db).Create(context.Background(), &model.KnowledgeRelation{
+		UserID: 2, SourceID: 3, TargetID: 9, RelationType: model.RelationTypeRelated,
+		Status: model.RelationConfirmed, Source: model.RelationSourceManual,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, model.RelationConfirmed, row.Status)
+	require.Equal(t, model.RelationSourceAI, row.Source)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 手动添加命中已确认的 AI 行：原样返回，不改写来源，也不重复写库。
+func TestCreateRelationLeavesConfirmedAISourceUntouched(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery(relationPairQuery).WillReturnRows(sqlmock.NewRows([]string{
+		"id", "user_id", "source_id", "target_id", "relation_type", "status", "source",
+	}).AddRow(8, 2, 3, 9, "related", "confirmed", "ai"))
+
+	row, err := NewRelationRepository(db).Create(context.Background(), &model.KnowledgeRelation{
+		UserID: 2, SourceID: 3, TargetID: 9, RelationType: model.RelationTypeRelated,
+		Status: model.RelationConfirmed, Source: model.RelationSourceManual,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, model.RelationConfirmed, row.Status)
+	require.Equal(t, model.RelationSourceAI, row.Source)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 // 并发插入命中唯一键时回读已有行，不把 1062 抛给上层。
 func TestCreateRelationToleratesDuplicateKey(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
@@ -122,6 +165,7 @@ func TestCreateRelationToleratesDuplicateKey(t *testing.T) {
 	}).AddRow(9, 2, 3, 9, "related", "suggested", "ai"))
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `knowledge_relations` SET .* WHERE id = \\? AND user_id = \\?").
+		WithArgs(sqlmock.AnyArg(), "confirmed", sqlmock.AnyArg(), 9, 2).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
@@ -134,6 +178,7 @@ func TestCreateRelationToleratesDuplicateKey(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint(9), row.ID)
 	require.Equal(t, model.RelationConfirmed, row.Status)
+	require.Equal(t, model.RelationSourceAI, row.Source, "并发命中建议行时仍应保留 AI 来源")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

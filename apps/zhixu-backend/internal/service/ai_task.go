@@ -36,6 +36,7 @@ func TerminalTaskError(message string) error { return &AiTaskTerminalError{Messa
 type AiTaskStore interface {
 	Enqueue(context.Context, model.AiTask) (*model.AiTask, error)
 	Latest(context.Context, uint, string, uint) (*model.AiTask, error)
+	HasTaskForTarget(context.Context, uint, string, uint) (bool, error)
 	Claim(context.Context, string, time.Time) (*model.AiTask, error)
 	RecycleExpired(context.Context, time.Time) error
 	Succeed(context.Context, *model.AiTask, string) error
@@ -102,6 +103,11 @@ func (s *AiTaskService) EnqueueRelationTask(ctx context.Context, userID, knowled
 // Latest 返回目标最近一次任务。
 func (s *AiTaskService) Latest(ctx context.Context, userID uint, taskType string, targetID uint) (*model.AiTask, error) {
 	return s.Store.Latest(ctx, userID, taskType, targetID)
+}
+
+// HasTaskForTarget 判断目标是否已经有该类型的任务（任意状态）。
+func (s *AiTaskService) HasTaskForTarget(ctx context.Context, userID uint, taskType string, targetID uint) (bool, error) {
+	return s.Store.HasTaskForTarget(ctx, userID, taskType, targetID)
 }
 
 // UpdatePayload 覆盖任务产物（用于记录用户采纳整理结果等状态）。

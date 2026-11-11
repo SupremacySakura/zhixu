@@ -217,7 +217,7 @@ func newRelationTaskFixture() *relationTaskFixture {
 		{TargetID: 21, RelationType: model.RelationTypeRelated, Confidence: 0.78, Evidence: RelateEvidence{Reason: "主题相近", SourceQuote: "源片段", TargetQuote: "候选片段"}},
 		{TargetID: 22, RelationType: model.RelationTypeDependsOn, Confidence: 0.55, Evidence: RelateEvidence{Reason: "置信度不足"}},
 		{TargetID: 26, RelationType: model.RelationTypeUpdates, Confidence: 0.90, Evidence: RelateEvidence{Reason: "更新版本"}},
-		{TargetID: 26, RelationType: model.RelationTypeSupplements, Confidence: 0.80, Evidence: RelateEvidence{Reason: "同对重复"}},
+		{TargetID: 26, RelationType: model.RelationTypeUpdates, Confidence: 0.80, Evidence: RelateEvidence{Reason: "同对同类型重复"}},
 		{TargetID: 99, RelationType: model.RelationTypeRelated, Confidence: 0.92, Evidence: RelateEvidence{Reason: "不在候选"}},
 		{TargetID: 21, RelationType: model.RelationTypeRelated, Confidence: 0.95, Evidence: RelateEvidence{Reason: "最高分"}},
 		{TargetID: 21, RelationType: model.RelationType("friend"), Confidence: 0.93, Evidence: RelateEvidence{Reason: "非法类型"}},
@@ -291,6 +291,27 @@ func TestRelationProcessorCreatesSuggestions(t *testing.T) {
 	require.NoError(t, json.Unmarshal(payload, &result))
 	require.Equal(t, uint(12), result.KnowledgeID)
 	require.Equal(t, uint(5), result.BaseVersion)
+	require.Equal(t, 2, result.SuggestionCount)
+}
+
+// 去重键包含关系类型：同一对知识允许同时保留 related 与 depends_on，同类型重复仍只留最高分。
+func TestRelationProcessorKeepsDifferentRelationTypesForSamePair(t *testing.T) {
+	f := newRelationTaskFixture()
+	f.pairs.rows = nil
+	f.suggester.relations = []RelateRelation{
+		{TargetID: 21, RelationType: model.RelationTypeRelated, Confidence: 0.90, Evidence: RelateEvidence{Reason: "主题相近"}},
+		{TargetID: 21, RelationType: model.RelationTypeDependsOn, Confidence: 0.85, Evidence: RelateEvidence{Reason: "依赖关系"}},
+		{TargetID: 21, RelationType: model.RelationTypeRelated, Confidence: 0.80, Evidence: RelateEvidence{Reason: "同类型重复"}},
+	}
+
+	payload, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.pairs.created, 2)
+	require.Equal(t, model.RelationTypeRelated, f.pairs.created[0].RelationType)
+	require.Equal(t, model.RelationTypeDependsOn, f.pairs.created[1].RelationType)
+	var result RelationPayload
+	require.NoError(t, json.Unmarshal(payload, &result))
 	require.Equal(t, 2, result.SuggestionCount)
 }
 

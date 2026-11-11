@@ -119,6 +119,16 @@ function buildOption(): EChartsCoreOption {
         },
         edgeSymbol: ['none', 'arrow'],
         edgeSymbolSize: 6,
+        // 边上直接标注中文关系类型，用较小字号；节点标签由 labelLayout 隐藏重叠。
+        edgeLabel: {
+          show: true,
+          fontSize: 10,
+          color: palette.labelSecondary,
+          formatter: (params: { data?: { relation_type?: string } }) => {
+            const type = params.data?.relation_type as RelationType | undefined
+            return type ? relationTypeLabel(type) : ''
+          },
+        },
         data: nodes,
         links,
         force: {
