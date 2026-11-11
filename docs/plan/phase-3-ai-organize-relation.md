@@ -28,14 +28,14 @@ status: in-progress
 
 ## 工作项
 
-### W3.1 统一 ai_tasks 状态机（FR-SYS-04 扩展）
+### W3.1 统一 ai_tasks 状态机（FR-SYS-04 扩展）✅ 已完成（2026-11-11）
 
 - **数据库**：`ai_tasks`（id、user_id、task_type: organize/relation/evolve、target_id（knowledge_id）、status: pending/running/succeeded/failed、payload JSON、error_message、retry_count、created_at/updated_at；`(task_type,target_id,status)` 部分唯一防并发重复入队，或应用层幂等键）。
 - **Go**：任务创建（幂等：同 target 同类型进行中任务复用）、租约/超时回收（复用现有模式）、失败重试（指数退避，≤3 次）、状态回调接收。
 - **回调扩展**：`POST /internal/ai/tasks/{taskId}/status` 支持新 task_type；**硬约束：持久化回调（metadata/relations/alerts）必须先于任务状态回调**（架构契约）。
 - **依赖**：无。**验收**：任务列表可见（复用任务面板），重复触发不产生重复任务，失败可重试。
 
-### W3.2 Organize 工作流：摘要/关键词/标签（FR-ORG-01/02/03/04）
+### W3.2 Organize 工作流：摘要/关键词/标签（FR-ORG-01/02/03/04）✅ 已完成（2026-11-11）
 
 - **契约**：Go→AI `POST /v1/organize {taskId, knowledgeId, userId}`；AI→Go `POST /internal/ai/files/{fileId}/metadata {taskId, summary, keywords[], suggestedTags[]}`。
 - **AI 服务**：`organize-workflow`——读取知识正文（Go 内部接口或回调 payload 携带）→ `generateObject` + zod Schema（summary ≤200 字、keywords ≤10 个、suggestedTags 从用户现有标签+新词混合）→ Schema 校验失败自动重试 1 次 → 结构化结果回调。
@@ -43,13 +43,13 @@ status: in-progress
 - **触发**：导入/创建完成后自动触发（产品设计 8.1：清洗校验后摘要关键词与分块向量化**并行**）；详情页可手动"重新整理"。
 - **依赖**：W3.1、P1-W1.4。**验收**：新导入知识 N 秒内出现摘要/关键词；标签推荐包含用户已有标签匹配。
 
-### W3.3 整理结果预览与确认（FR-ORG-05）
+### W3.3 整理结果预览与确认（FR-ORG-05）✅ 已完成（2026-11-11）
 
 - **Go**：整理结果先落"待确认"区（`ai_tasks.payload` 或 `knowledge_items` 增加 `organize_status`/暂存字段）；`POST /api/v1/knowledge/:id/organize/accept {summary?, keywords?, tagIds[]}`（用户可编辑后采纳，一次落正式字段）、`POST .../regenerate`。
 - **前端**：详情页"AI 整理"面板：摘要/关键词/推荐标签并排预览，支持逐项编辑、一键采纳、重新生成；采纳前列表页摘要不展示（或展示但标注 AI 待确认）。
 - **依赖**：W3.2。**验收**：AC-04——生成 → 预览 → 编辑 → 采纳闭环；未采纳不污染正式字段。
 
-### W3.4 关联推荐（FR-REL-01 + FR-ORG-06）
+### W3.4 关联推荐（FR-REL-01 + FR-ORG-06）⏳ 未开始（第四批）
 
 - **数据库**：`knowledge_relations`（id、user_id、source_id、target_id、relation_type: related/extends/supports/contradicts/updates、confidence 0~1、evidence JSON、status: suggested/confirmed/rejected、created_at；`(source_id,target_id)` 唯一防重复，反向关系视为同一对）。
 - **契约**：AI→Go `POST /internal/ai/files/{fileId}/relations {taskId, relations:[{targetKnowledgeId, relationType, confidence, evidence}]}`。
@@ -58,7 +58,7 @@ status: in-progress
 - **前端**：详情页"相关知识"区：列表展示（标题/关系类型/置信度），建议态关系带"确认/忽略"操作。
 - **依赖**：W3.2（挂在 organize 后）。**验收**：AC-07——导入相似主题文档后出现相关知识推荐，点击可跳转。
 
-### W3.5 关系管理（FR-REL-02）
+### W3.5 关系管理（FR-REL-02）⏳ 未开始（第四批）
 
 - **后端**：
   - `GET /api/v1/knowledge/:id/relations`（含 suggested/confirmed，标注方向与类型）。
