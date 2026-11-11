@@ -24,7 +24,9 @@ const (
 	// OrganizeKeywordMax 采纳后的关键词数量上限。
 	OrganizeKeywordMax = 10
 	// OrganizeKeywordMaxRunes 采纳后的单个关键词长度上限（字符）。
-	OrganizeKeywordMaxRunes = 20
+	// 20 字符装不下 "React Server Components" 这类英文技术术语，实测会让模型输出
+	// 在结构化校验层直接失败，因此放宽到 40。
+	OrganizeKeywordMaxRunes = 40
 )
 
 // AI 整理调用的错误分类：调用方据此决定是重试还是直接判任务失败。
@@ -164,10 +166,12 @@ func sanitizeDraft(draft OrganizeDraft) (*OrganizeDraft, error) {
 	if summary == "" {
 		return nil, ErrOrganizeInvalidOutput
 	}
+	// AI 侧已按 200 字符截断，这里再兜底一次：宁可给用户一段可继续编辑的截断摘要，
+	// 也不要因为多出几个字符把整次整理判为失败。
 	if utf8.RuneCountInString(summary) > OrganizeSummaryMaxRunes {
-		return nil, fmt.Errorf("%w: 摘要超过 %d 字符", ErrOrganizeInvalidOutput, OrganizeSummaryMaxRunes)
+		summary = strings.TrimSpace(string([]rune(summary)[:OrganizeSummaryMaxRunes]))
 	}
-	keywords := cleanItems(draft.Keywords, 20, OrganizeKeywordMax)
+	keywords := cleanItems(draft.Keywords, OrganizeKeywordMaxRunes, OrganizeKeywordMax)
 	if len(keywords) == 0 {
 		return nil, fmt.Errorf("%w: 缺少关键词", ErrOrganizeInvalidOutput)
 	}
@@ -211,12 +215,12 @@ func ParseKeywords(raw string) []string {
 	if err := json.Unmarshal([]byte(raw), &list); err != nil {
 		return []string{}
 	}
-	return cleanItems(list, 20, OrganizeKeywordMax)
+	return cleanItems(list, OrganizeKeywordMaxRunes, OrganizeKeywordMax)
 }
 
 // EncodeKeywords 把关键词列表编码为落库字符串；空列表存空串而不是 "null"。
 func EncodeKeywords(keywords []string) string {
-	clean := cleanItems(keywords, 20, OrganizeKeywordMax)
+	clean := cleanItems(keywords, OrganizeKeywordMaxRunes, OrganizeKeywordMax)
 	if len(clean) == 0 {
 		return ""
 	}

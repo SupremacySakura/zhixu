@@ -16,7 +16,8 @@ const emit = defineEmits<{ accepted: [item: KnowledgeItem] }>()
 const POLL_INTERVAL = 3_000
 const SUMMARY_MAX = 200
 const KEYWORD_MAX = 10
-const KEYWORD_MAX_RUNES = 20
+// 与后端 OrganizeKeywordMaxRunes 保持一致：英文技术术语（如 React Server Components）超过 20 字符。
+const KEYWORD_MAX_RUNES = 40
 
 const task = ref<KnowledgeOrganizeTask | null>(null)
 const draft = ref<KnowledgeOrganizeDraft | null>(null)

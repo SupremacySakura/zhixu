@@ -284,7 +284,7 @@ func validateOrganizeSummary(summary string) error {
 	return nil
 }
 
-// normalizeAcceptedKeywords 清洗采纳的关键词：去空、去重、长度 ≤20 字符、数量 ≤10。
+// normalizeAcceptedKeywords 清洗采纳的关键词：去空、去重、长度 ≤40 字符、数量 ≤10。
 func normalizeAcceptedKeywords(keywords []string) ([]string, error) {
 	seen := make(map[string]struct{}, len(keywords))
 	result := make([]string, 0, len(keywords))

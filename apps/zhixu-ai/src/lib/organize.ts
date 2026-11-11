@@ -25,13 +25,23 @@ export const organizeSchema = z
 
 export type OrganizeInput = z.infer<typeof organizeSchema>;
 
-// Draft dimensions are wider than the prompt asks for on purpose: a model that writes a
-// 190-character summary or 7 keywords must not fail the whole task.
+// Model-facing schema. Bounds are deliberately loose: an English term such as
+// "React Server Components" is 24 characters, so a 20-character keyword limit makes the
+// model's otherwise-correct answer fail validation before we can normalize it.
+export const organizeDraftWireSchema = z.object({
+  summary: z.string().min(10).max(400),
+  keywords: z.array(z.string().min(1).max(40)).min(1).max(10),
+  suggestedTags: z.array(z.string().min(1).max(30)).max(8),
+  concepts: z.array(z.string().min(1).max(30)).max(6),
+});
+
+// Product-facing schema after normalization: the draft the user previews must already
+// respect what the Go accept endpoint will store.
 export const organizeDraftSchema = z.object({
   summary: z.string().min(10).max(200),
-  keywords: z.array(z.string().min(1).max(20)).min(1).max(10),
+  keywords: z.array(z.string().min(1).max(40)).min(1).max(10),
   suggestedTags: z.array(z.string().min(1).max(30)).max(8),
-  concepts: z.array(z.string().max(30)).max(6),
+  concepts: z.array(z.string().min(1).max(30)).max(6),
 });
 
 export type OrganizeDraft = z.infer<typeof organizeDraftSchema>;
@@ -56,8 +66,8 @@ export class OrganizeUpstreamError extends Error {
 const INSTRUCTIONS = `你是「知序」个人知识库的整理助手。用户会给你一篇知识条目的标题、正文和用户已有的标签。
 
 请完成四项整理工作：
-1. summary：用 100 到 150 个汉字概括这篇知识的核心内容，写成一个完整通顺的句子或两个短句，不要出现「本文」「这篇文章」这类空话，不要罗列。
-2. keywords：提取 5 个左右最能代表内容的关键词或术语，每个 2 到 12 个字，用原文中的说法，不要写成句子。
+1. summary：概括这篇知识的核心内容，写成一个完整通顺的句子或两个短句，最多 200 个字符（约 100 到 150 个汉字）。不要出现「本文」「这篇文章」这类空话，不要罗列。
+2. keywords：提取 5 个左右最能代表内容的关键词或术语，每个 2 到 20 个字符；英文技术术语可以稍长，但不要超过 40 个字符。用原文中的说法，不要在关键词内部另起句子。
 3. suggestedTags：推荐 3 到 6 个分类标签，每个不超过 15 个字。若用户已有标签含义相符，优先直接复用已有标签的原文写法；其余标签要能概括主题，避免过于宽泛的词（如「知识」「内容」）。
 4. concepts：列出 3 到 5 个文中提到的核心概念、方法、工具或人物名称，用于后续建立知识关联。
 
@@ -66,9 +76,46 @@ const INSTRUCTIONS = `你是「知序」个人知识库的整理助手。用户�
 - 只依据给定正文，不要补充正文没有的信息，不要编造数据或结论。
 - 不要输出 Markdown、编号或解释，只输出符合结构的 JSON 字段。`;
 
+const RETRY_INSTRUCTIONS =
+  "上一次输出违反了字段长度限制：summary 最多 200 个字符，keywords 每项最多 40 个字符且最多 10 项，只输出符合 schema 的 JSON。";
+
 function truncate(value: string, max: number): string {
   const trimmed = value.trim();
   return trimmed.length <= max ? trimmed : trimmed.slice(0, max);
+}
+
+const SUMMARY_MAX_CHARS = 200;
+// Prefer cutting a long summary at a sentence boundary instead of mid-word; the lower
+// bound keeps the truncated draft long enough to stay useful.
+const SUMMARY_TRUNCATE_FLOOR = 100;
+
+export function clampSummary(value: string): string {
+  const chars = Array.from(value.trim());
+  if (chars.length <= SUMMARY_MAX_CHARS) return chars.join("");
+  const head = chars.slice(0, SUMMARY_MAX_CHARS);
+  for (let index = head.length - 1; index >= SUMMARY_TRUNCATE_FLOOR; index--) {
+    if ("。！？；.!?;".includes(head[index])) {
+      return head
+        .slice(0, index + 1)
+        .join("")
+        .trim();
+    }
+  }
+  return head.join("").trim();
+}
+
+// Mastra validates the structured-output schema before returning the object, so an
+// over-limit field surfaces as a thrown error rather than a parse failure. That is model
+// output we cannot use, not an upstream outage: Go must see 422 instead of retrying 502s.
+export function isSchemaValidationError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const value = error as { id?: unknown; message?: unknown };
+  return (
+    (typeof value.id === "string" &&
+      value.id.includes("STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED")) ||
+    (typeof value.message === "string" &&
+      value.message.includes("Structured output validation failed"))
+  );
 }
 
 // Exported for tests: the prompt shape is the only thing the model sees besides the body.
@@ -106,8 +153,10 @@ export function normalizeDraft(raw: unknown): unknown {
   };
   return {
     summary:
-      typeof value.summary === "string" ? value.summary.trim() : value.summary,
-    keywords: strings(value.keywords, 20).slice(0, 10),
+      typeof value.summary === "string"
+        ? clampSummary(value.summary)
+        : value.summary,
+    keywords: strings(value.keywords, 40).slice(0, 10),
     suggestedTags: strings(value.suggestedTags, 30).slice(0, 8),
     concepts: strings(value.concepts, 30).slice(0, 6),
   };
@@ -140,9 +189,10 @@ export class OrganizeAgent {
       try {
         const result = await agent.generate(messages, {
           structuredOutput: {
-            schema: organizeDraftSchema,
+            schema: organizeDraftWireSchema,
             jsonPromptInjection: "auto",
             errorStrategy: "strict",
+            ...(attempt === 0 ? {} : { instructions: RETRY_INSTRUCTIONS }),
           },
           modelSettings: { maxRetries: 0 },
           abortSignal: signal,
@@ -150,9 +200,14 @@ export class OrganizeAgent {
         object = result?.object;
       } catch (error) {
         if (signal.aborted) throw error;
-        // A thrown call may be either a provider failure or unparsable output; retry
-        // once, then let Go decide whether the class of failure is worth retrying.
-        if (attempt === 1) throw new OrganizeUpstreamError();
+        // A thrown call is either a provider failure or output Mastra rejected against the
+        // schema. Retry once, then report the right class so Go retries transport errors
+        // but stops early on unusable output.
+        if (attempt === 1) {
+          throw isSchemaValidationError(error)
+            ? new OrganizeInvalidOutputError()
+            : new OrganizeUpstreamError();
+        }
         continue;
       }
       const parsed = organizeDraftSchema.safeParse(normalizeDraft(object));
