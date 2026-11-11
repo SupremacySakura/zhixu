@@ -38,7 +38,8 @@ status: in-progress
 ### W3.2 Organize 工作流：摘要/关键词/标签（FR-ORG-01/02/03/04）✅ 已完成（2026-11-11）
 
 - **契约**：Go→AI `POST /v1/organize {taskId, knowledgeId, userId}`；AI→Go `POST /internal/ai/files/{fileId}/metadata {taskId, summary, keywords[], suggestedTags[]}`。
-- **AI 服务**：`organize-workflow`——读取知识正文（Go 内部接口或回调 payload 携带）→ `generateObject` + zod Schema（summary ≤200 字、keywords ≤10 个、suggestedTags 从用户现有标签+新词混合）→ Schema 校验失败自动重试 1 次 → 结构化结果回调。
+- **AI 服务**：`OrganizeAgent`——读取知识正文（由 Go 侧随请求携带）→ `agent.generate(..., { structuredOutput })` + zod Schema（summary ≤200 字、keywords ≤10 个且每项 ≤40 字符、suggestedTags 从用户现有标签+新词混合）→ Schema 校验失败自动重试 1 次 → 同步返回结构化结果。
+  - **长度容错**：Mastra 在返回前就按 schema 校验模型输出，因此模型侧校验用宽松 schema（summary ≤400、keywords 每项 ≤40），再在 `normalizeDraft` 里把超长 summary 按 `。！？；.!?;` 语义边界截到 200 字；仍不合法时返回 422（输出不可用），而不是 502（上游故障），避免 Go 侧无意义重试。
 - **Go**：`knowledge_items` 增加 `summary`（text）、`keywords`（JSON）；suggestedTags 经 `knowledge_tags.source=ai` 落库（**待确认状态，见 W3.3**）。
 - **触发**：导入/创建完成后自动触发（产品设计 8.1：清洗校验后摘要关键词与分块向量化**并行**）；详情页可手动"重新整理"。
 - **依赖**：W3.1、P1-W1.4。**验收**：新导入知识 N 秒内出现摘要/关键词；标签推荐包含用户已有标签匹配。

@@ -28,6 +28,20 @@ applicable_to: 在 Go+Gin+GORM 后端与 Mastra AI 服务之间落地「LLM 结�
 - run_code 程序里拼接含反引号的 TS 源码会被模板字面量截断，用 `String.fromCharCode(96)` 或按行数组 join。
 - 根目录 `pnpm lint` 会卡住数分钟：ESLint 9 不读 `.gitignore`，把 `apps/zhixu-ai/.mastra/output`（349 个打包文件 / 26MB）也当作源码格式化。在 `eslint.config.js` 的 ignores 里补 `**/.mastra/**` 后 lint 从「>10 分钟」降到 5 秒。
 
+## 2026-11-11 修复：整理字段长度校验（commit 3a35dc7）
+
+**症状**：AI 日志持续出现 `STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED: keywords.N Too big: expected string to have <=20 characters`（如 “React Server Components” 24 字符），模型重试后仍失败，Go 侧按 502 反复重试直到任务 failed。
+
+**根因三层**：
+
+1. `organizeDraftSchema` 把 keywords 每项卡在 20 字符、summary 卡在 200 字符，而 **Mastra 在 `agent.generate` 内部先用该 schema 校验 structuredOutput**，超限直接 throw，`normalizeDraft` 的截断逻辑没有机会执行。
+2. 该 throw 被当成上游故障 → `OrganizeUpstreamError` → 路由 502 → Go 判定可重试，白烧 3 次模型调用。
+3. Go `OrganizeKeywordMaxRunes=20`、`sanitizeDraft` 对超长 summary 直接 `ErrOrganizeInvalidOutput`、前端 `KEYWORD_MAX_RUNES=20` 同样过窄。
+
+**改法**：拆 `organizeDraftWireSchema`（模型侧宽松：summary ≤400、keywords 每项 ≤40）与 `organizeDraftSchema`（产品侧 summary ≤200）；`clampSummary` 在 200 字内按句读边界截断（下限 100 字）；`isSchemaValidationError` 识别 Mastra 校验错误并转 422；Go 常量 20→40 且 summary 超长改为截断兜底。
+
+**验证**：把日志中原本失败的真实模型输出原样回放——wire 与 product schema 均通过、24 字符英文术语完整保留；260 字摘要截断到 198 字且落在句号；`pnpm verify` exit 0；AI 测试 43→50 项通过。
+
 ## 可沉淀模式
 
 - **单向同步契约替代回调**：AI 侧只做无副作用生成并同步返回，Go 侧落草稿，用户确认后再写正式字段。省掉 AI→Go 回调的鉴权、重放与乱序补偿。
