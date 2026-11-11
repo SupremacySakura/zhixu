@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 
 const {
   buildOrganizePrompt,
+  isSchemaValidationError,
   normalizeDraft,
   organizeDraftSchema,
+  organizeDraftWireSchema,
   organizeSchema,
 } = await import("../lib/organize.ts");
 
@@ -49,13 +51,18 @@ test("organize schema rejects unusable requests", () => {
     { ...valid, model: { ...valid.model, dimension: 1024 } },
   ];
   for (const input of cases) {
-    assert.equal(organizeSchema.safeParse(input).success, false, JSON.stringify(input).slice(0, 80));
+    assert.equal(
+      organizeSchema.safeParse(input).success,
+      false,
+      JSON.stringify(input).slice(0, 80),
+    );
   }
 });
 
 test("draft schema accepts a normal model answer", () => {
   const draft = {
-    summary: "HNSW 用分层图结构实现近似最近邻检索，在召回率和延迟之间取得平衡。",
+    summary:
+      "HNSW 用分层图结构实现近似最近邻检索，在召回率和延迟之间取得平衡。",
     keywords: ["HNSW", "近似最近邻", "图索引", "向量检索", "分层"],
     suggestedTags: ["向量数据库", "检索算法"],
     concepts: ["HNSW", "KNN", "可导航小世界图"],
@@ -72,7 +79,10 @@ test("draft schema rejects empty or oversized answers", () => {
     concepts: [],
   };
   assert.equal(organizeDraftSchema.safeParse(draft).success, true);
-  assert.equal(organizeDraftSchema.safeParse({ ...draft, summary: "" }).success, false);
+  assert.equal(
+    organizeDraftSchema.safeParse({ ...draft, summary: "" }).success,
+    false,
+  );
   assert.equal(
     organizeDraftSchema.safeParse({ ...draft, keywords: [] }).success,
     false,
@@ -84,6 +94,58 @@ test("draft schema rejects empty or oversized answers", () => {
     }).success,
     false,
   );
+});
+
+test("draft schemas tolerate long English technical terms", () => {
+  const draft = {
+    summary:
+      "创建 React 应用时推荐从全栈框架起步，例如 Next.js App Router、React Router v7 与 Expo。",
+    keywords: ["全栈框架", "Next.js App Router", "React Server Components"],
+    suggestedTags: ["React", "前端框架"],
+    concepts: ["React Server Components"],
+  };
+  assert.equal(organizeDraftWireSchema.safeParse(draft).success, true);
+  assert.equal(organizeDraftSchema.safeParse(draft).success, true);
+});
+
+test("wire schema is looser than the product schema on summary length", () => {
+  const draft = {
+    summary: "长".repeat(260),
+    keywords: ["向量检索"],
+    suggestedTags: [],
+    concepts: [],
+  };
+  assert.equal(organizeDraftWireSchema.safeParse(draft).success, true);
+  assert.equal(organizeDraftSchema.safeParse(draft).success, false);
+});
+
+test("normalizeDraft clamps an oversized summary at a sentence boundary", () => {
+  const sentence = "这是一句完整的摘要内容，用来验证截断逻辑。";
+  const normalized = normalizeDraft({
+    summary: sentence.repeat(20),
+    keywords: ["React Server Components"],
+  });
+  assert.ok([...normalized.summary].length <= 200);
+  assert.match(normalized.summary, /。$/);
+  assert.deepEqual(normalized.keywords, ["React Server Components"]);
+});
+
+test("isSchemaValidationError recognizes Mastra structured-output failures", () => {
+  assert.equal(
+    isSchemaValidationError({
+      id: "STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED",
+      message: "boom",
+    }),
+    true,
+  );
+  assert.equal(
+    isSchemaValidationError(
+      new Error("Structured output validation failed: keywords.4"),
+    ),
+    true,
+  );
+  assert.equal(isSchemaValidationError(new Error("connection reset")), false);
+  assert.equal(isSchemaValidationError(null), false);
 });
 
 test("normalizeDraft trims, dedupes and caps model output", () => {

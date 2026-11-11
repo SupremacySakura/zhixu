@@ -124,6 +124,15 @@ describe('knowledge organize panel', () => {
     expect(wrapper.text()).toContain('采纳整理结果')
   })
 
+  it('accepts an English technical keyword longer than 20 characters', async () => {
+    mockGet.mockResolvedValue(makeState('succeeded', makeDraft()))
+    const wrapper = await render()
+    const input = wrapper.get('input[placeholder="输入关键词后回车添加"]')
+    await input.setValue('React Server Components')
+    await input.trigger('keydown.enter')
+    expect(wrapper.text()).toContain('React Server Components')
+  })
+
   it('submits edited content and splits tag ids from new tag names', async () => {
     mockGet.mockResolvedValue(makeState('succeeded', makeDraft()))
     const updated = makeItem({ summary: '改后的摘要', keywords: ['分块'] })
