@@ -120,6 +120,28 @@ describe('KnowledgeGraphChart', () => {
     wrapper.unmount()
   })
 
+  it('筛选后节点与边集合变化时重建 option，只保留剩余节点与边', async () => {
+    const wrapper = render()
+    await nextTick()
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(1)
+
+    await wrapper.setProps({ edges: edges.filter(edge => edge.status === 'confirmed') })
+    await nextTick()
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
+    let option = mocks.chart.setOption.mock.calls.at(-1)?.[0]
+    expect(option.series[0].data).toHaveLength(2)
+    expect(option.series[0].links).toHaveLength(1)
+    expect(option.series[0].links[0].id).toBe('10')
+
+    await wrapper.setProps({ nodes: [nodes[0]], edges: [] })
+    await nextTick()
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(3)
+    option = mocks.chart.setOption.mock.calls.at(-1)?.[0]
+    expect(option.series[0].data).toHaveLength(1)
+    expect(option.series[0].links).toHaveLength(0)
+    wrapper.unmount()
+  })
+
   it('点击节点时向父组件抛出节点 id', async () => {
     const wrapper = render()
     await nextTick()

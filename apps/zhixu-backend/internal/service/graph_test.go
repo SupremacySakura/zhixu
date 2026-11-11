@@ -17,10 +17,16 @@ type graphFakeStore struct {
 	nodeErr          error
 	recent           []repository.GraphNodeRow
 	recentLimit      int
+	recentFilter     repository.GraphNodeFilter
 	nodes            map[uint]repository.GraphNodeRow
 	nodeIDs          []uint
+	nodesFilter      repository.GraphNodeFilter
+	nodeRows         []repository.GraphNodeRow
+	nodeRowsSet      bool
 	relations        []model.KnowledgeRelation
+	relationsAmong   []model.KnowledgeRelation
 	relationIDs      []uint
+	amongIDs         []uint
 	includeSuggested bool
 }
 
@@ -34,13 +40,18 @@ func (f *graphFakeStore) GetNode(_ context.Context, _ uint, id uint) (*repositor
 	return nil, gorm.ErrRecordNotFound
 }
 
-func (f *graphFakeStore) ListRecentNodes(_ context.Context, _ uint, limit int) ([]repository.GraphNodeRow, error) {
+func (f *graphFakeStore) ListRecentNodes(_ context.Context, _ uint, filter repository.GraphNodeFilter, limit int) ([]repository.GraphNodeRow, error) {
+	f.recentFilter = filter
 	f.recentLimit = limit
 	return f.recent, nil
 }
 
-func (f *graphFakeStore) ListNodesByIDs(_ context.Context, _ uint, ids []uint) ([]repository.GraphNodeRow, error) {
+func (f *graphFakeStore) ListNodesByIDs(_ context.Context, _ uint, filter repository.GraphNodeFilter, ids []uint) ([]repository.GraphNodeRow, error) {
 	f.nodeIDs = ids
+	f.nodesFilter = filter
+	if f.nodeRowsSet {
+		return f.nodeRows, nil
+	}
 	rows := make([]repository.GraphNodeRow, 0, len(ids))
 	for _, id := range ids {
 		if row, ok := f.nodes[id]; ok {
@@ -53,6 +64,14 @@ func (f *graphFakeStore) ListNodesByIDs(_ context.Context, _ uint, ids []uint) (
 func (f *graphFakeStore) ListRelations(_ context.Context, _ uint, ids []uint, includeSuggested bool) ([]model.KnowledgeRelation, error) {
 	f.relationIDs = ids
 	f.includeSuggested = includeSuggested
+	return f.relations, nil
+}
+
+func (f *graphFakeStore) ListRelationsAmong(_ context.Context, _ uint, ids []uint, includeSuggested bool) ([]model.KnowledgeRelation, error) {
+	f.amongIDs = ids
+	if f.relationsAmong != nil {
+		return f.relationsAmong, nil
+	}
 	return f.relations, nil
 }
 
@@ -106,7 +125,7 @@ func TestGraphWithoutCenterBuildsRecentSubgraph(t *testing.T) {
 	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{})
 	require.NoError(t, err)
 	require.Equal(t, 50, store.recentLimit)
-	require.ElementsMatch(t, []uint{1, 2, 3}, store.relationIDs)
+	require.ElementsMatch(t, []uint{1, 2, 3}, store.amongIDs)
 	require.False(t, view.Truncated)
 	require.Len(t, view.Nodes, 3)
 	require.Len(t, view.Edges, 2)
@@ -136,7 +155,7 @@ func TestGraphWithCenterReturnsOneHopNeighbors(t *testing.T) {
 	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{CenterID: 5})
 	require.NoError(t, err)
 	require.Equal(t, []uint{5}, store.relationIDs)
-	require.ElementsMatch(t, []uint{6, 7, 8}, store.nodeIDs)
+	require.ElementsMatch(t, []uint{5, 6, 7, 8}, store.nodeIDs)
 	require.False(t, view.Truncated)
 	require.Len(t, view.Nodes, 3)
 	require.Equal(t, uint(5), view.Nodes[0].ID, "中心节点排在首位")
@@ -240,4 +259,114 @@ func graphNodeIDs(view GraphView) []uint {
 		ids = append(ids, node.ID)
 	}
 	return ids
+}
+
+// 筛选参数透传到仓储，关系只取两端都在筛选结果内的边。
+func TestGraphPassesTagAndSourceFilter(t *testing.T) {
+	store := &graphFakeStore{
+		recent: []repository.GraphNodeRow{
+			graphRow(1, "网页一", "web", graphBaseTime),
+			graphRow(2, "网页二", "web", graphBaseTime),
+		},
+		relations: []model.KnowledgeRelation{
+			{ID: 41, SourceID: 1, TargetID: 2, RelationType: model.RelationTypeRelated, Status: model.RelationConfirmed, Source: model.RelationSourceAI},
+		},
+	}
+
+	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{TagID: 7, SourceType: "web"})
+	require.NoError(t, err)
+	require.Equal(t, repository.GraphNodeFilter{TagID: 7, SourceType: "web"}, store.recentFilter)
+	require.Equal(t, 50, store.recentLimit)
+	require.ElementsMatch(t, []uint{1, 2}, store.amongIDs)
+	require.Len(t, view.Nodes, 2)
+	require.Len(t, view.Edges, 1)
+}
+
+// 中心不满足筛选时返回空图 200，而不是知识不存在 404；也不再请求关系。
+func TestGraphCenterOutsideFilterReturnsEmpty(t *testing.T) {
+	center := graphRow(5, "中心知识", "manual", graphBaseTime)
+	neighbor := graphRow(6, "网页邻居", "web", graphBaseTime)
+	store := &graphFakeStore{
+		node:        &center,
+		nodes:       map[uint]repository.GraphNodeRow{5: center, 6: neighbor},
+		nodeRows:    []repository.GraphNodeRow{neighbor},
+		nodeRowsSet: true,
+		relations: []model.KnowledgeRelation{
+			{ID: 51, SourceID: 5, TargetID: 6, RelationType: model.RelationTypeRelated, Status: model.RelationConfirmed, Source: model.RelationSourceManual},
+		},
+	}
+
+	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{CenterID: 5, SourceType: "web"})
+	require.NoError(t, err)
+	require.Equal(t, repository.GraphNodeFilter{SourceType: "web"}, store.nodesFilter)
+	require.Empty(t, view.Nodes)
+	require.Empty(t, view.Edges)
+	require.Nil(t, store.amongIDs)
+}
+
+// 中心满足筛选时，只有同样满足筛选的一跳邻居与其关系进入子图。
+func TestGraphFilterTrimsNeighborsAndEdges(t *testing.T) {
+	center := graphRow(5, "中心知识", "manual", graphBaseTime)
+	manualNeighbor := graphRow(6, "手动邻居", "manual", graphBaseTime)
+	webNeighbor := graphRow(7, "网页邻居", "web", graphBaseTime)
+	store := &graphFakeStore{
+		node:        &center,
+		nodes:       map[uint]repository.GraphNodeRow{5: center, 6: manualNeighbor, 7: webNeighbor},
+		nodeRows:    []repository.GraphNodeRow{center, manualNeighbor},
+		nodeRowsSet: true,
+		relations: []model.KnowledgeRelation{
+			{ID: 52, SourceID: 5, TargetID: 6, RelationType: model.RelationTypeRelated, Status: model.RelationConfirmed, Source: model.RelationSourceManual},
+			{ID: 53, SourceID: 5, TargetID: 7, RelationType: model.RelationTypeRelated, Status: model.RelationConfirmed, Source: model.RelationSourceAI},
+		},
+		relationsAmong: []model.KnowledgeRelation{
+			{ID: 52, SourceID: 5, TargetID: 6, RelationType: model.RelationTypeRelated, Status: model.RelationConfirmed, Source: model.RelationSourceManual},
+		},
+	}
+
+	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{CenterID: 5, SourceType: "manual"})
+	require.NoError(t, err)
+	require.Equal(t, repository.GraphNodeFilter{SourceType: "manual"}, store.nodesFilter)
+	require.ElementsMatch(t, []uint{5, 6}, store.amongIDs)
+	require.Len(t, view.Nodes, 2)
+	require.Len(t, view.Edges, 1)
+	require.True(t, graphEdgeExists(view, 5, 6))
+	require.NotContains(t, graphNodeIDs(view), uint(7))
+}
+
+// source_type 只接受 manual/web；其他值返回空集 200，且不查询存储。
+func TestGraphInvalidSourceTypeReturnsEmpty(t *testing.T) {
+	store := &graphFakeStore{}
+	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{SourceType: "pdf"})
+	require.NoError(t, err)
+	require.Empty(t, view.Nodes)
+	require.Empty(t, view.Edges)
+	require.False(t, view.Truncated)
+	require.Zero(t, store.recentLimit)
+}
+
+// 筛选后的节点集同样受 100 上限约束，中心不被裁掉且度数按筛后边重算。
+func TestGraphFilteredTruncationKeepsCenter(t *testing.T) {
+	center := graphRow(900, "中心知识", "web", graphBaseTime)
+	nodes := map[uint]repository.GraphNodeRow{900: center}
+	relations := make([]model.KnowledgeRelation, 0, 120)
+	rows := []repository.GraphNodeRow{center}
+	for id := uint(1); id <= 120; id++ {
+		nodes[id] = graphRow(id, "网页邻居", "web", graphBaseTime)
+		rows = append(rows, nodes[id])
+		relations = append(relations, model.KnowledgeRelation{ID: 300 + id, SourceID: 900, TargetID: id, RelationType: model.RelationTypeRelated, Status: model.RelationConfirmed, Source: model.RelationSourceAI})
+	}
+	store := &graphFakeStore{
+		node:           &center,
+		nodes:          nodes,
+		relations:      relations,
+		relationsAmong: relations,
+	}
+
+	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{CenterID: 900, SourceType: "web"})
+	require.NoError(t, err)
+	require.True(t, view.Truncated)
+	require.Len(t, view.Nodes, 100)
+	require.Equal(t, uint(900), view.Nodes[0].ID)
+	require.Len(t, view.Edges, 99)
+	require.Equal(t, 99, graphNodeByID(t, view, 900).Degree)
 }

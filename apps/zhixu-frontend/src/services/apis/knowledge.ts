@@ -471,14 +471,24 @@ export interface KnowledgeGraph {
   /** 节点超过上限时按连接度截断。 */
   truncated: boolean
 }
+export interface KnowledgeGraphQuery {
+  centerId?: number
+  includeSuggested?: boolean
+  /** 只看命中该标签的知识；0 或省略表示全部标签。 */
+  tagId?: number
+  /** 只看该来源类型的知识：manual/web；空字符串表示全部来源。 */
+  sourceType?: string
+}
+
 /** 局部图谱：不带中心取最近更新的 50 条知识，带中心只展开一跳。 */
-export async function getKnowledgeGraph(
-  centerId?: number,
-  includeSuggested = false,
-  signal?: AbortSignal,
-) {
-  const params: Record<string, number> = { depth: 1, include_suggested: includeSuggested ? 1 : 0 }
-  if (centerId && centerId > 0) params.center_id = centerId
+export async function getKnowledgeGraph(options: KnowledgeGraphQuery = {}, signal?: AbortSignal) {
+  const params: Record<string, string | number> = {
+    depth: 1,
+    include_suggested: options.includeSuggested ? 1 : 0,
+  }
+  if (options.centerId && options.centerId > 0) params.center_id = options.centerId
+  if (options.tagId && options.tagId > 0) params.tag_id = options.tagId
+  if (options.sourceType) params.source_type = options.sourceType
   return unwrap(
     (await request.get<ResponseData<KnowledgeGraph>>('/api/knowledge/graph', { params, signal }))
       .data,
