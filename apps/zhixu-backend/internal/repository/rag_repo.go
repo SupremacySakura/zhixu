@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	"zhixu-backend/internal/model"
 
@@ -39,4 +40,29 @@ func (r *RagRepository) KnowledgeTitles(ctx context.Context, user uint, ids []ui
 		titles[item.ID] = item.Title
 	}
 	return titles, nil
+}
+
+// SearchChunksKeyword matches the query against the caller's live chunks through
+// the ngram full-text index, strongest relevance first. The joins keep archived
+// or non-ready knowledge out of the candidate set, mirroring the semantic path.
+func (r *RagRepository) SearchChunksKeyword(ctx context.Context, user uint, query string, limit int) ([]model.KnowledgeChunk, error) {
+	query = strings.TrimSpace(query)
+	if query == "" || limit <= 0 {
+		return nil, nil
+	}
+	var chunks []model.KnowledgeChunk
+	err := r.DB.WithContext(ctx).Raw(`
+		SELECT knowledge_chunks.*
+		FROM knowledge_chunks
+		JOIN knowledge_items
+			ON knowledge_items.id = knowledge_chunks.knowledge_id
+			AND knowledge_items.user_id = knowledge_chunks.user_id
+		WHERE knowledge_chunks.user_id = ?
+			AND knowledge_chunks.state = ?
+			AND knowledge_items.status = ?
+			AND knowledge_items.archived_at IS NULL
+			AND MATCH(knowledge_chunks.content) AGAINST(? IN NATURAL LANGUAGE MODE)
+		ORDER BY MATCH(knowledge_chunks.content) AGAINST(? IN NATURAL LANGUAGE MODE) DESC, knowledge_chunks.id ASC
+		LIMIT ?`, user, "ready", model.KnowledgeReady, query, query, limit).Scan(&chunks).Error
+	return chunks, err
 }

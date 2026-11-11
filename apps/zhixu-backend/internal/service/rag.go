@@ -26,6 +26,9 @@ const (
 
 type RagChunkStore interface {
 	ChunksByIDs(context.Context, uint, []uint) ([]model.KnowledgeChunk, error)
+	// SearchChunksKeyword is the keyword leg of hybrid retrieval: ngram full-text
+	// matches with the same user and readiness isolation as the chunk hydration.
+	SearchChunksKeyword(context.Context, uint, string, int) ([]model.KnowledgeChunk, error)
 	Collections(context.Context, uint, uint64) ([]string, error)
 	KnowledgeTitles(context.Context, uint, []uint) (map[uint]string, error)
 }

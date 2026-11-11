@@ -108,14 +108,13 @@ func TestEnsureQueryIndexes(t *testing.T) {
 			}), &gorm.Config{})
 			require.NoError(t, err)
 
-			for _, index := range queryIndexes {
+			indexes := append(queryIndexDDLs(), fulltextIndexDDLs()...)
+			for _, index := range indexes {
 				mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?")).
 					WithArgs(index.table, index.name).
 					WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(scenario.existing))
 				if scenario.existing == 0 {
-					exec := mock.ExpectExec(regexp.QuoteMeta(fmt.Sprintf(
-						"CREATE INDEX `%s` ON `%s` (%s)", index.name, index.table, index.columns,
-					)))
+					exec := mock.ExpectExec(regexp.QuoteMeta(index.ddl))
 					if scenario.ddlError != nil {
 						exec.WillReturnError(scenario.ddlError)
 					} else {
@@ -127,6 +126,9 @@ func TestEnsureQueryIndexes(t *testing.T) {
 				}
 			}
 			err = ensureQueryIndexes(db)
+			if err == nil {
+				err = ensureFulltextIndexes(db)
+			}
 			if scenario.wantErr {
 				require.Error(t, err)
 			} else {

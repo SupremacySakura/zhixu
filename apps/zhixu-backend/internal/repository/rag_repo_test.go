@@ -26,3 +26,28 @@ func TestRagChunkHydrationRequiresLiveOwnedKnowledge(t *testing.T) {
 	require.Empty(t, chunks)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestRagKeywordSearchUsesNgramIndexAndLiveOwnedKnowledge(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	rows := sqlmock.NewRows([]string{"id", "knowledge_id", "user_id", "seq", "content", "state"}).
+		AddRow(11, 7, 7, 1, "回滚方案说明", "ready").
+		AddRow(12, 7, 7, 2, "回滚步骤", "ready")
+	mock.ExpectQuery(`SELECT knowledge_chunks\.\* FROM knowledge_chunks JOIN knowledge_items .*WHERE knowledge_chunks\.user_id = \?.*MATCH\(knowledge_chunks\.content\) AGAINST\(\? IN NATURAL LANGUAGE MODE\).*ORDER BY MATCH\(knowledge_chunks\.content\) AGAINST\(\? IN NATURAL LANGUAGE MODE\) DESC.*LIMIT \?`).
+		WithArgs(uint(7), "ready", model.KnowledgeReady, "回滚", "回滚", 5).
+		WillReturnRows(rows)
+	chunks, err := (&RagRepository{DB: db}).SearchChunksKeyword(context.Background(), 7, " 回滚 ", 5)
+	require.NoError(t, err)
+	require.Len(t, chunks, 2)
+	require.Equal(t, uint(11), chunks[0].ID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRagKeywordSearchSkipsBlankQuery(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	chunks, err := (&RagRepository{DB: db}).SearchChunksKeyword(context.Background(), 7, "   ", 5)
+	require.NoError(t, err)
+	require.Empty(t, chunks)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

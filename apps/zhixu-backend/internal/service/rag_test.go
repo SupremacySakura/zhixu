@@ -13,6 +13,7 @@ import (
 
 type ragChunkStoreFake struct {
 	chunks      []model.KnowledgeChunk
+	keyword     []model.KnowledgeChunk
 	titles      map[uint]string
 	err         error
 	collections []string
@@ -20,6 +21,10 @@ type ragChunkStoreFake struct {
 
 func (f *ragChunkStoreFake) Collections(context.Context, uint, uint64) ([]string, error) {
 	return f.collections, f.err
+}
+
+func (f *ragChunkStoreFake) SearchChunksKeyword(_ context.Context, _ uint, _ string, _ int) ([]model.KnowledgeChunk, error) {
+	return f.keyword, nil
 }
 
 func (f *ragChunkStoreFake) ChunksByIDs(_ context.Context, _ uint, ids []uint) ([]model.KnowledgeChunk, error) {
