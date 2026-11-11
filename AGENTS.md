@@ -19,3 +19,15 @@
 ## 工具专属目录
 - .trae/ — Trae IDE 工作空间（已 gitignore，不作为项目知识来源）
 - .sisyphus/ — OpenCode 执行引擎（plans 是执行计划，非学习日志）
+
+## Agent skills
+
+### Issue tracking
+- 议题和规格存在 GitHub Issues（`SupremacySakura/zhixu`），统一用 `gh` CLI 操作。详见 [docs/agents/issue-tracker.md](./docs/agents/issue-tracker.md)。
+
+### Triage labels
+- 分诊使用五种规范标签：`needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`。详见 [docs/agents/triage-labels.md](./docs/agents/triage-labels.md)。
+
+### Domain docs
+- 单上下文布局：领域术语在根 `GLOSSARY.md`，架构决策在 `docs/adr/`。详见 [docs/agents/domain.md](./docs/agents/domain.md)。
+
