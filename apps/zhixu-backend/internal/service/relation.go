@@ -117,8 +117,7 @@ func (s *RelationService) Create(ctx context.Context, userID, knowledgeID uint, 
 	if input.TargetID == knowledgeID {
 		return nil, fmt.Errorf("%w: 不能与自身建立关系", ErrRelationInvalid)
 	}
-	source, err := s.knowledge.Get(ctx, userID, knowledgeID)
-	if err != nil {
+	if _, err := s.knowledge.Get(ctx, userID, knowledgeID); err != nil {
 		return nil, knowledgeError(err)
 	}
 	target, err := s.knowledge.Get(ctx, userID, input.TargetID)
@@ -143,9 +142,9 @@ func (s *RelationService) Create(ctx context.Context, userID, knowledgeID uint, 
 	}
 	view := relationViewFromRecord(repository.RelationRecord{KnowledgeRelation: *created})
 	if created.SourceID != knowledgeID {
-		// 对称类型入库时按 min/max 归一，对端要按归一后的方向取。
+		// 对称类型入库时按 min/max 归一：当前知识成了 target，对端是 source。
 		view.CounterpartID = created.SourceID
-		view.CounterpartTitle = source.Title
+		view.CounterpartTitle = target.Title
 	} else {
 		view.CounterpartID = created.TargetID
 		view.CounterpartTitle = target.Title

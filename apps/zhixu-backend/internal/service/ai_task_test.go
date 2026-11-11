@@ -43,6 +43,13 @@ type aiTaskFakeStore struct {
 	succeeds   []aiTaskSucceedCall
 	fails      []aiTaskFailCall
 	payloads   []aiTaskPayloadCall
+
+	hasExists bool
+	hasErr    error
+	hasCalls  int
+	hasUser   uint
+	hasType   string
+	hasTarget uint
 }
 
 func (f *aiTaskFakeStore) Enqueue(_ context.Context, task model.AiTask) (*model.AiTask, error) {
@@ -82,6 +89,12 @@ func (f *aiTaskFakeStore) Fail(_ context.Context, task *model.AiTask, message st
 func (f *aiTaskFakeStore) UpdatePayload(_ context.Context, userID, taskID uint, payload string) error {
 	f.payloads = append(f.payloads, aiTaskPayloadCall{userID: userID, taskID: taskID, payload: payload})
 	return nil
+}
+
+func (f *aiTaskFakeStore) HasTaskForTarget(_ context.Context, userID uint, taskType string, targetID uint) (bool, error) {
+	f.hasCalls++
+	f.hasUser, f.hasType, f.hasTarget = userID, taskType, targetID
+	return f.hasExists, f.hasErr
 }
 
 type aiTaskFakeProcessor struct {
@@ -130,6 +143,20 @@ func TestAiTaskServiceEnqueueRelationUsesKnowledgeDedupeKey(t *testing.T) {
 	require.NotNil(t, store.enqueued.DedupeKey)
 	require.Equal(t, "relation:9", *store.enqueued.DedupeKey)
 	require.JSONEq(t, `{"knowledge_id":9,"base_version":5}`, store.enqueued.Payload)
+}
+
+func TestAiTaskServiceHasTaskForTargetDelegates(t *testing.T) {
+	svc, store, _ := newAiTaskFixture(model.AiTaskTypeRelation)
+	store.hasExists = true
+
+	found, err := svc.HasTaskForTarget(context.Background(), 2, model.AiTaskTypeRelation, 9)
+
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, 1, store.hasCalls)
+	require.Equal(t, uint(2), store.hasUser)
+	require.Equal(t, model.AiTaskTypeRelation, store.hasType)
+	require.Equal(t, uint(9), store.hasTarget)
 }
 
 func TestAiTaskServiceProcessNextWithoutProcessors(t *testing.T) {

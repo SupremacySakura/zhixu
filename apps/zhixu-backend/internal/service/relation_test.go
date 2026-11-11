@@ -40,11 +40,20 @@ type relationTypeUpdate struct {
 	relationType model.RelationType
 }
 
+// normalizeTestRelationPair 复刻仓储的对称归一，保证 service 视图测试走真实落库方向。
+func normalizeTestRelationPair(relationType model.RelationType, sourceID, targetID uint) (uint, uint) {
+	if relationType.Symmetric() && sourceID > targetID {
+		return targetID, sourceID
+	}
+	return sourceID, targetID
+}
+
 func (f *relationFakeStore) Create(_ context.Context, relation *model.KnowledgeRelation) (*model.KnowledgeRelation, error) {
 	if f.createErr != nil {
 		return nil, f.createErr
 	}
 	relation.ID = 41
+	relation.SourceID, relation.TargetID = normalizeTestRelationPair(relation.RelationType, relation.SourceID, relation.TargetID)
 	f.created = relation
 	return relation, nil
 }
@@ -168,6 +177,35 @@ func TestCreateRelationBuildsConfirmedManualView(t *testing.T) {
 	require.Equal(t, "目标知识", view.CounterpartTitle)
 	require.Equal(t, uint(3), store.created.SourceID)
 	require.Equal(t, uint(9), store.created.TargetID)
+}
+
+// 对称类型入库后方向可能翻转：对端必须是翻转后的另一侧，标题取对端知识而不是当前知识。
+func TestCreateRelationResolvesCounterpartAfterSymmetricNormalization(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		knowledgeID     uint
+		targetID        uint
+		relationType    model.RelationType
+		wantCounterpart uint
+		wantTitle       string
+	}{
+		{"related 当前 id 较小", 3, 9, model.RelationTypeRelated, 9, "目标知识"},
+		{"related 当前 id 较大", 9, 3, model.RelationTypeRelated, 3, "源知识"},
+		{"contrasts 当前 id 较小", 3, 9, model.RelationTypeContrasts, 9, "目标知识"},
+		{"contrasts 当前 id 较大", 9, 3, model.RelationTypeContrasts, 3, "源知识"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _, _ := newRelationFixture()
+
+			view, err := svc.Create(context.Background(), 2, tc.knowledgeID, RelationCreateInput{
+				TargetID: tc.targetID, RelationType: tc.relationType,
+			})
+
+			require.NoError(t, err)
+			require.Equal(t, tc.wantCounterpart, view.CounterpartID)
+			require.Equal(t, tc.wantTitle, view.CounterpartTitle)
+		})
+	}
 }
 
 // 非法类型、缺目标、指向自身都算参数错误（400）。
@@ -320,6 +358,7 @@ func TestConfirmSuggestionRecordsConfirmationTime(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, view)
 	require.Equal(t, model.RelationConfirmed, view.Status)
+	require.Equal(t, model.RelationSourceAI, view.Source, "确认 AI 建议不得把来源改成 manual")
 	require.NotNil(t, view.ConfirmedAt)
 	require.WithinDuration(t, time.Now(), *view.ConfirmedAt, time.Minute)
 	require.Equal(t, "目标知识", view.CounterpartTitle)

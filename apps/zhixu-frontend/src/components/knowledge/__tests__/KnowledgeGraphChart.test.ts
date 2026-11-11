@@ -120,6 +120,17 @@ describe('KnowledgeGraphChart', () => {
     wrapper.unmount()
   })
 
+  it('边标签显示中文关系类型且使用小字号', async () => {
+    const wrapper = render()
+    await nextTick()
+    const series = mocks.chart.setOption.mock.calls.at(-1)?.[0].series[0]
+    expect(series.edgeLabel.show).toBe(true)
+    expect(series.edgeLabel.fontSize).toBe(10)
+    expect(series.edgeLabel.formatter({ data: { relation_type: 'related' } })).toBe('相关')
+    expect(series.edgeLabel.formatter({ data: { relation_type: 'depends_on' } })).toBe('依赖')
+    wrapper.unmount()
+  })
+
   it('筛选后节点与边集合变化时重建 option，只保留剩余节点与边', async () => {
     const wrapper = render()
     await nextTick()

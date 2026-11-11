@@ -35,8 +35,9 @@ func normalizeRelationPair(relationType model.RelationType, sourceID, targetID u
 }
 
 // Create 写入关系并返回落库后的行。同一对知识同类型已存在时复用旧行：
-// AI 推荐留下的 suggested/rejected 行会被提升为已确认并改为手动来源，不插入第二行。
-// 并发插入命中唯一键时回读旧行，对上层表现为幂等。
+// suggested 行只提升状态、保留 AI 来源（用户只是确认建议）；rejected 行被手动添加
+// 命中时改为 confirmed + manual（覆盖用户此前的忽略决定）。并发插入命中唯一键时
+// 回读旧行，对上层表现为幂等。
 func (r *RelationRepository) Create(ctx context.Context, relation *model.KnowledgeRelation) (*model.KnowledgeRelation, error) {
 	relation.SourceID, relation.TargetID = normalizeRelationPair(relation.RelationType, relation.SourceID, relation.TargetID)
 	existing, err := r.findPair(ctx, relation)
@@ -59,13 +60,15 @@ func (r *RelationRepository) Create(ctx context.Context, relation *model.Knowled
 	return relation, nil
 }
 
-// CreateSuggestion 写入 AI 建议：同一对知识只要已有任意状态的关系（含已拒绝）就不再插入，
-// 既不覆盖用户已确认的行，也不重复堆积建议。并发命中唯一键时同样视为已存在。
+// CreateSuggestion 写入 AI 建议：同一对知识同类型只要已有任意状态的关系（含已拒绝）
+// 就不再插入，既不覆盖用户已确认的行，也不重复堆积建议；不同类型可以共存。
+// 并发命中唯一键时同样视为已存在。
 func (r *RelationRepository) CreateSuggestion(ctx context.Context, relation *model.KnowledgeRelation) (bool, error) {
 	relation.SourceID, relation.TargetID = normalizeRelationPair(relation.RelationType, relation.SourceID, relation.TargetID)
 	var count int64
 	if err := r.DB.WithContext(ctx).Model(&model.KnowledgeRelation{}).
-		Where("user_id = ? AND source_id = ? AND target_id = ?", relation.UserID, relation.SourceID, relation.TargetID).
+		Where("user_id = ? AND source_id = ? AND target_id = ? AND relation_type = ?",
+			relation.UserID, relation.SourceID, relation.TargetID, relation.RelationType).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -90,16 +93,20 @@ func (r *RelationRepository) findPair(ctx context.Context, relation *model.Knowl
 	return &row, err
 }
 
-// confirm 把旧行提升为已确认的手动关系；已是已确认行时原样返回。
+// confirm 把旧行提升为已确认关系；已是已确认行时原样返回。
+// 只有被手动添加命中的 rejected 行才改为 manual：确认一条 AI 建议不应篡改来源。
 func (r *RelationRepository) confirm(ctx context.Context, relation *model.KnowledgeRelation) (*model.KnowledgeRelation, error) {
 	if relation.Status == model.RelationConfirmed {
 		return relation, nil
 	}
 	confirmedAt := time.Now()
+	wasRejected := relation.Status == model.RelationRejected
 	updates := map[string]any{
 		"status":       model.RelationConfirmed,
-		"source":       model.RelationSourceManual,
 		"confirmed_at": confirmedAt,
+	}
+	if wasRejected {
+		updates["source"] = model.RelationSourceManual
 	}
 	if err := r.DB.WithContext(ctx).Model(&model.KnowledgeRelation{}).
 		Where("id = ? AND user_id = ?", relation.ID, relation.UserID).
@@ -107,7 +114,9 @@ func (r *RelationRepository) confirm(ctx context.Context, relation *model.Knowle
 		return nil, err
 	}
 	relation.Status = model.RelationConfirmed
-	relation.Source = model.RelationSourceManual
+	if wasRejected {
+		relation.Source = model.RelationSourceManual
+	}
 	relation.ConfirmedAt = &confirmedAt
 	return relation, nil
 }

@@ -308,12 +308,24 @@ type relationEnqueuerFake struct {
 	calls                     int
 	userID, knowledgeID, base uint
 	err                       error
+
+	hasCalls           int
+	hasExists          bool
+	hasErr             error
+	hasUser, hasTarget uint
+	hasType            string
 }
 
 func (f *relationEnqueuerFake) EnqueueRelation(_ context.Context, userID, knowledgeID, baseVersion uint) error {
 	f.calls++
 	f.userID, f.knowledgeID, f.base = userID, knowledgeID, baseVersion
 	return f.err
+}
+
+func (f *relationEnqueuerFake) HasTaskForTarget(_ context.Context, userID uint, taskType string, targetID uint) (bool, error) {
+	f.hasCalls++
+	f.hasUser, f.hasType, f.hasTarget = userID, taskType, targetID
+	return f.hasExists, f.hasErr
 }
 
 // 向量化成功就绪是关联任务的唯一触发点：带上知识版本，并只入队一次。
@@ -327,10 +339,44 @@ func TestProcessNextEnqueuesRelationAfterVectorReady(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, processed)
 	require.Empty(t, store.finished)
+	require.Equal(t, 1, relations.hasCalls)
+	require.Equal(t, uint(7), relations.hasUser)
+	require.Equal(t, model.AiTaskTypeRelation, relations.hasType)
+	require.Equal(t, uint(9), relations.hasTarget)
 	require.Equal(t, 1, relations.calls)
 	require.Equal(t, uint(7), relations.userID)
 	require.Equal(t, uint(9), relations.knowledgeID)
 	require.Equal(t, uint(5), relations.base)
+}
+
+// 编辑正文会再次触发向量化，但规格不允许它自动重跑推荐：已有任意状态的关系任务就不再入队。
+func TestProcessNextDoesNotEnqueueRelationWhenTaskAlreadyExists(t *testing.T) {
+	service, store, _, _ := newVectorizeFixture(nil)
+	relations := &relationEnqueuerFake{hasExists: true}
+	service.Relations = relations
+
+	processed, err := service.ProcessNext(context.Background())
+
+	require.NoError(t, err)
+	require.True(t, processed)
+	require.Empty(t, store.finished)
+	require.Equal(t, 1, relations.hasCalls)
+	require.Zero(t, relations.calls)
+}
+
+// 查询失败时保守跳过自动入队，人工“查找相关知识”仍可显式触发。
+func TestProcessNextDoesNotEnqueueRelationWhenTaskLookupFails(t *testing.T) {
+	service, store, _, _ := newVectorizeFixture(nil)
+	relations := &relationEnqueuerFake{hasErr: errors.New("db down")}
+	service.Relations = relations
+
+	processed, err := service.ProcessNext(context.Background())
+
+	require.NoError(t, err)
+	require.True(t, processed)
+	require.Empty(t, store.finished)
+	require.Equal(t, 1, relations.hasCalls)
+	require.Zero(t, relations.calls)
 }
 
 func TestProcessNextDoesNotEnqueueRelationAfterFailure(t *testing.T) {
