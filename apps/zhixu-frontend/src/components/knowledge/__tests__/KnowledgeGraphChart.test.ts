@@ -6,6 +6,7 @@ import KnowledgeGraphChart from '../KnowledgeGraphChart.vue'
 const mocks = vi.hoisted(() => {
   const chart = {
     setOption: vi.fn(),
+    dispatchAction: vi.fn(),
     resize: vi.fn(),
     dispose: vi.fn(),
     on: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('echarts/core', () => ({ init: mocks.init, use: mocks.use }))
 vi.mock('echarts/charts', () => ({ GraphChart: {} }))
 vi.mock('echarts/components', () => ({ TooltipComponent: {} }))
 vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }))
+vi.mock('echarts/features', () => ({ LabelLayout: {} }))
 
 const palette = {
   source: {
@@ -127,6 +129,67 @@ describe('KnowledgeGraphChart', () => {
     expect(wrapper.emitted('node-click')).toEqual([[2]])
     click({ dataType: 'edge', data: { id: '10' } })
     expect(wrapper.emitted('node-click')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('按需注册力导向图、提示框、Canvas 渲染器与标签布局', async () => {
+    const wrapper = render()
+    await nextTick()
+    expect(mocks.use.mock.calls[0]?.[0]).toHaveLength(4)
+    wrapper.unmount()
+  })
+
+  it('选中样式由 series.select 提供，节点数据内置选中标志已移除', async () => {
+    const wrapper = render({ selectedId: 1 })
+    await nextTick()
+    const option = mocks.chart.setOption.mock.calls.at(-1)?.[0]
+    expect(option.series[0].select.itemStyle.borderWidth).toBe(3)
+    expect(
+      option.series[0].data.every((item: Record<string, unknown>) => !('selected' in item)),
+    ).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('切换选中节点只派发 select/unselect，不重建图表', async () => {
+    const wrapper = render({ selectedId: 1 })
+    await nextTick()
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(1)
+    expect(mocks.chart.dispatchAction).toHaveBeenCalledWith({
+      type: 'select',
+      seriesIndex: 0,
+      dataIndex: 0,
+    })
+
+    await wrapper.setProps({ selectedId: 2 })
+    await nextTick()
+    // 仍是同一张图：没有新的 setOption（重建会重置力导向布局与缩放）。
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(1)
+    expect(mocks.chart.dispatchAction).toHaveBeenCalledWith({
+      type: 'unselect',
+      seriesIndex: 0,
+      dataIndex: 0,
+    })
+    expect(mocks.chart.dispatchAction).toHaveBeenCalledWith({
+      type: 'select',
+      seriesIndex: 0,
+      dataIndex: 1,
+    })
+
+    await wrapper.setProps({ selectedId: null })
+    await nextTick()
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(1)
+    expect(mocks.chart.dispatchAction).toHaveBeenLastCalledWith({
+      type: 'unselect',
+      seriesIndex: 0,
+      dataIndex: 1,
+    })
+    wrapper.unmount()
+  })
+
+  it('selectedId 指向图外节点时不选中任何节点', async () => {
+    const wrapper = render({ selectedId: 99 })
+    await nextTick()
+    expect(mocks.chart.dispatchAction).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
