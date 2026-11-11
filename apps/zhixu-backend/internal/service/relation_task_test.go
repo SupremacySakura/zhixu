@@ -401,6 +401,43 @@ func TestRelationProcessorSeparatesEmbeddingAndJudgementExcerpts(t *testing.T) {
 	require.Equal(t, 1200, len([]rune(f.suggester.gotCandidates[0].Excerpt)))
 }
 
+// 标题也占用嵌入文本预算：超长标题 + 1000 字正文不得把 /vectorize 的单条文本顶到上限外，
+// 判定侧摘录仍按自己的 2000 字上限截断，不受影响。
+func TestRelationProcessorKeepsEmbeddingTextWithinBudget(t *testing.T) {
+	f := newRelationTaskFixture()
+	f.pairs.rows = nil
+	f.suggester.relations = nil
+	f.knowledge.items[12].Title = strings.Repeat("题", 200)
+	f.knowledge.items[12].Summary = ""
+	f.knowledge.items[12].Content = strings.Repeat("源", 2500)
+	f.searcher.matches = []VectorMatch{
+		{ChunkID: 1, KnowledgeID: 12, Score: 0.99},
+		{ChunkID: 2, KnowledgeID: 21, Score: 0.90},
+		{ChunkID: 3, KnowledgeID: 22, Score: 0.80},
+	}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.embedder.texts, 1)
+	require.LessOrEqual(t, len([]rune(f.embedder.texts[0])), RelationEmbeddingTextMaxRunes, "嵌入文本超上限会被 AI 侧整批 400 拒绝")
+	require.True(t, strings.HasPrefix(f.embedder.texts[0], strings.Repeat("题", 200)+"\n"))
+	require.Equal(t, 2000, len([]rune(f.suggester.gotExcerpt)))
+}
+
+// 嵌入请求被 AI 侧拒绝（400/403）时直接判终态，不再退避重试。
+func TestRelationProcessorTerminalWhenEmbeddingRejected(t *testing.T) {
+	f := newRelationTaskFixture()
+	f.embedder.err = &EmbeddingRejectedError{Status: http.StatusBadRequest}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	terminal := requireTerminalError(t, err)
+	require.Contains(t, terminal.Message, "HTTP 400")
+	require.Zero(t, f.suggester.calls)
+	require.Empty(t, f.pairs.created)
+}
+
 // 知识不存在/已归档/未就绪属于终态失败，不做付费调用也不重试。
 func TestRelationProcessorTerminalKnowledgeFailures(t *testing.T) {
 	now := time.Now()

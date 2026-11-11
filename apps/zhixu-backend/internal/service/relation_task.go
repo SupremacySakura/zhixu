@@ -80,6 +80,8 @@ func (p *RelationProcessor) Process(ctx context.Context, task *model.AiTask) (js
 	if embeddingBody == "" {
 		return nil, TerminalTaskError("知识尚未就绪，无法生成关联建议")
 	}
+	// 标题一起计入长度预算：AI 侧对单条文本有上限，超长会让整批请求被 400 拒绝。
+	embeddingText := truncateRunes(source.Title+"\n"+embeddingBody, RelationEmbeddingTextMaxRunes)
 
 	// 模型配置先解析对话能力：它缺失时直接终止，不发起任何付费调用。
 	chat, err := p.Chat.ResolveChatModel(ctx, userID)
@@ -91,9 +93,14 @@ func (p *RelationProcessor) Process(ctx context.Context, task *model.AiTask) (js
 		return nil, TerminalTaskError("未配置可用的 Embedding 模型，请前往模型设置")
 	}
 	embedCtx, cancel := context.WithTimeout(ctx, 110*time.Second)
-	vectors, err := p.Embedder.Embed(embedCtx, snapshot, []string{source.Title + "\n" + embeddingBody})
+	vectors, err := p.Embedder.Embed(embedCtx, snapshot, []string{embeddingText})
 	cancel()
 	if err != nil {
+		// 400/403 表示文本或模型配置不合规：同一输入重试只会再次被拒，直接判终态。
+		var rejected *EmbeddingRejectedError
+		if errors.As(err, &rejected) {
+			return nil, TerminalTaskError(rejected.Error())
+		}
 		return nil, err
 	}
 	if len(vectors) != 1 || len(vectors[0]) == 0 {

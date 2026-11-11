@@ -56,6 +56,7 @@ status: in-progress
 - **关系类型（5 种，2026-11-11 定）**：related / depends_on / supplements / contrasts / updates（界面显示相关、依赖、补充说明、对比、更新替代）。合并了原计划的 extends/supports/contradicts，只补 P4-W4.3 需要的 updates；理由与取舍见 [ADR-0001](../adr/0001-knowledge-relation-model.md)。
 - **方向与判重**：有向存储；related、contrasts 两种对称类型写入前按 min/max id 归一，A→B 已存在则不再插 B→A；其余三种保持严格方向。
 - **契约（2026-11-11 简化，取消 AI→Go 回调）**：Go→AI `POST {CHAT_AI_URL}/relate`（Bearer INTERNAL_API_SECRET，同步返回）：请求 `{version:1, model{protocol,model_id,base_url,api_key}, taskId, knowledgeId, knowledge{title, excerpt}, candidates:[{knowledge_id, title, excerpt, score}]}`；响应 `{relations:[{target_id, relation_type, confidence, evidence{reason, source_quote, target_quote}}]}`。
+- **嵌入文本长度预算**：送 `/vectorize` 的文本 = 标题 + 换行 + 代表文本（1000 字），标题一起计入预算并按 `RelationEmbeddingTextMaxRunes`（1201）截断；AI 侧单条文本上限 4096 字符。400/403 视为不可重试（文本或模型配置不合规），只有 5xx/超时才退避重试——否则超长文本会被反复重试到终态失败。
 - **候选生成（Go 侧）**：用「标题 + 已采纳摘要（无摘要取正文前 1000 字）」嵌入一次向量 → Qdrant Search top 50 → 按 `knowledge_id` 归并取最高分 → 过滤自身/归档/已有关系对/已拒绝对 → Top 10 送模型；相似度 < 0.55 直接丢弃。
 - **AI 服务**：Mastra `POST /relate`（严格 zod 校验 + `agent.generate(..., {structuredOutput})`，单条非法丢弃而非整批失败）；最多 5 条建议，置信度 < 0.6 由 Go 侧再过滤；Schema 失败内部重试 1 次后返回 422。
 - **触发**：向量化就绪（`vector_state=ready`）后自动入队 `relation` 任务，`dedupe_key=relation:<knowledgeID>`；不向对端扩散（避免一次导入触发雪崩）；详情页「查找相关知识」可手动重跑，新建议与既有建议合并。

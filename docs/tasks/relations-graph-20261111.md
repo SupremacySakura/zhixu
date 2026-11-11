@@ -42,6 +42,17 @@ P3 的 W3.4/W3.5 与 P4 的 W4.1 依赖同一张 `knowledge_relations` 表：先
 - **复用被拒绝行时只改该改的字段**：确认 AI 建议应保留 source=ai，只有手动添加复用 rejected 行才改成 manual；否则"来源"事实被覆盖。
 - **测试通过不等于验收通过**：图谱页、边标签、缩放与抽屉交互最终仍需真机手测（本轮服务未启动，未做）。
 
+## 2026-11-11 修复：嵌入文本超长导致「查找相关知识」必失败
+
+- **现象**：点「让 AI 找相关知识」约 3.5 分钟后失败，面板只显示「Embedding 调用失败，请检查 Mastra、模型地址、凭据及额度」，Mastra 与 Go 日志都没有错误行。
+- **根因**：relation 任务发给 `/vectorize` 的文本是「标题 + 换行 + 代表文本（1000 字）」，而 AI 侧 schema 把单条文本卡在 1024 字符。中文标题 ≥24 字时总长即超限 → `safeParse` 失败 → AI 返回 400（catch 分支不打日志）→ Go 把任何非 200 都压成同一句可重试错误 → 30/60/120 秒退避重试 3 次后 failed。实测：知识 #33/#34（标题 26/28 字、无已采纳摘要）每次必失败；#35 在采纳 169 字摘要后文本变短，同一任务随即成功。
+- **修复**：
+  - `apps/zhixu-ai/src/lib/vectorize.ts`：单条文本上限 1024 → 4096（覆盖「标题 200 字 + 代表文本 1000 字」的最坏 UTF-16 长度，也覆盖长提问的查询向量化）。
+  - `apps/zhixu-backend/internal/service/relation_task.go`：标题计入嵌入文本预算，先拼接再按 `RelationEmbeddingTextMaxRunes`（代表文本 1000 + 标题 200 + 换行）截断，长度不再依赖远端上限。
+  - `apps/zhixu-backend/internal/service/embedding.go`：400/403 返回 `EmbeddingRejectedError`（带状态码），5xx/超时文案也带状态码；relation 任务对前者直接判终态，不再空转重试。
+  - `apps/zhixu-ai/src/mastra/vectorize.ts`：catch 里加 `console.error`（只记错误摘要，不记正文、凭据与供应商响应）。
+- **测试**：AI 侧 1029 字符文本通过、4097 拒绝；Go 侧 400 归类为拒绝、502 仍可重试、200 字标题下嵌入文本不超预算、被拒绝时终态失败且不调模型。
+
 ## 已知限制（候选改进）
 
 - 图谱关系查询未加 LIMIT，超级枢纽节点会把全部关联行读入内存后再截断，超大关系量有放大风险。
@@ -54,5 +65,6 @@ P3 的 W3.4/W3.5 与 P4 的 W4.1 依赖同一张 `knowledge_relations` 表：先
 ## 验证
 
 - `pnpm verify` 全绿：根级 lint、typecheck、前端 Vitest（46 文件 / 310 项）、前端 build、Go build 与 go test（config/database/handler/middleware/repository/router/service/utils）。
-- `pnpm typecheck:ai` 通过；AI 侧无新增依赖。
+- `pnpm typecheck:ai` 通过（AI 侧 51 项测试）；AI 侧无新增依赖。
+- 2026-11-11 修复嵌入超长后：用知识 #34 的真实标题 + 1000 字正文（1029 字符）复跑，schema 通过、Ollama 返回 768 维向量；`pnpm verify` 全绿。
 - 未 push、未开 PR；真机端到端（导入相似文档 → 建议出现 → 确认 → 图谱可见）需用户重启 `pnpm dev` 与 Mastra 后手测。

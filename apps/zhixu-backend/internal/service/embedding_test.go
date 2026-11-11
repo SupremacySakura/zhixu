@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -61,6 +62,42 @@ func TestMastraEmbedderRejectsMismatchedResponse(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
+}
+
+// 400/403 是契约或配置错误：必须暴露成可判定的拒绝类型并带状态码，
+// 否则调用方会当成瞬时故障退避重试，用户白等三分钟还看不到真实原因。
+func TestMastraEmbedderClassifiesRejectedRequests(t *testing.T) {
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"Invalid vectorize input"}`))
+	}))
+	defer ai.Close()
+	snapshot := &ChatCapability{
+		Model:    model.ProviderModel{Kind: "embedding", ModelID: "embeddinggemma", Dimension: 2},
+		Provider: model.ModelProvider{BaseURL: "http://127.0.0.1:11434/v1", Protocol: "chat"},
+	}
+	_, err := (&MastraEmbedder{AIURL: ai.URL, Secret: testInternalSecret}).Embed(context.Background(), snapshot, []string{"第一段"})
+	var rejected *EmbeddingRejectedError
+	require.ErrorAs(t, err, &rejected)
+	require.Equal(t, http.StatusBadRequest, rejected.Status)
+	require.Contains(t, err.Error(), "HTTP 400")
+	require.Contains(t, err.Error(), "文本长度")
+}
+
+// 上游 5xx 仍按可重试错误返回，且文案里要能看到状态码。
+func TestMastraEmbedderKeepsUpstreamFailureRetryable(t *testing.T) {
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer ai.Close()
+	snapshot := &ChatCapability{
+		Model:    model.ProviderModel{Kind: "embedding", ModelID: "embeddinggemma", Dimension: 2},
+		Provider: model.ModelProvider{BaseURL: "http://127.0.0.1:11434/v1", Protocol: "chat"},
+	}
+	_, err := (&MastraEmbedder{AIURL: ai.URL, Secret: testInternalSecret}).Embed(context.Background(), snapshot, []string{"第一段"})
+	var rejected *EmbeddingRejectedError
+	require.False(t, errors.As(err, &rejected))
+	require.Contains(t, err.Error(), "HTTP 502")
 }
 
 func TestMastraEmbedderRequiresInternalSecret(t *testing.T) {

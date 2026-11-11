@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -20,6 +21,14 @@ import (
 type MastraEmbedder struct {
 	AIURL  string
 	Secret string
+}
+
+// EmbeddingRejectedError 表示 AI 服务拒绝了请求本身（HTTP 400/403）：文本过长或模型配置
+// 不合规，重试只会重复同一次拒绝。调用方据此把任务直接判终态，不再空转退避重试。
+type EmbeddingRejectedError struct{ Status int }
+
+func (e *EmbeddingRejectedError) Error() string {
+	return fmt.Sprintf("Embedding 请求被拒绝（HTTP %d），请检查文本长度与模型配置", e.Status)
 }
 
 func ValidateEmbeddings(vectors [][]float64, count, dimension int) error {
@@ -74,7 +83,13 @@ func (e *MastraEmbedder) Embed(ctx context.Context, snapshot *ChatCapability, te
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, errors.New("Embedding 调用失败，请检查 Mastra、模型地址、凭据及额度")
+		// 带上状态码：没有它，排障时只能看到一句通用文案，无法区分契约错误与上游故障。
+		switch response.StatusCode {
+		case http.StatusBadRequest, http.StatusForbidden:
+			return nil, &EmbeddingRejectedError{Status: response.StatusCode}
+		default:
+			return nil, fmt.Errorf("Embedding 调用失败（HTTP %d），请检查 Mastra、模型地址、凭据及额度", response.StatusCode)
+		}
 	}
 	var result struct {
 		Embeddings [][]float64 `json:"embeddings"`

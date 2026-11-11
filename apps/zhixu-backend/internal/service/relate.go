@@ -34,6 +34,10 @@ const (
 	RelationCandidateExcerptMaxRunes = 1200
 	// RelationEmbeddingBodyMaxRunes 是代表文本（无摘要时取正文）的嵌入上限。
 	RelationEmbeddingBodyMaxRunes = 1000
+	// RelationEmbeddingTextMaxRunes 是送给 /vectorize 的单条文本上限：标题（≤200 字，见
+	// validateKnowledgeTitle）+ 换行 + 代表文本。标题必须一起计入预算，否则长中文标题会把
+	// 文本顶到 AI 侧 schema 上限之上，整批请求被 400 拒绝——历史上「查找相关知识」正是这样必失败。
+	RelationEmbeddingTextMaxRunes = RelationEmbeddingBodyMaxRunes + 201
 	// relationQuoteMaxRunes 是证据引文的单侧长度上限。
 	relationQuoteMaxRunes = 200
 )
