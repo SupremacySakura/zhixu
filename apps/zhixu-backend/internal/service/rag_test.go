@@ -95,9 +95,9 @@ func newRagFixture(chunks []model.KnowledgeChunk) (*RagSearcher, *ragVectorFake)
 
 func TestRagSearchReturnsRankedSources(t *testing.T) {
 	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
-		{ID: 11, KnowledgeID: 9, UserID: 7, Section: "部署 / 回滚", Content: "回滚步骤与注意事项", State: "ready"},
-		{ID: 12, KnowledgeID: 9, UserID: 7, Section: "部署", Content: "发布前的检查清单", State: "ready"},
-		{ID: 13, KnowledgeID: 9, UserID: 7, Section: "旧任务", Content: "仍在等待向量化", State: "pending"},
+		{ID: 11, KnowledgeID: 9, UserID: 7, Seq: 3, Section: "部署 / 回滚", Content: "回滚步骤与注意事项", State: "ready"},
+		{ID: 12, KnowledgeID: 9, UserID: 7, Seq: 5, Section: "部署", Content: "发布前的检查清单", State: "ready"},
+		{ID: 13, KnowledgeID: 9, UserID: 7, Seq: 6, Section: "旧任务", Content: "仍在等待向量化", State: "pending"},
 	})
 	vectors.matches = []VectorMatch{{ChunkID: 12, Score: 0.91}, {ChunkID: 11, Score: 0.83}, {ChunkID: 13, Score: 0.4}, {ChunkID: 99, Score: 0.1}}
 	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "回滚步骤"})
@@ -113,6 +113,8 @@ func TestRagSearchReturnsRankedSources(t *testing.T) {
 	require.Equal(t, "发布流程", result.Sources[0].Title)
 	require.InDelta(t, 0.91, result.Sources[0].Score, 1e-9)
 	require.Equal(t, uint(9), result.Sources[0].KnowledgeID)
+	require.Equal(t, uint(12), result.Sources[0].ChunkID)
+	require.Equal(t, 5, result.Sources[0].Seq)
 	require.Equal(t, "回滚步骤与注意事项", result.Sources[1].Content)
 }
 

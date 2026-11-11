@@ -35,6 +35,8 @@ type ChatTurnSource struct {
 // user as a citation. Mirrored from the AI service's rag contract.
 type KnowledgeSource struct {
 	KnowledgeID uint    `json:"knowledge_id"`
+	ChunkID     uint    `json:"chunk_id"`
+	Seq         int     `json:"seq"`
 	Title       string  `json:"title"`
 	Section     string  `json:"section"`
 	Content     string  `json:"content"`

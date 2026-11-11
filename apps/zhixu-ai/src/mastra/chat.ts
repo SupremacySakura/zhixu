@@ -91,6 +91,8 @@ const searchResultSchema = z.object({
   sources: z.array(
     z.object({
       knowledge_id: z.number(),
+      chunk_id: z.number(),
+      seq: z.number(),
       title: z.string(),
       section: z.string(),
       content: z.string(),

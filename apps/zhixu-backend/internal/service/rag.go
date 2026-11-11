@@ -59,11 +59,15 @@ type RagChunkStore interface {
 }
 
 type RagSource struct {
-	KnowledgeID uint    `json:"knowledge_id"`
-	Title       string  `json:"title"`
-	Section     string  `json:"section"`
-	Content     string  `json:"content"`
-	Score       float64 `json:"score"`
+	KnowledgeID uint `json:"knowledge_id"`
+	// ChunkID and Seq let the UI link a citation straight to the matching chunk
+	// preview (readable chunk number) instead of only the document.
+	ChunkID uint    `json:"chunk_id"`
+	Seq     int     `json:"seq"`
+	Title   string  `json:"title"`
+	Section string  `json:"section"`
+	Content string  `json:"content"`
+	Score   float64 `json:"score"`
 	// Source records which leg produced the passage: keyword, semantic or both.
 	Source string `json:"source"`
 }
@@ -374,7 +378,8 @@ func (s *RagSearcher) hydrate(ctx context.Context, user uint, ranked []rankedChu
 			content = string([]rune(content)[:RagMaxChunkChars])
 		}
 		sources = append(sources, RagSource{
-			KnowledgeID: chunk.KnowledgeID, Title: titles[chunk.KnowledgeID],
+			KnowledgeID: chunk.KnowledgeID, ChunkID: chunk.ID, Seq: chunk.Seq,
+			Title:   titles[chunk.KnowledgeID],
 			Section: chunk.Section, Content: content, Score: candidate.score, Source: candidate.source,
 		})
 		if len(sources) == topK {

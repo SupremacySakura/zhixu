@@ -213,6 +213,55 @@ describe('ChatPage', () => {
     expect(wrapper.text()).toContain('抽屉里的问题')
     wrapper.unmount()
   })
+  it('links citations to the cited chunk', async () => {
+    configureModel()
+    vi.mocked(listConversations).mockResolvedValue([
+      { id: 'c1', title: '旧会话', created_at: '', updated_at: '' },
+    ])
+    vi.mocked(getConversation).mockResolvedValue({
+      conversation: { id: 'c1', title: '旧会话', created_at: '', updated_at: '' },
+      messages: [
+        { role: 'user', content: '发布流程是什么', created_at: '' },
+        {
+          role: 'assistant',
+          content: '见参考来源。',
+          created_at: '',
+          sources: [
+            {
+              knowledge_id: 9,
+              chunk_id: 12,
+              seq: 5,
+              title: '发布流程',
+              section: '部署',
+              content: '发布前的检查清单',
+              score: 0.91,
+            },
+          ],
+        },
+      ],
+    })
+    const citationGlobal = {
+      stubs: {
+        RouterLink: {
+          props: ['to'],
+          template: '<a :data-to="JSON.stringify(to)"><slot /></a>',
+        },
+        teleport: true,
+      },
+    }
+    const wrapper = mount(ChatPage, { global: citationGlobal })
+    await flushPromises()
+    await wrapper
+      .findAll('aside button')
+      .find(b => b.text() === '旧会话')!
+      .trigger('click')
+    await flushPromises()
+    const citation = wrapper.findAll('a').find(a => a.attributes('data-to')?.includes('/chunks'))
+    expect(citation).toBeTruthy()
+    expect(citation!.attributes('data-to')).toContain('"chunk":"5"')
+    expect(citation!.text()).toContain('[1] 发布流程')
+    wrapper.unmount()
+  })
   it('starts a new chat from the drawer without confirmation when empty', async () => {
     configureModel()
     const wrapper = mount(ChatPage, { global })

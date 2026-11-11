@@ -8,6 +8,7 @@ import SettingsModal from '../components/ui/SettingsModal.vue'
 import ConversationSidebar from '../components/chat/ConversationSidebar.vue'
 import { useAISettings } from '../composables/useAISettings'
 import { useChat } from '../composables/useChat'
+import type { ChatSource } from '../services/apis/chat'
 const { configuration, loading, error, load } = useAISettings()
 const {
   messages,
@@ -30,6 +31,11 @@ const transcript = ref<HTMLElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
 const confirmation = ref<string | null>(null)
 const copyStatus = ref('')
+// Citations point at the exact chunk preview when the turn recorded a chunk number.
+function citationTarget(source: ChatSource) {
+  const path = `/home/knowledge/${source.knowledge_id}/chunks`
+  return source.seq ? { path, query: { chunk: String(source.seq) } } : path
+}
 const options = computed(
   () =>
     configuration.value?.providers.flatMap(p =>
@@ -304,9 +310,7 @@ onMounted(() => {
               </summary>
               <ol class="mt-3 space-y-3">
                 <li v-for="(source, order) in message.sources" :key="order">
-                  <RouterLink
-                    :to="`/home/knowledge/${source.knowledge_id}/chunks`"
-                    class="text-primary-pressed"
+                  <RouterLink :to="citationTarget(source)" class="text-primary-pressed"
                     >[{{ order + 1 }}] {{ source.title || '未命名文档' }}</RouterLink
                   >
                   <span class="ml-2 text-label-secondary">{{ source.section }}</span>

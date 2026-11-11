@@ -14,6 +14,9 @@ export type SearchTools = z.infer<typeof searchToolsSchema>;
 
 export interface KnowledgeSource {
   knowledge_id: number;
+  // Chunk identity used by the UI to open the exact passage behind a citation.
+  chunk_id: number;
+  seq: number;
   title: string;
   section: string;
   content: string;
@@ -62,6 +65,8 @@ export async function searchKnowledge(
   return (result.sources ?? []).filter(
     (source) =>
       Number.isInteger(source.knowledge_id) &&
+      Number.isInteger(source.chunk_id) &&
+      Number.isInteger(source.seq) &&
       typeof source.title === "string" &&
       typeof source.section === "string" &&
       typeof source.content === "string" &&
