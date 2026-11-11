@@ -92,6 +92,26 @@ const mountPanel = () =>
 const findButton = (wrapper: ReturnType<typeof mountPanel>, label: string) =>
   wrapper.findAll('button').find(button => button.text().includes(label))
 
+/** 打开项目内的 FilterMenu（面板已不再使用原生下拉框）并点选指定文案。 */
+const chooseOption = async (
+  wrapper: ReturnType<typeof mountPanel>,
+  label: string,
+  option: string,
+) => {
+  const trigger = wrapper
+    .findAll('button[aria-haspopup="menu"]')
+    .find(button => button.attributes('aria-label') === label)
+  expect(trigger).toBeTruthy()
+  await trigger!.trigger('click')
+  await flushPromises()
+  const item = wrapper
+    .findAll('[role="menuitemradio"]')
+    .find(button => button.text().trim() === option)
+  expect(item).toBeTruthy()
+  await item!.trigger('click')
+  await flushPromises()
+}
+
 describe('relation type labels', () => {
   it('exposes the five Chinese labels and keeps their order', () => {
     expect(RELATION_TYPE_LABELS).toEqual({
@@ -170,7 +190,7 @@ describe('KnowledgeRelationsPanel', () => {
     expect(wrapper.text()).not.toContain('已归档知识')
     expect(wrapper.text()).not.toContain('当前知识')
     await options[0].trigger('click')
-    await wrapper.find('select[aria-label="关系类型"]').setValue('contrasts')
+    await chooseOption(wrapper, '关系类型', '对比')
     vi.mocked(createKnowledgeRelation).mockResolvedValue(
       relation({
         id: 42,
@@ -305,7 +325,7 @@ describe('KnowledgeRelationsPanel suggestions', () => {
     )
     const wrapper = mountPanel()
     await flushPromises()
-    const button = findButton(wrapper, '查找相关知识')
+    const button = findButton(wrapper, '正在查找')
     expect(button?.attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('正在查找')
   })
@@ -335,11 +355,13 @@ describe('KnowledgeRelationsPanel suggestions', () => {
     vi.mocked(updateKnowledgeRelationType).mockResolvedValue(relation({ relation_type: 'updates' }))
     const wrapper = mountPanel()
     await flushPromises()
-    const select = wrapper.find('select[aria-label="修改与目标知识的关系类型"]')
-    await select.setValue('updates')
-    await flushPromises()
+    await chooseOption(wrapper, '修改与目标知识的关系类型', '更新替代')
     expect(updateKnowledgeRelationType).toHaveBeenCalledWith(41, 'updates')
-    expect((select.element as HTMLSelectElement).value).toBe('updates')
+    const trigger = wrapper
+      .findAll('button[aria-haspopup="menu"]')
+      .find(button => button.attributes('aria-label') === '修改与目标知识的关系类型')
+    expect(trigger?.text()).toContain('更新替代')
+    expect(wrapper.find('select').exists()).toBe(false)
   })
 
   it('links to the graph centered on the current knowledge', async () => {

@@ -84,6 +84,22 @@ async function render(path = '/home/knowledge/graph') {
   return { wrapper, router }
 }
 
+/** 打开项目内的 FilterMenu 并点选指定文案：页面不再使用浏览器原生下拉框。 */
+async function chooseFilter(wrapper: ReturnType<typeof mount>, label: string, option: string) {
+  const trigger = wrapper
+    .findAll('button[aria-haspopup="menu"]')
+    .find(button => button.attributes('aria-label') === label)
+  expect(trigger).toBeTruthy()
+  await trigger!.trigger('click')
+  await flushPromises()
+  const item = wrapper
+    .findAll('[role="menuitemradio"]')
+    .find(button => button.text().trim() === option)
+  expect(item).toBeTruthy()
+  await item!.trigger('click')
+  await flushPromises()
+}
+
 beforeEach(() => {
   vi.mocked(getKnowledgeGraph).mockReset()
   vi.mocked(listKnowledge).mockReset()
@@ -113,15 +129,20 @@ describe('KnowledgeGraph 页面', () => {
     expect(wrapper.find('[data-test="chart"]').text()).toContain('中心知识')
   })
 
-  it('标签下拉展示接口返回的标签并带全部标签选项', async () => {
+  it('标签下拉复用项目内的筛选菜单并带全部标签选项', async () => {
     vi.mocked(listTags).mockResolvedValue({
       items: [{ id: 7, name: '研究', usage_count: 2 }],
       total: 1,
     })
     const { wrapper } = await render()
-    const options = wrapper.find('[data-test="tag-filter"]').findAll('option')
-    expect(options.map(option => option.text())).toEqual(['全部标签', '研究'])
-    expect(options.map(option => option.attributes('value'))).toEqual(['0', '7'])
+    const trigger = wrapper.find('[data-test="tag-filter"] button[aria-haspopup="menu"]')
+    expect(trigger.text()).toContain('全部标签')
+    await trigger.trigger('click')
+    await flushPromises()
+    const options = wrapper.findAll('[role="menuitemradio"]')
+    expect(options.map(option => option.text().trim())).toEqual(['全部标签', '研究'])
+    expect(options[0].attributes('aria-checked')).toBe('true')
+    expect(wrapper.find('select').exists()).toBe(false)
   })
 
   it('切换标签后重新请求并同步减少节点与边', async () => {
@@ -129,8 +150,7 @@ describe('KnowledgeGraph 页面', () => {
       options.tagId === 7 ? { nodes: [graph.nodes[0]], edges: [], truncated: false } : { ...graph },
     )
     const { wrapper } = await render()
-    await wrapper.find('[data-test="tag-filter"]').setValue('7')
-    await flushPromises()
+    await chooseFilter(wrapper, '筛选标签', '研究')
     expect(getKnowledgeGraph).toHaveBeenLastCalledWith(
       expect.objectContaining({ tagId: 7, sourceType: undefined, centerId: undefined }),
       expect.any(AbortSignal),
@@ -149,10 +169,8 @@ describe('KnowledgeGraph 页面', () => {
         : { ...graph },
     )
     const { wrapper } = await render()
-    await wrapper.find('[data-test="tag-filter"]').setValue('7')
-    await flushPromises()
-    await wrapper.find('[data-test="source-filter"]').setValue('web')
-    await flushPromises()
+    await chooseFilter(wrapper, '筛选标签', '研究')
+    await chooseFilter(wrapper, '筛选来源类型', '网页导入')
     expect(getKnowledgeGraph).toHaveBeenLastCalledWith(
       expect.objectContaining({ tagId: 7, sourceType: 'web' }),
       expect.any(AbortSignal),
@@ -169,20 +187,21 @@ describe('KnowledgeGraph 页面', () => {
         : { ...graph },
     )
     const { wrapper } = await render()
-    const sourceSelect = wrapper.find('[data-test="source-filter"]')
-    const optionValues = sourceSelect.findAll('option').map(option => option.attributes('value'))
-    expect(optionValues).toEqual([
-      '',
-      'manual',
-      'web',
-      'markdown',
-      'text',
-      'pdf',
-      'docx',
-      'csv',
-      'xlsx',
+    await wrapper.find('[data-test="source-filter"] button[aria-haspopup="menu"]').trigger('click')
+    await flushPromises()
+    const options = wrapper.findAll('[role="menuitemradio"]')
+    expect(options.map(option => option.text().trim())).toEqual([
+      '全部来源',
+      '手动创建',
+      '网页导入',
+      'Markdown',
+      '文本',
+      'PDF',
+      'Word',
+      'CSV',
+      'Excel',
     ])
-    await sourceSelect.setValue('pdf')
+    await options.find(option => option.text().trim() === 'PDF')!.trigger('click')
     await flushPromises()
     expect(getKnowledgeGraph).toHaveBeenLastCalledWith(
       expect.objectContaining({ sourceType: 'pdf' }),
@@ -201,8 +220,11 @@ describe('KnowledgeGraph 页面', () => {
     )
     const { wrapper } = await render()
     expect(wrapper.find('[data-test="chart"]').attributes('data-edge-count')).toBe('1')
-    await wrapper.find('[data-test="suggested-toggle"]').setValue(true)
+    const toggle = wrapper.find('[data-test="suggested-toggle"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
     await flushPromises()
+    expect(wrapper.find('[data-test="suggested-toggle"]').attributes('aria-checked')).toBe('true')
     expect(getKnowledgeGraph).toHaveBeenLastCalledWith(
       expect.objectContaining({ includeSuggested: true }),
       expect.any(AbortSignal),
@@ -210,7 +232,7 @@ describe('KnowledgeGraph 页面', () => {
     const chart = wrapper.find('[data-test="chart"]')
     expect(chart.attributes('data-edge-count')).toBe('2')
     expect(chart.find('[data-edge-status="suggested"]').exists()).toBe(true)
-    await wrapper.find('[data-test="suggested-toggle"]').setValue(false)
+    await wrapper.find('[data-test="suggested-toggle"]').trigger('click')
     await flushPromises()
     expect(getKnowledgeGraph).toHaveBeenLastCalledWith(
       expect.objectContaining({ includeSuggested: false }),
@@ -236,8 +258,7 @@ describe('KnowledgeGraph 页面', () => {
       options.tagId === 7 ? { nodes: [graph.nodes[0]], edges: [], truncated: false } : { ...graph },
     )
     const { wrapper } = await render()
-    await wrapper.find('[data-test="tag-filter"]').setValue('7')
-    await flushPromises()
+    await chooseFilter(wrapper, '筛选标签', '研究')
     expect(wrapper.find('[data-test="clear-filters"]').exists()).toBe(true)
     await wrapper.find('[data-test="clear-filters"]').trigger('click')
     await flushPromises()
@@ -252,8 +273,7 @@ describe('KnowledgeGraph 页面', () => {
   it('筛选后无匹配时展示筛选空态并可清空', async () => {
     vi.mocked(getKnowledgeGraph).mockResolvedValue({ nodes: [], edges: [], truncated: false })
     const { wrapper } = await render()
-    await wrapper.find('[data-test="tag-filter"]').setValue('7')
-    await flushPromises()
+    await chooseFilter(wrapper, '筛选标签', '研究')
     expect(wrapper.text()).toContain('没有符合筛选条件的知识')
     expect(wrapper.text()).not.toContain('还没有可展示的知识')
     expect(wrapper.find('[data-test="clear-filters"]').exists()).toBe(true)
@@ -261,11 +281,13 @@ describe('KnowledgeGraph 页面', () => {
   })
 
   it('快速切换筛选会取消上一个图谱请求', async () => {
+    // 让请求一直挂起，才能观察到切换筛选时对旧请求的取消。
+    vi.mocked(getKnowledgeGraph).mockImplementation(() => new Promise(() => {}) as never)
     const { wrapper } = await render()
-    await wrapper.find('[data-test="tag-filter"]').setValue('7')
+    await chooseFilter(wrapper, '筛选标签', '研究')
     const tagSignal = vi.mocked(getKnowledgeGraph).mock.calls.at(-1)?.[1] as AbortSignal
     expect(tagSignal.aborted).toBe(false)
-    await wrapper.find('[data-test="source-filter"]').setValue('web')
+    await chooseFilter(wrapper, '筛选来源类型', '网页导入')
     expect(tagSignal.aborted).toBe(true)
     expect(getKnowledgeGraph).toHaveBeenLastCalledWith(
       expect.objectContaining({ tagId: 7, sourceType: 'web' }),
@@ -276,7 +298,7 @@ describe('KnowledgeGraph 页面', () => {
   it('仅打开建议边而图为空时仍显示默认空状态', async () => {
     vi.mocked(getKnowledgeGraph).mockResolvedValue({ nodes: [], edges: [], truncated: false })
     const { wrapper } = await render()
-    await wrapper.find('[data-test="suggested-toggle"]').setValue(true)
+    await wrapper.find('[data-test="suggested-toggle"]').trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('还没有可展示的知识')
     expect(wrapper.text()).not.toContain('没有符合筛选条件')
@@ -286,8 +308,7 @@ describe('KnowledgeGraph 页面', () => {
   it('筛选状态下仍显示截断提示', async () => {
     vi.mocked(getKnowledgeGraph).mockResolvedValue({ ...graph, truncated: true })
     const { wrapper } = await render()
-    await wrapper.find('[data-test="tag-filter"]').setValue('7')
-    await flushPromises()
+    await chooseFilter(wrapper, '筛选标签', '研究')
     expect(wrapper.text()).toContain('已截断')
   })
 
@@ -330,8 +351,7 @@ describe('KnowledgeGraph 页面', () => {
       .find(button => button.text().includes('中心知识'))
     await nodeButton?.trigger('click')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
-    await wrapper.find('[data-test="tag-filter"]').setValue('7')
-    await flushPromises()
+    await chooseFilter(wrapper, '筛选标签', '研究')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('摘要一')
   })
@@ -359,8 +379,7 @@ describe('KnowledgeGraph 页面', () => {
       expect.objectContaining({ centerId: 2 }),
       expect.any(AbortSignal),
     )
-    await wrapper.find('[data-test="tag-filter"]').setValue('7')
-    await flushPromises()
+    await chooseFilter(wrapper, '筛选标签', '研究')
     expect(getKnowledgeGraph).toHaveBeenLastCalledWith(
       expect.objectContaining({ centerId: 2, tagId: 7 }),
       expect.any(AbortSignal),

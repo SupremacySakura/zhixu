@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import { Icon } from '@iconify/vue'
 import { Motion } from 'motion-v'
 import KnowledgeGraphChart from '../components/knowledge/KnowledgeGraphChart.vue'
+import FilterMenu from '../components/ui/FilterMenu.vue'
 import type { RelationStatus } from '../services/apis/knowledge'
 import { KNOWLEDGE_FORMATS, knowledgeSourceLabel } from '../utils/knowledge'
 import { relationTypeLabel } from '../utils/relation'
@@ -41,6 +44,18 @@ const sourceOptions = [
   ...KNOWLEDGE_FORMATS.map(format => ({ key: format.type, label: format.label })),
 ]
 
+/** FilterMenu 只处理字符串键：标签用 "0" 表示全部。 */
+const tagOptions = computed(() => [
+  { key: '0', label: '全部标签' },
+  ...tags.value.map(tag => ({ key: String(tag.id), label: tag.name })),
+])
+const tagFilter = computed({
+  get: () => String(tagId.value),
+  set: value => {
+    tagId.value = Number(value) || 0
+  },
+})
+
 const STATUS_LABELS: Record<RelationStatus, string> = {
   suggested: '建议',
   confirmed: '已确认',
@@ -65,11 +80,15 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
         <div class="relative w-full max-w-sm">
           <input
             v-model="searchTerm"
-            class="knowledge-input w-full"
+            class="knowledge-input w-full pl-9"
             placeholder="搜索知识，设为图谱中心"
             type="search"
             @input="scheduleSearch"
             @focus="searchOpen = true"
+          />
+          <Icon
+            class="pointer-events-none absolute left-3 top-3.5 text-label-secondary"
+            icon="material-symbols:search"
           />
           <div
             v-if="searchOpen && (searchResults.length || searching || searchHint)"
@@ -96,38 +115,43 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
         <button type="button" class="knowledge-button-secondary" @click="backToRecent">
           回到最近
         </button>
-        <label class="flex items-center gap-2 text-caption text-label-secondary">
-          <span>标签</span>
-          <select
-            v-model.number="tagId"
-            data-test="tag-filter"
-            class="knowledge-input w-auto py-1 text-caption"
-          >
-            <option :value="0">全部标签</option>
-            <option v-for="tag in tags" :key="tag.id" :value="tag.id">{{ tag.name }}</option>
-          </select>
-        </label>
-        <label class="flex items-center gap-2 text-caption text-label-secondary">
-          <span>来源</span>
-          <select
-            v-model="sourceType"
-            data-test="source-filter"
-            class="knowledge-input w-auto py-1 text-caption"
-          >
-            <option v-for="option in sourceOptions" :key="option.key" :value="option.key">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-        <label class="flex items-center gap-2 text-caption text-label-secondary">
-          <input
-            v-model="showSuggested"
-            data-test="suggested-toggle"
-            type="checkbox"
-            class="size-4 accent-primary"
-          />
+        <FilterMenu
+          v-model="tagFilter"
+          :options="tagOptions"
+          label="筛选标签"
+          data-test="tag-filter"
+        />
+        <FilterMenu
+          v-model="sourceType"
+          :options="sourceOptions"
+          label="筛选来源类型"
+          data-test="source-filter"
+        />
+        <button
+          type="button"
+          role="switch"
+          :aria-checked="showSuggested"
+          data-test="suggested-toggle"
+          class="flex min-h-11 items-center gap-2.5 rounded-full px-[13px] text-[13px] font-semibold transition-all active:scale-[0.97]"
+          :class="
+            showSuggested
+              ? 'bg-primary-tint text-primary-pressed'
+              : 'bg-surface-tertiary text-label-secondary hover:text-label'
+          "
+          @click="showSuggested = !showSuggested"
+        >
           显示建议边
-        </label>
+          <span
+            aria-hidden="true"
+            class="relative h-5 w-9 shrink-0 rounded-full transition-colors"
+            :class="showSuggested ? 'bg-primary' : 'bg-label-tertiary'"
+          >
+            <span
+              class="absolute left-0.5 top-0.5 size-4 rounded-full bg-surface transition-transform"
+              :class="showSuggested ? 'translate-x-[16px]' : 'translate-x-0'"
+            />
+          </span>
+        </button>
         <button
           v-if="filtersActive"
           type="button"

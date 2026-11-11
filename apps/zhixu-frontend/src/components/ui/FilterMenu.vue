@@ -3,12 +3,23 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, useId } from 'vue'
 import { Icon } from '@iconify/vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { springSnappy } from '../../utils/motion'
-const props = defineProps<{
-  modelValue: string
-  options: readonly { key: string; label: string }[]
-  label: string
-  field?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    options: readonly { key: string; label: string }[]
+    label: string
+    /** 表单式外观：占满整行、带边框，用于设置面板与内嵌表单。 */
+    field?: boolean
+    /** 紧凑高度（36px），用于详情页侧栏与列表行内的选择器。 */
+    compact?: boolean
+    /** 是否显示左侧的筛选图标；紧凑选择器与列表行里通常不需要。 */
+    icon?: boolean
+    /** 禁用触发器（请求进行中时阻止再次选择）。 */
+    disabled?: boolean
+  }>(),
+  // 布尔 prop 缺省会被 Vue 转成 false，这里显式恢复“默认带筛选图标”的历史外观。
+  { icon: true },
+)
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const root = ref<HTMLElement | null>(null)
 const trigger = ref<HTMLButtonElement | null>(null)
@@ -71,17 +82,19 @@ onBeforeUnmount(() => document.removeEventListener('click', outside))
       aria-haspopup="menu"
       :aria-expanded="open"
       :aria-controls="id"
-      class="flex min-h-11 items-center gap-1.5 px-[13px] text-[13px] font-semibold text-label-secondary transition-all hover:text-label active:scale-[0.97]"
-      :class="
+      :disabled="disabled"
+      class="flex items-center gap-1.5 font-semibold text-label-secondary transition-all hover:text-label active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+      :class="[
         field
           ? 'w-full justify-between rounded-sm border border-hairline bg-surface-secondary text-left'
-          : 'rounded-full bg-surface-tertiary'
-      "
+          : 'rounded-full bg-surface-tertiary',
+        compact ? 'min-h-9 px-2.5 text-caption' : 'min-h-11 px-[13px] text-[13px]',
+      ]"
       @click="toggle"
     >
-      <Icon v-if="!field" icon="material-symbols:filter-list" /><span class="min-w-0 break-all">{{
-        selectedLabel
-      }}</span
+      <Icon v-if="icon && !field" icon="material-symbols:filter-list" /><span
+        class="min-w-0 break-all"
+        >{{ selectedLabel }}</span
       ><Icon icon="material-symbols:expand-more" class="shrink-0" />
     </button>
     <AnimatePresence>

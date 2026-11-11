@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { Icon } from '@iconify/vue'
+import FilterMenu from '../ui/FilterMenu.vue'
 import {
   confirmKnowledgeRelation,
   createKnowledgeRelation,
@@ -44,6 +46,18 @@ let timer: ReturnType<typeof setTimeout> | undefined
 
 const total = computed(() => confirmed.value.length + suggested.value.length)
 const running = computed(() => task.value?.status === 'pending' || task.value?.status === 'running')
+const hasSuggestions = computed(() => suggested.value.length > 0)
+/** 关系类型下拉复用项目内的 FilterMenu，选项转成它要求的字符串键。 */
+const relationTypeOptions = RELATION_TYPE_OPTIONS.map(option => ({
+  key: option.value,
+  label: option.label,
+}))
+/** 手动添加的关系类型：只接受关系类型表里的值。 */
+function setRelationType(value: string) {
+  if (relationTypeOptions.some(option => option.key === value)) {
+    relationType.value = value as RelationType
+  }
+}
 
 interface RelationEvidence {
   reason: string
@@ -173,8 +187,9 @@ async function reject(relation: KnowledgeRelation) {
   }
 }
 
-async function changeType(relation: KnowledgeRelation, event: Event) {
-  const next = (event.target as HTMLSelectElement).value as RelationType
+async function changeType(relation: KnowledgeRelation, value: string) {
+  const next = value as RelationType
+  if (!relationTypeOptions.some(option => option.key === next)) return
   if (next === relation.relation_type || busy.value) return
   busy.value = `type:${relation.id}`
   error.value = ''
@@ -293,101 +308,144 @@ onScopeDispose(() => {
 
 <template>
   <section class="rounded-lg border border-hairline bg-surface p-5">
-    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-      <h2 class="text-body font-semibold">相关知识</h2>
-      <div class="flex items-center gap-3">
-        <span
-          v-if="total"
-          class="rounded-full bg-surface-secondary px-2.5 py-0.5 text-caption text-label-secondary"
-          >{{ total }} 条</span
-        >
-        <RouterLink
-          :to="`/home/knowledge/graph?center=${item.id}`"
-          class="knowledge-text-action text-caption"
-          >在图谱中查看</RouterLink
-        >
+    <div class="mb-3 flex items-start justify-between gap-2">
+      <div class="min-w-0">
+        <h2 class="text-body font-semibold">相关知识</h2>
+        <p class="mt-0.5 flex items-center gap-2 text-caption text-label-tertiary">
+          <span>AI 推荐与手动维护</span>
+          <span
+            v-if="total"
+            class="rounded-full bg-surface-secondary px-2 py-0.5 text-label-secondary"
+            >{{ total }} 条</span
+          >
+        </p>
       </div>
-    </div>
-
-    <div class="mb-3 flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        class="knowledge-button-secondary min-h-9 px-3 text-caption"
-        :disabled="running || busy === 'regenerate'"
-        @click="regenerate"
-      >
-        {{ running ? '查找相关知识…' : '查找相关知识' }}
-      </button>
-      <span v-if="running" class="text-caption text-label-secondary" role="status"
-        >AI 正在查找相关知识，请稍候…</span
+      <RouterLink
+        :to="`/home/knowledge/graph?center=${item.id}`"
+        class="knowledge-text-action min-h-8 shrink-0 text-caption"
+        >在图谱中查看</RouterLink
       >
     </div>
 
-    <div
-      v-if="task?.status === 'failed'"
-      class="mb-3 rounded-md border border-hairline bg-surface-secondary p-3"
-      role="alert"
-    >
-      <p class="break-words text-caption leading-5 text-danger">
-        查找失败：{{ task.error_message || '请稍后重试' }}
+    <div class="rounded-md border border-hairline bg-surface-secondary p-3">
+      <div class="flex items-center gap-2">
+        <span
+          class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary"
+        >
+          <Icon icon="material-symbols:auto-awesome" class="text-[14px]" />
+        </span>
+        <p class="min-w-0 flex-1 text-caption font-semibold text-label">让 AI 找相关知识</p>
+      </div>
+      <p class="mt-2 text-caption leading-5 text-label-secondary">
+        按标题与摘要比对知识库，只生成待确认建议；你确认后才建立关系。
       </p>
       <button
         type="button"
-        class="knowledge-text-action mt-1 text-caption"
-        :disabled="busy === 'regenerate'"
+        class="knowledge-button-tint mt-3 min-h-9 w-full px-3 text-caption"
+        :disabled="running || busy === 'regenerate'"
         @click="regenerate"
       >
-        重试
+        <Icon
+          :icon="
+            running
+              ? 'material-symbols:progress-activity'
+              : hasSuggestions
+                ? 'material-symbols:refresh'
+                : 'material-symbols:search'
+          "
+          class="text-[16px]"
+          :class="running ? 'animate-spin' : ''"
+        />
+        {{
+          running
+            ? '正在查找…'
+            : busy === 'regenerate'
+              ? '正在提交…'
+              : hasSuggestions
+                ? '重新查找'
+                : '查找相关知识'
+        }}
       </button>
+      <p v-if="running" class="mt-2 text-caption leading-5 text-label-tertiary" role="status">
+        AI 正在比对知识库，通常需要 10–30 秒，结果会自动刷新。
+      </p>
+      <div
+        v-if="task?.status === 'failed'"
+        class="mt-2.5 rounded-sm bg-danger-tint p-2.5"
+        role="alert"
+      >
+        <p class="break-words text-caption leading-5 text-danger">
+          {{ task.error_message || '查找失败，请稍后重试。' }}
+        </p>
+        <button
+          type="button"
+          class="knowledge-text-action min-h-8 text-caption"
+          :disabled="busy === 'regenerate'"
+          @click="regenerate"
+        >
+          重试查找
+        </button>
+      </div>
     </div>
 
     <p v-if="loading" class="text-caption text-label-secondary" role="status">正在读取关系…</p>
     <template v-else>
-      <section class="mb-4" aria-label="待确认建议">
+      <section class="mt-4" aria-label="待确认建议">
         <div class="mb-2 flex items-center gap-2">
-          <h3 class="text-caption font-semibold">待确认建议</h3>
+          <h3 class="text-caption font-semibold text-label">待确认建议</h3>
           <span
             v-if="suggested.length"
             class="rounded-full bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
             >{{ suggested.length }} 条</span
           >
         </div>
-        <p v-if="!suggested.length" class="text-caption leading-6 text-label-secondary">
-          暂无待确认建议。点「查找相关知识」，让 AI 找找可能相关的知识。
+        <p
+          v-if="!suggested.length"
+          class="rounded-md border border-dashed border-hairline px-3 py-3 text-caption leading-5 text-label-secondary"
+        >
+          暂无待确认建议。点上方「查找相关知识」，AI 找到的建议会出现在这里。
         </p>
-        <ul v-else class="space-y-3">
+        <ul v-else class="space-y-2">
           <li
             v-for="relation in suggested"
             :key="relation.id"
             class="rounded-md border border-hairline p-3"
             :data-suggestion-id="relation.id"
           >
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="flex items-center justify-between gap-2">
               <span
                 class="rounded-full bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
                 >{{ relationTypeLabel(relation.relation_type) }}</span
               >
-              <span v-if="relation.confidence > 0" class="text-caption text-label-secondary"
+              <span v-if="relation.confidence > 0" class="text-caption text-label-tertiary"
                 >置信度 {{ confidencePercent(relation) }}</span
               >
-              <RouterLink
-                :to="`/home/knowledge/${relation.counterpart_id}`"
-                class="min-w-0 break-words text-subhead text-primary-pressed hover:underline"
-                >{{ relation.counterpart_title }}</RouterLink
-              >
             </div>
+            <RouterLink
+              :to="`/home/knowledge/${relation.counterpart_id}`"
+              class="mt-1.5 block break-words text-subhead font-medium leading-6 text-label hover:text-primary-pressed"
+              >{{ relation.counterpart_title }}</RouterLink
+            >
 
-            <div v-if="evidenceOf(relation)" class="mt-2">
+            <template v-if="evidenceOf(relation)">
               <button
                 type="button"
-                class="knowledge-text-action text-caption"
+                class="knowledge-text-action min-h-8 text-caption"
                 @click="toggleEvidence(relation.id)"
               >
+                <Icon
+                  :icon="
+                    expandedId === relation.id
+                      ? 'material-symbols:expand-less'
+                      : 'material-symbols:expand-more'
+                  "
+                  class="text-[14px]"
+                />
                 {{ expandedId === relation.id ? '收起理由' : '查看理由' }}
               </button>
               <div
                 v-if="expandedId === relation.id"
-                class="mt-2 space-y-2 rounded-md bg-surface-secondary p-2"
+                class="space-y-2 rounded-sm bg-surface-secondary p-2.5"
               >
                 <p v-if="evidenceOf(relation)!.reason" class="break-words text-caption leading-5">
                   {{ evidenceOf(relation)!.reason }}
@@ -405,12 +463,12 @@ onScopeDispose(() => {
                   对端：{{ evidenceOf(relation)!.target_quote }}
                 </blockquote>
               </div>
-            </div>
+            </template>
 
-            <div class="mt-3 flex gap-2">
+            <div class="mt-2 flex items-center gap-2">
               <button
                 type="button"
-                class="knowledge-button-primary min-h-8 px-3 text-caption"
+                class="knowledge-button-primary min-h-8 flex-1 px-3 text-caption"
                 :disabled="busy === `confirm:${relation.id}`"
                 @click="confirm(relation)"
               >
@@ -418,7 +476,7 @@ onScopeDispose(() => {
               </button>
               <button
                 type="button"
-                class="knowledge-button-secondary min-h-8 px-3 text-caption"
+                class="knowledge-button-secondary min-h-8 shrink-0 px-3 text-caption"
                 :disabled="busy === `reject:${relation.id}`"
                 @click="reject(relation)"
               >
@@ -429,9 +487,9 @@ onScopeDispose(() => {
         </ul>
       </section>
 
-      <section class="border-t border-hairline pt-3" aria-label="已确认关系">
+      <section class="mt-4 border-t border-hairline pt-3" aria-label="已确认关系">
         <div class="mb-2 flex items-center gap-2">
-          <h3 class="text-caption font-semibold">已确认</h3>
+          <h3 class="text-caption font-semibold text-label">已确认</h3>
           <span
             v-if="confirmed.length"
             class="rounded-full bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
@@ -451,114 +509,136 @@ onScopeDispose(() => {
           <li
             v-for="relation in confirmed"
             :key="relation.id"
-            class="flex flex-wrap items-start justify-between gap-2"
+            class="rounded-md border border-hairline p-2.5"
           >
-            <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <div class="flex items-start justify-between gap-2">
               <RouterLink
                 :to="`/home/knowledge/${relation.counterpart_id}`"
-                class="min-w-0 break-all text-subhead text-primary-pressed hover:underline"
+                class="min-w-0 break-all text-subhead font-medium leading-6 text-label hover:text-primary-pressed"
                 >{{ relation.counterpart_title }}</RouterLink
               >
-              <select
-                class="knowledge-input w-auto py-1 text-caption"
-                :value="relation.relation_type"
-                :aria-label="`修改与${relation.counterpart_title}的关系类型`"
-                :disabled="busy === `type:${relation.id}`"
-                @change="changeType(relation, $event)"
-              >
-                <option
-                  v-for="option in RELATION_TYPE_OPTIONS"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <template v-if="pendingDelete === relation.id">
-                <button
-                  type="button"
-                  class="knowledge-text-action text-caption text-danger"
-                  :disabled="busy === `delete:${relation.id}`"
-                  @click="remove(relation)"
-                >
-                  确认删除
-                </button>
-                <button
-                  type="button"
-                  class="knowledge-text-action text-caption"
-                  @click="pendingDelete = null"
-                >
-                  取消
-                </button>
-              </template>
               <button
-                v-else
+                v-if="pendingDelete !== relation.id"
                 type="button"
-                class="knowledge-text-action text-caption"
+                class="knowledge-icon-button -mr-1 -mt-1 size-8 shrink-0"
                 :aria-label="`删除与${relation.counterpart_title}的关系`"
                 @click="pendingDelete = relation.id"
               >
-                删除
+                <Icon icon="material-symbols:delete-outline" class="text-[16px]" />
+              </button>
+            </div>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <FilterMenu
+                :model-value="relation.relation_type"
+                :options="relationTypeOptions"
+                :label="`修改与${relation.counterpart_title}的关系类型`"
+                :disabled="busy === `type:${relation.id}`"
+                compact
+                :icon="false"
+                @update:model-value="changeType(relation, $event)"
+              />
+              <span class="text-caption text-label-tertiary">{{
+                relation.source === 'manual' ? '手动添加' : 'AI 建议'
+              }}</span>
+            </div>
+            <div
+              v-if="pendingDelete === relation.id"
+              class="mt-2 flex items-center gap-2 border-t border-hairline pt-2"
+            >
+              <button
+                type="button"
+                class="knowledge-text-action min-h-8 text-caption text-danger"
+                :disabled="busy === `delete:${relation.id}`"
+                @click="remove(relation)"
+              >
+                确认删除
+              </button>
+              <button
+                type="button"
+                class="knowledge-text-action min-h-8 text-caption"
+                @click="pendingDelete = null"
+              >
+                取消
               </button>
             </div>
           </li>
         </ul>
       </section>
 
-      <div class="mt-4 border-t border-hairline pt-4">
-        <p class="mb-2 text-caption text-label-secondary">手动添加</p>
-        <div class="flex gap-2">
-          <input
-            v-model="query"
-            class="knowledge-input min-w-0 flex-1"
-            placeholder="搜索知识标题"
-            @keydown.enter.prevent="search"
-          />
+      <section class="mt-4 border-t border-hairline pt-3" aria-label="手动添加关系">
+        <h3 class="text-caption font-semibold text-label">手动添加</h3>
+        <div class="mt-2 flex gap-2">
+          <div class="relative min-w-0 flex-1">
+            <Icon
+              class="pointer-events-none absolute left-2.5 top-3 text-label-tertiary"
+              icon="material-symbols:search"
+            />
+            <input
+              v-model="query"
+              class="knowledge-input w-full pl-8 text-caption"
+              placeholder="搜索知识标题"
+              aria-label="搜索知识标题"
+              @keydown.enter.prevent="search"
+            />
+          </div>
           <button
             type="button"
-            class="knowledge-button-secondary min-h-9 shrink-0 px-3 text-caption"
+            class="knowledge-button-secondary shrink-0 px-3 text-caption"
             :disabled="searching"
             @click="search"
           >
             {{ searching ? '搜索中…' : '搜索' }}
           </button>
         </div>
-        <div v-if="results.length" class="mt-2 space-y-1">
+        <div
+          v-if="results.length"
+          class="mt-2 overflow-hidden rounded-md border border-hairline bg-surface shadow-card"
+        >
           <button
             v-for="candidate in results"
             :key="candidate.id"
             type="button"
-            class="block w-full truncate rounded-md px-2 py-1 text-left text-caption transition-colors hover:bg-surface-secondary"
+            class="block w-full truncate px-2.5 py-2 text-left text-caption transition-colors hover:bg-surface-secondary"
             @click="choose(candidate)"
           >
             {{ candidate.title }}
           </button>
         </div>
         <p v-if="searchHint" class="mt-2 text-caption text-label-secondary">{{ searchHint }}</p>
-        <div v-if="target" class="mt-3 flex items-center gap-2">
-          <span class="min-w-0 truncate text-caption text-label-secondary"
+        <div
+          v-if="target"
+          class="mt-2 flex items-center gap-2 rounded-md bg-surface-secondary px-2.5 py-2"
+        >
+          <span class="min-w-0 flex-1 truncate text-caption text-label"
             >已选：{{ target.title }}</span
           >
-          <button type="button" class="knowledge-text-action text-caption" @click="resetForm">
-            清除
+          <button
+            type="button"
+            class="text-label-secondary transition-colors hover:text-label"
+            aria-label="清除已选知识"
+            @click="resetForm"
+          >
+            <Icon icon="material-symbols:close" class="text-[14px]" />
           </button>
         </div>
-        <select v-model="relationType" class="knowledge-input mt-3 w-full" aria-label="关系类型">
-          <option v-for="option in RELATION_TYPE_OPTIONS" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+        <FilterMenu
+          :model-value="relationType"
+          field
+          compact
+          :options="relationTypeOptions"
+          label="关系类型"
+          class="mt-2"
+          @update:model-value="setRelationType"
+        />
         <button
           type="button"
-          class="knowledge-button-primary mt-3 min-h-9 px-4 text-caption"
+          class="knowledge-button-primary mt-2 w-full"
           :disabled="!target || busy === 'create'"
           @click="add"
         >
           {{ busy === 'create' ? '添加中…' : '添加关系' }}
         </button>
-      </div>
+      </section>
     </template>
     <p v-if="error" class="mt-3 text-caption leading-5 text-danger" role="alert">{{ error }}</p>
   </section>
