@@ -42,7 +42,7 @@ last_reviewed: 2026-11-11
 
 **关键路径**：P1（标签/版本表）→ P3（整理/关联）→ P4（演化）→ P5（实验）。P2 独立于数据表依赖，可并行启动。
 
-**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 进行中（2026-11-11：W3.1/W3.2/W3.3 已完成，AC-04 闭环；W3.4/W3.5 留到第四批）；P4~P5 未开始。
+**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 进行中（2026-11-11：W3.1/W3.2/W3.3 已完成，AC-04 闭环；W3.4/W3.5 进入第四批，2026-11-11 完成设计共识）；P4-W4.1 图谱与 W3.4/W3.5 同批实施；P4 剩余演化工作项与 P5 未开始。
 
 ## 数据库变更总表
 
@@ -55,7 +55,7 @@ last_reviewed: 2026-11-11
 | `knowledge_versions` | 编辑前自动快照（version_number/title/content/change_source） | P1-W1.2 |
 | `retrieval_logs` | 检索日志（mode/hits JSON/hit_count/latency_ms，实验数据源） | P2-W2.6 |
 | `ai_tasks` | 统一 AI 任务状态机（task_type: organize/relation/evolve；ingest 沿用现有导入任务表） | P3-W3.1 |
-| `knowledge_relations` | 知识关系（source/target/type/confidence/evidence/status，唯一约束防重复） | P3-W3.4 |
+| `knowledge_relations` | 知识关系（source/target/type/confidence/evidence/status/source: ai 或 manual；唯一键含 relation_type，对称类型归一侧只存一条） | P3-W3.4 |
 | `evolution_alerts` | 演化提醒（alert_type/payload/status pending/resolved/dismissed） | P4-W4.2 |
 
 字段变更：
@@ -76,7 +76,7 @@ last_reviewed: 2026-11-11
 |---|---|---|
 | ~~`GET /internal/files/keyword-search`~~ | 已取消（2026-11-10 变更：RRF 融合放 Go 侧，见 phase-2） | — |
 | ✅ `POST {CHAT_AI_URL}/organize`（Go→AI 同步返回草稿） | 整理工作流 | P3-W3.2（2026-11-11 简化：取消 metadata 回调，见 phase-3） |
-| `POST /internal/ai/files/{fileId}/relations`（AI→Go） | 关联推荐 | P3-W3.4 |
+| `POST {CHAT_AI_URL}/relate`（Go→AI 同步返回关系建议） | 关联推荐 | P3-W3.4（2026-11-11 简化：取消 relations 回调，见 phase-3） |
 | `POST /v1/evolve/check`（Go→AI）、`POST /internal/ai/files/{fileId}/evolution-alerts`（AI→Go） | 演化检测 | P4-W4.4 |
 | ~~`POST /internal/ai/tasks/{taskId}/status` 扩展 task_type~~ | 已取消（2026-11-11：organize 改同步返回，任务状态只由 Go 侧 worker 维护） | — |
 
@@ -88,11 +88,11 @@ last_reviewed: 2026-11-11
 |---|---|---|
 | 首页 Dashboard | ⚠️ 有基础统计 | 缺最近知识、待处理任务、演化提醒聚合（P4-W4.5、P5-W5.2） |
 | 知识列表 | ✅ 有 | 已支持来源类型/标签/收藏归档筛选与排序（P1-W1.6） |
-| 知识详情 | ✅ 有 | 已支持编辑、版本历史、标签、AI 整理面板（P3-W3.3）；缺相关知识区（P3-W3.4/W3.5） |
+| 知识详情 | ✅ 有 | 已支持编辑、版本历史、标签、AI 整理面板（P3-W3.3）；缺相关知识区（P3-W3.4/W3.5，第四批） |
 | 分块预览 | ✅ 有 | 已支持引用跳转与高亮定位（P2-W2.5） |
 | 导入页面 | ✅ 有 | 已支持“网页链接”入口（P1-W1.5）；仍并入文件管理 |
 | AI 问答 | ✅ 有 | grounding 双模式与引用高亮已就绪（P2） |
-| 知识图谱 | ❌ 无 | P4-W4.1（ECharts） |
+| 知识图谱 | ❌ 无 | P4-W4.1（ECharts 局部图谱，第四批先行） |
 | 演化中心 | ❌ 无 | P4-W4.5 |
 | 系统设置 | ✅ 有 | 缺"测试连接"按钮（P5-W5.1） |
 

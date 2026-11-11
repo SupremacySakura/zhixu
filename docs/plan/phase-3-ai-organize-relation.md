@@ -49,23 +49,28 @@ status: in-progress
 - **前端**：详情页"AI 整理"面板：摘要/关键词/推荐标签并排预览，支持逐项编辑、一键采纳、重新生成；采纳前列表页摘要不展示（或展示但标注 AI 待确认）。
 - **依赖**：W3.2。**验收**：AC-04——生成 → 预览 → 编辑 → 采纳闭环；未采纳不污染正式字段。
 
-### W3.4 关联推荐（FR-REL-01 + FR-ORG-06）⏳ 未开始（第四批）
+### W3.4 关联推荐（FR-REL-01 + FR-ORG-06）⏳ 未开始（第四批，设计已定 2026-11-11）
 
-- **数据库**：`knowledge_relations`（id、user_id、source_id、target_id、relation_type: related/extends/supports/contradicts/updates、confidence 0~1、evidence JSON、status: suggested/confirmed/rejected、created_at；`(source_id,target_id)` 唯一防重复，反向关系视为同一对）。
-- **契约**：AI→Go `POST /internal/ai/files/{fileId}/relations {taskId, relations:[{targetKnowledgeId, relationType, confidence, evidence}]}`。
-- **AI 服务**：`relation-workflow`——以新知识向量在 Qdrant 找近邻候选 Top10（同 user、排除自身与 archived）→ LLM 逐对判定关系类型/置信度/证据（generateObject）→ 置信度 <0.6 丢弃 → 回调。
-- **触发**：organize 完成后自动触发（产品设计 8.1 的"检索相关知识→关联建议"段）；手动"查找相关知识"按钮同样可用。
-- **前端**：详情页"相关知识"区：列表展示（标题/关系类型/置信度），建议态关系带"确认/忽略"操作。
-- **依赖**：W3.2（挂在 organize 后）。**验收**：AC-07——导入相似主题文档后出现相关知识推荐，点击可跳转。
+- **数据库**：`knowledge_relations`（id、user_id、source_id、target_id、relation_type、confidence、evidence JSON、status、source: ai/manual、created_at/updated_at；唯一键 `(user_id, source_id, target_id, relation_type)`）。
+- **关系类型（5 种，2026-11-11 定）**：related / depends_on / supplements / contrasts / updates（界面显示相关、依赖、补充说明、对比、更新替代）。合并了原计划的 extends/supports/contradicts，只补 P4-W4.3 需要的 updates；理由与取舍见 [ADR-0001](../adr/0001-knowledge-relation-model.md)。
+- **方向与判重**：有向存储；related、contrasts 两种对称类型写入前按 min/max id 归一，A→B 已存在则不再插 B→A；其余三种保持严格方向。
+- **契约（2026-11-11 简化，取消 AI→Go 回调）**：Go→AI `POST {CHAT_AI_URL}/relate`（Bearer INTERNAL_API_SECRET，同步返回）：请求 `{version:1, model{protocol,model_id,base_url,api_key}, taskId, knowledgeId, knowledge{title, excerpt}, candidates:[{knowledge_id, title, excerpt, score}]}`；响应 `{relations:[{target_id, relation_type, confidence, evidence{reason, source_quote, target_quote}}]}`。
+- **候选生成（Go 侧）**：用「标题 + 已采纳摘要（无摘要取正文前 1000 字）」嵌入一次向量 → Qdrant Search top 50 → 按 `knowledge_id` 归并取最高分 → 过滤自身/归档/已有关系对/已拒绝对 → Top 10 送模型；相似度 < 0.55 直接丢弃。
+- **AI 服务**：Mastra `POST /relate`（严格 zod 校验 + `agent.generate(..., {structuredOutput})`，单条非法丢弃而非整批失败）；最多 5 条建议，置信度 < 0.6 由 Go 侧再过滤；Schema 失败内部重试 1 次后返回 422。
+- **触发**：向量化就绪（`vector_state=ready`）后自动入队 `relation` 任务，`dedupe_key=relation:<knowledgeID>`；不向对端扩散（避免一次导入触发雪崩）；详情页「查找相关知识」可手动重跑，新建议与既有建议合并。
+- **降级与失败**：候选 < 2 条、422、知识已归档/删除均按终端失败处理不重试；Qdrant/AI 超时与 5xx 走 30/60/120s 退避共 3 次。
+- **前端**：详情页右栏「相关知识」面板（已确认列表 + 待确认建议 + 查找/手动添加 + 图谱入口），任务运行中 3s 轮询。
+- **依赖**：W3.2（复用 `ai_tasks` 与 organize 的同步契约路线）。**验收**：AC-07——导入相似主题文档后出现相关知识推荐，点击可跳转，确认/拒绝闭环。
 
-### W3.5 关系管理（FR-REL-02）⏳ 未开始（第四批）
+### W3.5 关系管理（FR-REL-02）⏳ 未开始（第四批，设计已定 2026-11-11）
 
 - **后端**：
-  - `GET /api/v1/knowledge/:id/relations`（含 suggested/confirmed，标注方向与类型）。
-  - `POST /api/v1/knowledge/:id/relations {targetId, relationType}`（手动添加，直接 confirmed）。
-  - `PUT /api/v1/relations/:id {relationType}`（改类型）、`DELETE /api/v1/relations/:id`。
-  - `POST /api/v1/relations/:id/confirm | /reject`（确认/拒绝 AI 建议；reject 后不再对同一对重复建议——记录 rejected 状态去重）。
-- **前端**：详情页关系管理面板（分"已确认/待确认"两区）。
+  - `GET /api/v1/knowledge/:id/relations`（confirmed / suggested 两区 + relation 任务状态）。
+  - `POST /api/v1/knowledge/:id/relations {target_id, relation_type}`（手动添加，直接 confirmed、source=manual）。
+  - `PUT /api/v1/relations/:id {relation_type}`（改类型）、`DELETE /api/v1/relations/:id`（物理删除，前端二次确认）。
+  - `POST /api/v1/relations/:id/confirm | /reject`（reject 保留 rejected 行做抑制，同一对不再推荐；用户手动添加同一对时复用 rejected 行改为 confirmed + source=manual，不插新行）。
+  - 删除知识条目时在同一事务内删除「source_id 或 target_id 命中」的关系行；归档只影响可见性不删关系。
+- **前端**：详情页「相关知识」面板分「已确认 / 待确认」两区，支持改类型、删除、搜索手动添加。
 - **依赖**：W3.4。**验收**：FR-REL-02 全规则——增删改查、类型修改、确认/拒绝、重复建议抑制。
 
 ## 里程碑验收（P3 Done）
