@@ -33,6 +33,7 @@ type KnowledgeStore interface {
 	FolderName(context.Context, uint, uint) (string, error)
 	ByFile(context.Context, uint, uint) (*model.KnowledgeItem, error)
 	Get(context.Context, uint, uint) (*model.KnowledgeItem, error)
+	ListByIDs(context.Context, uint, []uint) ([]model.KnowledgeItem, error)
 	Create(context.Context, *model.KnowledgeItem) (*model.KnowledgeItem, bool, error)
 	CreateManual(context.Context, *model.KnowledgeItem) error
 	Update(context.Context, uint, uint, string, string, string, uint) (*model.KnowledgeItem, error)
@@ -739,6 +740,11 @@ func (s *KnowledgeService) Get(ctx context.Context, userID, id uint) (*model.Kno
 	}
 	item.KeywordList = ParseKeywords(item.Keywords)
 	return item, nil
+}
+
+// ListByIDs 批量取知识，供关联候选一次性补标题与摘要；缺失的 ID 直接跳过。
+func (s *KnowledgeService) ListByIDs(ctx context.Context, userID uint, ids []uint) ([]model.KnowledgeItem, error) {
+	return s.store.ListByIDs(ctx, userID, ids)
 }
 
 // hydrateKeywords 为列表项填充关键词接口视图；纯内存解析，不额外查库。

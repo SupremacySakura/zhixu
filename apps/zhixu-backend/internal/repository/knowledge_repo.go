@@ -94,6 +94,19 @@ func (r *KnowledgeRepository) Get(ctx context.Context, userID, id uint) (*model.
 	return &item, err
 }
 
+// ListByIDs 批量读取候选知识的最小字段集；不加载全文以外的关键词、版本历史等关联数据。
+func (r *KnowledgeRepository) ListByIDs(ctx context.Context, userID uint, ids []uint) ([]model.KnowledgeItem, error) {
+	if len(ids) == 0 {
+		return []model.KnowledgeItem{}, nil
+	}
+	var items []model.KnowledgeItem
+	err := r.DB.WithContext(ctx).
+		Select("id, user_id, title, summary, content, status, archived_at, version").
+		Where("user_id = ? AND id IN ?", userID, ids).
+		Find(&items).Error
+	return items, err
+}
+
 func (r *KnowledgeRepository) Create(ctx context.Context, item *model.KnowledgeItem) (*model.KnowledgeItem, bool, error) {
 	err := r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var source model.FileModel

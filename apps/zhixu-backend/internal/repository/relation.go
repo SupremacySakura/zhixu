@@ -55,6 +55,28 @@ func (r *RelationRepository) Create(ctx context.Context, relation *model.Knowled
 	return relation, nil
 }
 
+// CreateSuggestion 写入 AI 建议：同一对知识只要已有任意状态的关系（含已拒绝）就不再插入，
+// 既不覆盖用户已确认的行，也不重复堆积建议。并发命中唯一键时同样视为已存在。
+func (r *RelationRepository) CreateSuggestion(ctx context.Context, relation *model.KnowledgeRelation) (bool, error) {
+	relation.SourceID, relation.TargetID = normalizeRelationPair(relation.RelationType, relation.SourceID, relation.TargetID)
+	var count int64
+	if err := r.DB.WithContext(ctx).Model(&model.KnowledgeRelation{}).
+		Where("user_id = ? AND source_id = ? AND target_id = ?", relation.UserID, relation.SourceID, relation.TargetID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	if count > 0 {
+		return false, nil
+	}
+	if err := r.DB.WithContext(ctx).Create(relation).Error; err != nil {
+		if isDuplicateRelation(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *RelationRepository) findPair(ctx context.Context, relation *model.KnowledgeRelation) (*model.KnowledgeRelation, error) {
 	var row model.KnowledgeRelation
 	err := r.DB.WithContext(ctx).

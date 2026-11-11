@@ -21,7 +21,7 @@ const (
 	// AiTaskMaxRetries 是一个任务允许的失败次数上限（首次执行 + 2 次重试）。
 	AiTaskMaxRetries = 3
 	// AiTaskLeaseTTL 覆盖一次模型调用的最坏耗时；worker 崩溃后任务最多等这么久才回收。
-	AiTaskLeaseTTL = 3 * time.Minute
+	AiTaskLeaseTTL      = 3 * time.Minute
 	aiTaskErrorMaxRunes = 500
 )
 
@@ -60,8 +60,10 @@ func (r *AiTaskRepository) Enqueue(ctx context.Context, task model.AiTask) (*mod
 	if task.NextRunAt.IsZero() {
 		task.NextRunAt = time.Now()
 	}
-	key := aiTaskDedupeKey(task.UserID, task.TaskType, task.TargetID)
-	task.DedupeKey = &key
+	if task.DedupeKey == nil {
+		key := aiTaskDedupeKey(task.UserID, task.TaskType, task.TargetID)
+		task.DedupeKey = &key
+	}
 	task.Status = model.AiTaskPending
 	if err := r.DB.WithContext(ctx).Create(&task).Error; err != nil {
 		if isDuplicateAiTask(err) {

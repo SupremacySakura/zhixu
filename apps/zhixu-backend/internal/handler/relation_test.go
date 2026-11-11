@@ -26,14 +26,41 @@ func (relationHandlerStore) Create(_ context.Context, relation *model.KnowledgeR
 }
 
 func (relationHandlerStore) ListByKnowledge(_ context.Context, _, knowledgeID uint) ([]repository.RelationRecord, error) {
-	return []repository.RelationRecord{{
+	rows := []repository.RelationRecord{{
 		KnowledgeRelation: model.KnowledgeRelation{
 			ID: 41, UserID: 2, SourceID: knowledgeID, TargetID: 9,
 			RelationType: model.RelationTypeRelated, Status: model.RelationConfirmed,
 			Source: model.RelationSourceManual, CreatedAt: time.Now(),
 		},
 		CounterpartID: 9, CounterpartTitle: "目标知识",
-	}}, nil
+	}}
+	if knowledgeID == 10 {
+		rows = append(rows, repository.RelationRecord{
+			KnowledgeRelation: model.KnowledgeRelation{
+				ID: 42, UserID: 2, SourceID: 10, TargetID: 3,
+				RelationType: model.RelationTypeSupplements, Status: model.RelationSuggested,
+				Source: model.RelationSourceAI, Confidence: 0.72,
+				Evidence:  "{\"reason\":\"互补\",\"source_quote\":\"甲\",\"target_quote\":\"乙\"}",
+				CreatedAt: time.Now(),
+			},
+			CounterpartID: 3, CounterpartTitle: "源知识",
+		})
+	}
+	return rows, nil
+}
+
+type relationHandlerTasks struct {
+	service.RelationTaskSource
+}
+
+func (relationHandlerTasks) Latest(_ context.Context, _ uint, taskType string, targetID uint) (*model.AiTask, error) {
+	if taskType == model.AiTaskTypeRelation && targetID == 10 {
+		return &model.AiTask{
+			ID: 7, UserID: 2, TaskType: model.AiTaskTypeRelation, TargetID: 10,
+			Status: model.AiTaskFailed, ErrorMessage: "AI 关联调用超时，请稍后重试", RetryCount: 2, UpdatedAt: time.Now(),
+		}, nil
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 func (relationHandlerStore) Delete(_ context.Context, _, id uint) error {
@@ -68,7 +95,7 @@ func serveRelation(t *testing.T, user uint, method, path, body string) *httptest
 	if user != 0 {
 		r.Use(func(c *gin.Context) { c.Set("user_id", user) })
 	}
-	h := &RelationHandler{Service: service.NewRelationService(relationHandlerStore{}, relationHandlerKnowledge{})}
+	h := &RelationHandler{Service: service.NewRelationService(relationHandlerStore{}, relationHandlerKnowledge{}, relationHandlerTasks{})}
 	r.GET("/knowledge/:id/relations", h.List)
 	r.POST("/knowledge/:id/relations", h.Create)
 	r.DELETE("/relations/:id", h.Delete)
@@ -90,6 +117,8 @@ func TestRelationHandlerRoutes(t *testing.T) {
 		{"unauthorized list", "GET", "/knowledge/3/relations", "", 0, 401, ""},
 		{"list relations", "GET", "/knowledge/3/relations", "", 2, 200, "目标知识"},
 		{"list keeps empty sections", "GET", "/knowledge/3/relations", "", 2, 200, `"suggested":[]`},
+		{"list suggested relations", "GET", "/knowledge/10/relations", "", 2, 200, "\"confidence\":0.72"},
+		{"list relation task", "GET", "/knowledge/10/relations", "", 2, 200, "AI 关联调用超时"},
 		{"list foreign knowledge", "GET", "/knowledge/77/relations", "", 2, 404, "知识不存在"},
 		{"list invalid knowledge id", "GET", "/knowledge/x/relations", "", 2, 400, ""},
 		{"create relation", "POST", "/knowledge/3/relations", `{"target_id":9,"relation_type":"related"}`, 2, 201, "目标知识"},
