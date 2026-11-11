@@ -65,6 +65,7 @@ async function render() {
     global: {
       plugins: [router],
       stubs: {
+        KnowledgeRelationsPanel: true,
         KnowledgeOrganizePanel: true,
         KnowledgeVectorPanel: true,
         KnowledgeTagEditor: true,
@@ -91,6 +92,16 @@ describe('KnowledgeDetail', () => {
     await flushPromises()
     expect(favoriteKnowledge).toHaveBeenCalledWith(10, true)
     expect(wrapper.text()).toContain('已收藏')
+  })
+
+  it('shows related knowledge above the AI organize panel', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({ ...baseItem } as never)
+    const wrapper = await render()
+    const html = wrapper.html()
+    const relationsPanel = html.indexOf('knowledge-relations-panel-stub')
+    const organizePanel = html.indexOf('knowledge-organize-panel-stub')
+    expect(relationsPanel).toBeGreaterThan(-1)
+    expect(relationsPanel).toBeLessThan(organizePanel)
   })
 
   it('archives and restores knowledge', async () => {

@@ -287,6 +287,7 @@ func TestDeleteByIDs_RecordsKnowledgeCascadeCount(t *testing.T) {
 		mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN").
 			WithArgs(uint(7), uint(7), uint(5)).WillReturnResult(sqlmock.NewResult(0, 1))
 	}
+	mock.ExpectExec("DELETE FROM `knowledge_relations` WHERE user_id = .*").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `knowledge_items` WHERE user_id = .*source_file_id").
 		WithArgs(uint(7), uint(5)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
@@ -338,6 +339,7 @@ func TestDeleteFolderByIDs_RecordsKnowledgeCascadeCount(t *testing.T) {
 		mock.ExpectExec("DELETE FROM `"+table+"` .*source_file_id IN .*folder_id IN").
 			WithArgs(uint(7), uint(7), uint(7), uint(3), uint(4)).WillReturnResult(sqlmock.NewResult(0, 2))
 	}
+	mock.ExpectExec("DELETE FROM `knowledge_relations` WHERE user_id = .*").WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("DELETE FROM `knowledge_items` .*source_file_id IN .*folder_id IN").
 		WithArgs(uint(7), uint(7), uint(3), uint(4)).WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("UPDATE `folder_models`").WithArgs(sqlmock.AnyArg(), uint(3), uint(4), uint(7)).

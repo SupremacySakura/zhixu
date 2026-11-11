@@ -75,6 +75,8 @@ func main() {
 	router.RegisterKnowledgeRouter(r, knowledgeService)
 	tagService := service.NewTagService(repository.NewTagRepository(database.DB))
 	router.RegisterTagRouter(r, &handler.TagHandler{Service: tagService})
+	relationService := service.NewRelationService(repository.NewRelationRepository(database.DB), knowledgeService)
+	router.RegisterRelationRouter(r, &handler.RelationHandler{Service: relationService})
 	// 采纳 AI 整理结果时需要追加标签：只增不删，不覆盖用户手工标签。
 	knowledgeService.Tags = tagService
 	// AI 整理工作流：Go worker 直接调用 AI 服务 /organize，草稿只写 ai_tasks.payload，等用户确认后才落正式字段。

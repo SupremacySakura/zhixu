@@ -20,6 +20,7 @@ import { renderKnowledgeContent } from '../utils/markdown'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
 import KnowledgeHistoryDialog from '../components/knowledge/KnowledgeHistoryDialog.vue'
 import KnowledgeOrganizePanel from '../components/knowledge/KnowledgeOrganizePanel.vue'
+import KnowledgeRelationsPanel from '../components/knowledge/KnowledgeRelationsPanel.vue'
 import KnowledgeTagEditor from '../components/knowledge/KnowledgeTagEditor.vue'
 import KnowledgeVectorPanel from '../components/knowledge/KnowledgeVectorPanel.vue'
 const route = useRoute()
@@ -220,6 +221,7 @@ function onOrganized(updated: KnowledgeItem) {
             >
           </article>
           <div class="space-y-5">
+            <KnowledgeRelationsPanel :item="item" />
             <KnowledgeOrganizePanel :item="item" @accepted="onOrganized" />
             <KnowledgeVectorPanel :item="item" @retried="item = $event" />
             <KnowledgeTagEditor :key="tagVersion" :knowledge-id="item.id" />

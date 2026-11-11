@@ -47,6 +47,11 @@ func DeleteKnowledgeRows(tx *gorm.DB, userID uint, query *gorm.DB) (int, error) 
 			return 0, err
 		}
 	}
+	// 关系行没有 knowledge_id 单列：源头或目标命中都要清理，与知识删除同事务完成。
+	if err := tx.Where("user_id = ? AND (source_id IN (?) OR target_id IN (?))", userID, query.Select("id"), query.Select("id")).
+		Delete(&model.KnowledgeRelation{}).Error; err != nil {
+		return 0, err
+	}
 	if err := query.Delete(&model.KnowledgeItem{}).Error; err != nil {
 		return 0, err
 	}
