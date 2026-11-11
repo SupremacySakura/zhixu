@@ -88,7 +88,7 @@ func main() {
 	})
 	// 关联建议工作流：向量化就绪后入队，候选由向量召回，模型只负责关系判定。
 	aiTasks.Register(&service.RelationProcessor{
-		Chat: chat.Service, Knowledge: knowledgeService, Relations: relationRepo,
+		Chat: chat.Service, Embedding: chat.Service, Knowledge: knowledgeService, Relations: relationRepo,
 		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 		Vectors:  qdrant,
 		Client:   &service.RelateClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},

@@ -27,7 +27,8 @@ const (
 	RelationConfidenceMin = 0.6
 	// RelationSuggestionMax 是单次任务最多落库的建议条数。
 	RelationSuggestionMax = 5
-	// RelationKnowledgeExcerptMaxRunes 是源知识发给模型的摘录上限。
+	// RelationKnowledgeExcerptMaxRunes 是送 /relate 判定的源知识摘录上限（契约 ≤2000），
+	// 与 RelationEmbeddingBodyMaxRunes 分开：向量化不需要占用判定侧的全部长度。
 	RelationKnowledgeExcerptMaxRunes = 2000
 	// RelationCandidateExcerptMaxRunes 是候选知识发给模型的摘录上限。
 	RelationCandidateExcerptMaxRunes = 1200
