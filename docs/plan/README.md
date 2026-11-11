@@ -21,7 +21,7 @@ last_reviewed: 2026-11-09
 |---|---|---|---|
 | 知识管理 FR-KM-01~09 | FR-KM-02 文件导入、FR-KM-05 详情、FR-KM-08 分块预览 | FR-KM-04 列表、FR-KM-08（缺引用高亮） | FR-KM-01 创建/编辑、FR-KM-03 网页导入、FR-KM-06 标签、FR-KM-07 收藏归档、FR-KM-09 编辑历史 |
 | AI 整理 FR-ORG-01~06 | — | — | **全部 6 条** |
-| 检索问答 FR-QA-01~07 | FR-QA-02 语义检索、FR-QA-05 引用溯源、FR-QA-07 会话历史 | FR-QA-04（缺 grounding）、FR-QA-06（缺拒答话术） | FR-QA-01 关键词检索、FR-QA-03 混合检索 |
+| 检索问答 FR-QA-01~07 | FR-QA-02 语义检索、FR-QA-05 引用溯源、FR-QA-07 会话历史 | FR-QA-04（grounding 双模式未硬化）、FR-QA-06（已变更：未命中声明+通用回答，见 phase-2 变更记录） | FR-QA-01 关键词检索、FR-QA-03 混合检索 |
 | 知识关联 FR-REL-01~03 | — | — | **全部 3 条** |
 | 知识演化 FR-EVO-01~05 | — | — | **全部 5 条** |
 | 系统支撑 FR-SYS-01~06 | FR-SYS-01 登录、FR-SYS-02 隔离、FR-SYS-04 任务、FR-SYS-05 重试 | FR-SYS-03（缺测试连接）、FR-SYS-06（缺统计展示） | — |
@@ -35,7 +35,7 @@ last_reviewed: 2026-11-09
 | 阶段 | 文件 | 目标 | 需求映射 | 验收映射 | 前置依赖 |
 |---|---|---|---|---|---|
 | P1 知识管理补全 | [phase-1-knowledge-crud.md](./phase-1-knowledge-crud.md) | 手动创建/编辑、版本快照、标签、网页导入、收藏归档、列表增强 | FR-KM-01/03/04/06/07/09、FR-EVO-04（表） | AC-02、AC-03 | 无 |
-| P2 混合检索与问答 | [phase-2-hybrid-search-qa.md](./phase-2-hybrid-search-qa.md) | ngram 关键词路、RRF 混合、拒答、agent grounding、引用高亮 | FR-QA-01/03/04/06、FR-KM-08（收尾） | AC-05、AC-06、AC-09 | 无（可与 P1 并行） |
+| P2 混合检索与问答 | [phase-2-hybrid-search-qa.md](./phase-2-hybrid-search-qa.md) | ngram 关键词路、Go 侧 RRF 混合、grounding 双模式回答、引用高亮 | FR-QA-01/03/04/06、FR-KM-08（收尾） | AC-05、AC-06、AC-09 | 无（可与 P1 并行） |
 | P3 AI 整理与关联 | [phase-3-ai-organize-relation.md](./phase-3-ai-organize-relation.md) | 统一 ai_tasks、organize 工作流、摘要/关键词/标签确认、关联推荐与管理 | FR-ORG-01~06、FR-REL-01/02、FR-SYS-04（扩展） | AC-04、AC-07 | P1 标签表（W1.4） |
 | P4 图谱与演化 | [phase-4-graph-evolution.md](./phase-4-graph-evolution.md) | ECharts 图谱、重复/过时/冲突检测、演化中心人工审核 | FR-REL-03、FR-EVO-01/02/03/05 | AC-10~13 | P1 版本表（W1.2）、P3 关系表（W3.4） |
 | P5 收尾与实验 | [phase-5-polish-experiments.md](./phase-5-polish-experiments.md) | 测试连接、用量统计、首页聚合、三组检索实验、演化实验、性能压测 | FR-SYS-03/06 收尾、SRS 7.3 实验 | 全部 AC 回归、论文数据 | P2/P3/P4 |
@@ -70,7 +70,7 @@ last_reviewed: 2026-11-09
 
 | 契约 | 方向 | 阶段 |
 |---|---|---|
-| `GET /internal/files/keyword-search?userId=&query=&limit=` | AI → Go（ngram 关键词路） | P2-W2.1 |
+| ~~`GET /internal/files/keyword-search`~~ | 已取消（2026-11-10 变更：RRF 融合放 Go 侧，见 phase-2） | — |
 | `POST /v1/organize`（Go→AI）、`POST /internal/ai/files/{fileId}/metadata`（AI→Go） | 整理工作流 | P3-W3.2 |
 | `POST /internal/ai/files/{fileId}/relations`（AI→Go） | 关联推荐 | P3-W3.4 |
 | `POST /v1/evolve/check`（Go→AI）、`POST /internal/ai/files/{fileId}/evolution-alerts`（AI→Go） | 演化检测 | P4-W4.4 |
@@ -87,7 +87,7 @@ last_reviewed: 2026-11-09
 | 知识详情 | ⚠️ 只读 | 缺编辑模式、标签编辑、AI 整理面板、相关知识区（P1/P3） |
 | 分块预览 | ✅ 有 | 缺引用跳转高亮定位（P2-W2.5） |
 | 导入页面 | ⚠️ 并入文件管理 | 缺"网页链接"入口与独立导入页（P1-W1.5） |
-| AI 问答 | ✅ 有 | 缺拒答话术、引用高亮（P2） |
+| AI 问答 | ✅ 有 | 缺 grounding 双模式硬化、引用高亮（P2） |
 | 知识图谱 | ❌ 无 | P4-W4.1（ECharts） |
 | 演化中心 | ❌ 无 | P4-W4.5 |
 | 系统设置 | ✅ 有 | 缺"测试连接"按钮（P5-W5.1） |
