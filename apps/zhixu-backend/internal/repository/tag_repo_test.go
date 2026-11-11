@@ -191,3 +191,55 @@ func TestTagRepositoryReplaceForKnowledge(t *testing.T) {
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 }
+
+func TestTagRepositoryAttachForKnowledge(t *testing.T) {
+	t.Run("appends bindings without deleting", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		now := time.Now()
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `knowledge_items` WHERE id = \\? AND user_id = \\?").
+			WithArgs(uint(10), uint(2)).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+		mock.ExpectQuery("SELECT \\* FROM `tags` WHERE user_id = \\? AND id IN").
+			WithArgs(uint(2), uint(4)).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "name", "created_at"}).AddRow(4, 2, "乙", now))
+		mock.ExpectQuery("SELECT \\* FROM `tags` WHERE user_id = \\? AND name = \\? LIMIT \\?").
+			WithArgs(uint(2), "新概念", 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "name", "created_at"}))
+		mock.ExpectExec("INSERT INTO `tags`").WillReturnResult(sqlmock.NewResult(8, 1))
+		mock.ExpectQuery("SELECT \\* FROM `tags` WHERE \\(user_id = \\? AND name = \\?\\) AND `tags`\\.`id` = \\? LIMIT \\?").
+			WithArgs(uint(2), "新概念", uint(8), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "name", "created_at"}).AddRow(8, 2, "新概念", now))
+		mock.ExpectExec("INSERT INTO `knowledge_tags`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec("INSERT INTO `knowledge_tags`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `knowledge_items` WHERE id = \\? AND user_id = \\?").
+			WithArgs(uint(10), uint(2)).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+		mock.ExpectQuery("SELECT `tags`\\.`id`.*FROM `tags` JOIN knowledge_tags").
+			WithArgs(uint(2), uint(10), uint(2)).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "name", "created_at"}).
+				AddRow(4, 2, "乙", now).AddRow(8, 2, "新概念", now))
+
+		tags, err := NewTagRepository(db).AttachForKnowledge(context.Background(), 2, 10, []uint{4}, []string{"新概念"}, model.TagSourceAI)
+		require.NoError(t, err)
+		require.Len(t, tags, 2)
+		require.Equal(t, "乙", tags[0].Name)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("missing knowledge rolls back", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `knowledge_items` WHERE id = \\? AND user_id = \\?").
+			WithArgs(uint(99), uint(2)).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+		mock.ExpectRollback()
+
+		_, err := NewTagRepository(db).AttachForKnowledge(context.Background(), 2, 99, nil, []string{"工作"}, model.TagSourceAI)
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}

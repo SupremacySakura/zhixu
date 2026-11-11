@@ -141,11 +141,21 @@ func (s *ChatService) Resolve(ctx context.Context, user uint, input ChatInput) (
 	if err := ValidateChat(input); err != nil {
 		return nil, err
 	}
+	return s.resolveModel(ctx, user, input.ModelID)
+}
+
+// ResolveChatModel 解析默认对话模型能力，供后台 AI 任务（整理、关联）复用：
+// 这些任务不是会话，不适用 ValidateChat 的消息交替与长度约束。
+func (s *ChatService) ResolveChatModel(ctx context.Context, user uint) (*ChatCapability, error) {
+	return s.resolveModel(ctx, user, 0)
+}
+
+func (s *ChatService) resolveModel(ctx context.Context, user uint, modelID uint) (*ChatCapability, error) {
 	state, err := s.Store.Read(ctx, user)
 	if err != nil {
 		return nil, err
 	}
-	id := input.ModelID
+	id := modelID
 	if id == 0 {
 		id = state.Settings.ChatModelID
 	}

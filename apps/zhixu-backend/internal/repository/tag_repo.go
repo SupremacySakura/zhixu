@@ -159,6 +159,66 @@ func (r *TagRepository) ReplaceForKnowledge(ctx context.Context, userID, knowled
 	return tags, err
 }
 
+// AttachForKnowledge 只新增标签绑定，不删除知识已有的绑定。
+// AI 推荐标签的采纳必须走这条路径：全量替换（ReplaceForKnowledge）会把用户手工标签一起删掉。
+// tagIDs 按用户校验归属（不属于该用户的 ID 被忽略）；names 不存在时创建。返回绑定后的完整标签列表。
+func (r *TagRepository) AttachForKnowledge(ctx context.Context, userID, knowledgeID uint, tagIDs []uint, names []string, source string) ([]model.Tag, error) {
+	err := r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", knowledgeID, userID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		resolved := make([]model.Tag, 0, len(tagIDs)+len(names))
+		seen := make(map[string]struct{}, len(tagIDs)+len(names))
+		if len(tagIDs) > 0 {
+			var byID []model.Tag
+			if err := tx.Where("user_id = ? AND id IN ?", userID, tagIDs).Find(&byID).Error; err != nil {
+				return err
+			}
+			for _, tag := range byID {
+				seen[strings.ToLower(tag.Name)] = struct{}{}
+				resolved = append(resolved, tag)
+			}
+		}
+		for _, name := range names {
+			key := strings.ToLower(name)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			var tag model.Tag
+			if err := tx.Where("user_id = ? AND name = ?", userID, name).Take(&tag).Error; err != nil {
+				if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+				tag = model.Tag{UserID: userID, Name: name}
+				if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&tag).Error; err != nil {
+					return err
+				}
+				if err := tx.Where("user_id = ? AND name = ?", userID, name).Take(&tag).Error; err != nil {
+					return err
+				}
+			}
+			resolved = append(resolved, tag)
+		}
+		for _, tag := range resolved {
+			link := model.KnowledgeTag{KnowledgeID: knowledgeID, TagID: tag.ID, UserID: userID, Source: source}
+			// DoNothing 保留已有绑定：手工标签不会被 AI 采纳降级成 ai 来源。
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&link).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return r.TagsByKnowledge(ctx, userID, knowledgeID)
+}
+
 // isDuplicateTagName 判断数据库唯一键冲突。
 func isDuplicateTagName(err error) bool {
 	var duplicate *mysqlDriver.MySQLError

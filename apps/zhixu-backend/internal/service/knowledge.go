@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -23,6 +24,8 @@ import (
 var (
 	ErrKnowledgeInvalid  = errors.New("invalid knowledge request")
 	ErrKnowledgeNotFound = errors.New("knowledge or source not found")
+	// ErrOrganizeNoDraft 表示当前没有可采纳的整理结果（未整理、任务未成功或草稿已失效）。
+	ErrOrganizeNoDraft = errors.New("没有可采纳的 AI 整理结果")
 )
 
 type KnowledgeStore interface {
@@ -42,6 +45,14 @@ type KnowledgeStore interface {
 	Delete(context.Context, uint, uint) error
 	Claim(context.Context, string, time.Time) (*model.KnowledgeImportTask, error)
 	Finish(context.Context, *model.KnowledgeImportTask, string, string, string) error
+	UpdateMetadata(context.Context, uint, uint, string, string) error
+}
+
+// OrganizeTagger 是采纳整理结果所需的标签能力（*TagService 满足）。
+// 为 nil 时不写入标签，推荐标签只回名称。
+type OrganizeTagger interface {
+	List(ctx context.Context, userID uint) ([]TagView, error)
+	AttachForKnowledge(ctx context.Context, userID, knowledgeID uint, tagIDs []uint, names []string) ([]TagView, error)
 }
 
 type KnowledgeService struct {
@@ -52,6 +63,249 @@ type KnowledgeService struct {
 	Fetcher WebFetcher
 	// Logs 为可选依赖：为 nil 时跳过操作日志记录，不影响主流程。
 	Logs OperationLogWriter
+	// Tasks 为可选依赖：为 nil 时不排入 AI 整理任务（测试与未启用 AI 的部署）。
+	Tasks *AiTaskService
+	// Tags 为可选依赖：为 nil 时采纳整理结果不写标签。
+	Tags OrganizeTagger
+}
+
+// enqueueOrganize 尽力排入 AI 整理任务：失败只记日志，不影响知识创建本身，
+// 用户仍可在详情页手动重新整理。
+func (s *KnowledgeService) enqueueOrganize(ctx context.Context, userID, knowledgeID uint) {
+	if s.Tasks == nil {
+		return
+	}
+	if _, err := s.Tasks.Enqueue(ctx, userID, model.AiTaskTypeOrganize, knowledgeID, nil); err != nil {
+		log.Warn().Err(err).Uint("knowledge_id", knowledgeID).Msg("AI 整理任务入队失败")
+	}
+}
+
+// OrganizeState 返回某条知识最近一次整理任务与待确认草稿；从未整理过时两者均为 nil。
+// 草稿只在任务成功时返回：失败或排队中的 payload 是空对象，前端按任务状态展示各自提示。
+func (s *KnowledgeService) OrganizeState(ctx context.Context, userID, id uint) (*AiTaskView, *OrganizeDraftView, error) {
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if s.Tasks == nil {
+		return nil, nil, nil
+	}
+	task, err := s.Tasks.Latest(ctx, userID, model.AiTaskTypeOrganize, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	if task == nil {
+		return nil, nil, nil
+	}
+	view := NewAiTaskView(task)
+	if task.Status != model.AiTaskSucceeded {
+		return view, nil, nil
+	}
+	var payload OrganizePayload
+	if err := json.Unmarshal([]byte(task.Payload), &payload); err != nil || strings.TrimSpace(payload.Summary) == "" {
+		return view, nil, nil
+	}
+	return view, s.draftView(ctx, userID, item, &payload), nil
+}
+
+// draftView 组装详情页面板数据：解析推荐标签是否已存在，并按正文版本标注草稿是否过期。
+func (s *KnowledgeService) draftView(ctx context.Context, userID uint, item *model.KnowledgeItem, payload *OrganizePayload) *OrganizeDraftView {
+	view := &OrganizeDraftView{
+		Summary:     payload.Summary,
+		Keywords:    payload.Keywords,
+		Concepts:    payload.Concepts,
+		Accepted:    payload.AcceptedAt != nil,
+		AcceptedAt:  payload.AcceptedAt,
+		BaseVersion: payload.BaseVersion,
+		// BaseVersion 为 0 的旧数据不做过期判断，避免误报。
+		Stale: payload.BaseVersion != 0 && item.Version != payload.BaseVersion,
+	}
+	if view.Keywords == nil {
+		view.Keywords = []string{}
+	}
+	if view.Concepts == nil {
+		view.Concepts = []string{}
+	}
+	view.SuggestedTags = s.resolveSuggestedTags(ctx, userID, payload.SuggestedTags)
+	return view
+}
+
+// resolveSuggestedTags 把推荐标签名解析成带 ID 的视图：命中用户已有标签时标记 existing，
+// 前端据此区分"复用已有标签"与"将新建标签"。
+func (s *KnowledgeService) resolveSuggestedTags(ctx context.Context, userID uint, names []string) []OrganizeTagView {
+	views := make([]OrganizeTagView, 0, len(names))
+	if s.Tags == nil {
+		for _, name := range names {
+			views = append(views, OrganizeTagView{Name: name})
+		}
+		return views
+	}
+	existing, err := s.Tags.List(ctx, userID)
+	if err != nil {
+		// 标签解析失败只降级为"全部新建"，不影响草稿本身。
+		log.Warn().Err(err).Uint("user_id", userID).Msg("AI 整理解析已有标签失败")
+		for _, name := range names {
+			views = append(views, OrganizeTagView{Name: name})
+		}
+		return views
+	}
+	index := make(map[string]uint, len(existing))
+	for _, tag := range existing {
+		index[strings.ToLower(tag.Name)] = tag.ID
+	}
+	for _, name := range names {
+		if tagID, ok := index[strings.ToLower(name)]; ok {
+			views = append(views, OrganizeTagView{Name: name, TagID: tagID, Existing: true})
+			continue
+		}
+		views = append(views, OrganizeTagView{Name: name})
+	}
+	return views
+}
+
+// OrganizeAcceptInput 是用户预览确认后的最终内容；Summary/Keywords 为 nil 表示沿用草稿原值。
+type OrganizeAcceptInput struct {
+	Summary  *string
+	Keywords *[]string
+	TagIDs   []uint
+	TagNames []string
+}
+
+// AcceptOrganize 采纳整理结果：摘要与关键词写入知识正式字段，推荐标签以 source=ai 追加绑定。
+// 只写 summary/keywords 两列，正文、版本与向量状态完全不受影响；重复采纳是幂等的。
+func (s *KnowledgeService) AcceptOrganize(ctx context.Context, userID, id uint, input OrganizeAcceptInput) (*model.KnowledgeItem, []TagView, *OrganizeDraftView, error) {
+	if _, err := s.Get(ctx, userID, id); err != nil {
+		return nil, nil, nil, err
+	}
+	task, payload, err := s.organizePayload(ctx, userID, id)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	summary := payload.Summary
+	if input.Summary != nil {
+		summary = strings.TrimSpace(*input.Summary)
+	}
+	if err := validateOrganizeSummary(summary); err != nil {
+		return nil, nil, nil, err
+	}
+	rawKeywords := payload.Keywords
+	if input.Keywords != nil {
+		rawKeywords = *input.Keywords
+	}
+	keywords, err := normalizeAcceptedKeywords(rawKeywords)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tags := []TagView{}
+	if len(input.TagIDs) > 0 || len(input.TagNames) > 0 {
+		if s.Tags == nil {
+			return nil, nil, nil, fmt.Errorf("%w: 标签功能不可用", ErrKnowledgeInvalid)
+		}
+		tags, err = s.Tags.AttachForKnowledge(ctx, userID, id, input.TagIDs, input.TagNames)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	if err := s.store.UpdateMetadata(ctx, userID, id, summary, EncodeKeywords(keywords)); err != nil {
+		return nil, nil, nil, knowledgeError(err)
+	}
+	acceptedAt := time.Now()
+	// 草稿里也保存最终采纳值：刷新后仍能看到用户改过的摘要与关键词，而不是模型的原始建议。
+	payload.Summary, payload.Keywords = summary, keywords
+	payload.AcceptedAt = &acceptedAt
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := s.Tasks.UpdatePayload(ctx, userID, task.ID, encoded); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, nil, ErrOrganizeNoDraft
+		}
+		return nil, nil, nil, err
+	}
+	updated, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	s.recordOperation(userID, model.OperationLogActionKnowledgeOrganize, id, updated.Title, updated.SourceFolderName, map[string]any{"tags": len(tags)})
+	return updated, tags, s.draftView(ctx, userID, updated, payload), nil
+}
+
+// RegenerateOrganize 重新生成整理结果：入队一条新的 organize 任务，草稿由 worker 异步产出。
+// 已有排队/运行中的任务时复用该任务，不重复消耗模型调用。
+func (s *KnowledgeService) RegenerateOrganize(ctx context.Context, userID, id uint) (*AiTaskView, *OrganizeDraftView, error) {
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if item.Status != model.KnowledgeReady || strings.TrimSpace(item.Content) == "" || s.Tasks == nil {
+		return nil, nil, repository.ErrKnowledgeConflict
+	}
+	if _, err := s.Tasks.Enqueue(ctx, userID, model.AiTaskTypeOrganize, id, nil); err != nil {
+		return nil, nil, err
+	}
+	return s.OrganizeState(ctx, userID, id)
+}
+
+// organizePayload 读取最近一次成功的整理任务及其草稿；没有可采纳的草稿时返回 ErrOrganizeNoDraft。
+func (s *KnowledgeService) organizePayload(ctx context.Context, userID, id uint) (*model.AiTask, *OrganizePayload, error) {
+	if s.Tasks == nil {
+		return nil, nil, ErrOrganizeNoDraft
+	}
+	task, err := s.Tasks.Latest(ctx, userID, model.AiTaskTypeOrganize, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, ErrOrganizeNoDraft
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	if task == nil || task.Status != model.AiTaskSucceeded {
+		return nil, nil, ErrOrganizeNoDraft
+	}
+	var payload OrganizePayload
+	if err := json.Unmarshal([]byte(task.Payload), &payload); err != nil || strings.TrimSpace(payload.Summary) == "" {
+		return nil, nil, ErrOrganizeNoDraft
+	}
+	return task, &payload, nil
+}
+
+// validateOrganizeSummary 校验采纳的摘要：1–200 字符、合法 UTF-8、无 NUL。
+func validateOrganizeSummary(summary string) error {
+	if !utf8.ValidString(summary) || strings.ContainsRune(summary, 0) {
+		return fmt.Errorf("%w: 摘要包含非法字符", ErrKnowledgeInvalid)
+	}
+	if n := utf8.RuneCountInString(summary); n == 0 || n > OrganizeSummaryMaxRunes {
+		return fmt.Errorf("%w: 摘要须为 1–%d 个字符", ErrKnowledgeInvalid, OrganizeSummaryMaxRunes)
+	}
+	return nil
+}
+
+// normalizeAcceptedKeywords 清洗采纳的关键词：去空、去重、长度 ≤20 字符、数量 ≤10。
+func normalizeAcceptedKeywords(keywords []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(keywords))
+	result := make([]string, 0, len(keywords))
+	for _, keyword := range keywords {
+		clean := strings.TrimSpace(keyword)
+		if clean == "" {
+			continue
+		}
+		if !utf8.ValidString(clean) || strings.ContainsRune(clean, 0) || utf8.RuneCountInString(clean) > OrganizeKeywordMaxRunes {
+			return nil, fmt.Errorf("%w: 关键词须为 1–%d 个字符", ErrKnowledgeInvalid, OrganizeKeywordMaxRunes)
+		}
+		key := strings.ToLower(clean)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, clean)
+	}
+	if len(result) > OrganizeKeywordMax {
+		return nil, fmt.Errorf("%w: 关键词最多 %d 个", ErrKnowledgeInvalid, OrganizeKeywordMax)
+	}
+	return result, nil
 }
 
 func (s *KnowledgeService) Chunks(ctx context.Context, user, id uint) ([]model.KnowledgeChunk, error) {
@@ -112,7 +366,7 @@ func (s *KnowledgeService) ListFiltered(ctx context.Context, user uint, page, si
 	if store, ok := s.store.(interface {
 		ListVector(context.Context, uint, repository.KnowledgeListFilter) ([]model.KnowledgeItem, int64, error)
 	}); ok {
-		return store.ListVector(ctx, user, repository.KnowledgeListFilter{
+		items, total, err := store.ListVector(ctx, user, repository.KnowledgeListFilter{
 			Page:        page,
 			Size:        size,
 			Query:       strings.TrimSpace(q),
@@ -124,6 +378,8 @@ func (s *KnowledgeService) ListFiltered(ctx context.Context, user uint, page, si
 			Archived:    opts.Archived,
 			Sort:        opts.Sort,
 		})
+		hydrateKeywords(items)
+		return items, total, err
 	}
 	// Retain the original store contract for import-only consumers and test doubles.
 	if opts == (KnowledgeListOptions{}) && vector == "" {
@@ -201,6 +457,7 @@ func (s *KnowledgeService) CreateManual(ctx context.Context, userID uint, title,
 		return nil, knowledgeError(err)
 	}
 	s.recordOperation(userID, model.OperationLogActionKnowledgeCreate, item.ID, item.Title, "", nil)
+	s.enqueueOrganize(ctx, userID, item.ID)
 	return item, nil
 }
 
@@ -231,6 +488,7 @@ func (s *KnowledgeService) ImportWeb(ctx context.Context, userID uint, rawURL st
 		return nil, knowledgeError(err)
 	}
 	s.recordOperation(userID, model.OperationLogActionKnowledgeWebImport, item.ID, item.Title, "", nil)
+	s.enqueueOrganize(ctx, userID, item.ID)
 	return item, nil
 }
 
@@ -476,7 +734,18 @@ func (s *KnowledgeService) Add(ctx context.Context, userID, fileID uint, title s
 
 func (s *KnowledgeService) Get(ctx context.Context, userID, id uint) (*model.KnowledgeItem, error) {
 	item, err := s.store.Get(ctx, userID, id)
-	return item, knowledgeError(err)
+	if err != nil {
+		return item, knowledgeError(err)
+	}
+	item.KeywordList = ParseKeywords(item.Keywords)
+	return item, nil
+}
+
+// hydrateKeywords 为列表项填充关键词接口视图；纯内存解析，不额外查库。
+func hydrateKeywords(items []model.KnowledgeItem) {
+	for i := range items {
+		items[i].KeywordList = ParseKeywords(items[i].Keywords)
+	}
 }
 
 func (s *KnowledgeService) Delete(ctx context.Context, userID, id uint) error {
@@ -509,7 +778,9 @@ func (s *KnowledgeService) List(ctx context.Context, userID uint, page, size int
 	default:
 		return nil, 0, ErrKnowledgeInvalid
 	}
-	return s.store.List(ctx, userID, page, size, strings.TrimSpace(query), status)
+	items, total, err := s.store.List(ctx, userID, page, size, strings.TrimSpace(query), status)
+	hydrateKeywords(items)
+	return items, total, err
 }
 
 func (s *KnowledgeService) Retry(ctx context.Context, userID, id uint) (*model.KnowledgeItem, error) {
@@ -614,7 +885,14 @@ func (s *KnowledgeService) ProcessNext(ctx context.Context) (bool, error) {
 	if ctx.Err() != nil {
 		return true, ctx.Err()
 	}
-	return true, s.store.Finish(ctx, task, content, code, message)
+	if err := s.store.Finish(ctx, task, content, code, message); err != nil {
+		return true, err
+	}
+	// 文件导入成功即就绪，随后排入 AI 整理任务；失败任务不整理，避免拿空正文调模型。
+	if code == "" {
+		s.enqueueOrganize(ctx, task.UserID, task.KnowledgeID)
+	}
+	return true, nil
 }
 
 func (s *KnowledgeService) Run(ctx context.Context) {

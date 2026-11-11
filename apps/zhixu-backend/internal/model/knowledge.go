@@ -34,6 +34,12 @@ type KnowledgeItem struct {
 	Title     string `gorm:"type:varchar(200);not null" json:"title"`
 	Content   string `gorm:"type:longtext;not null" json:"content"`
 	Version   uint   `gorm:"not null;default:1" json:"version"`
+	// Summary 与 Keywords 由 AI 整理草稿被采纳后写入；未采纳前保持空串，列表与详情都不会展示 AI 未确认内容。
+	// 刻意用 varchar 而不是 JSON 列：给已有表追加 NOT NULL 的 JSON 列时 MySQL 会用空串回填历史行并报 ERROR 3140。
+	Summary  string `gorm:"type:varchar(1000);not null;default:''" json:"summary"`
+	Keywords string `gorm:"type:varchar(1000);not null;default:''" json:"-"`
+	// KeywordList 是 Keywords 的解析视图，由服务层填充，不落库。
+	KeywordList []string `gorm:"-" json:"keywords"`
 	// IsFavorite 收藏标记；ArchivedAt 非空表示已归档，归档知识不参与检索与默认列表。
 	IsFavorite       bool            `gorm:"not null;default:false" json:"is_favorite"`
 	ArchivedAt       *time.Time      `gorm:"index" json:"archived_at"`

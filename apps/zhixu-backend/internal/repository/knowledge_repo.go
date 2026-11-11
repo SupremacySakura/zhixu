@@ -122,6 +122,18 @@ func (r *KnowledgeRepository) CreateManual(ctx context.Context, item *model.Know
 	})
 }
 
+// UpdateMetadata 只更新 AI 整理产出的摘要与关键词：不触碰正文、版本号、分块与向量状态，
+// 因此采纳整理结果不会让已有引用失效。先确认归属（0 行更新的 MySQL 语义无法区分"不存在"和"值未变"）。
+func (r *KnowledgeRepository) UpdateMetadata(ctx context.Context, userID, id uint, summary, keywords string) error {
+	db := r.DB.WithContext(ctx)
+	var item model.KnowledgeItem
+	if err := db.Select("id").Where("id = ? AND user_id = ?", id, userID).Take(&item).Error; err != nil {
+		return err
+	}
+	return db.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]any{"summary": summary, "keywords": keywords}).Error
+}
+
 // SetFavorite 幂等设置收藏标记：值未变化时不写库。
 func (r *KnowledgeRepository) SetFavorite(ctx context.Context, userID, id uint, favorite bool) error {
 	db := r.DB.WithContext(ctx)

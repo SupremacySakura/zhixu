@@ -14,6 +14,9 @@ vi.mock('../../services/apis/knowledge', () => ({
   favoriteKnowledge: vi.fn(),
   archiveKnowledge: vi.fn(),
   unarchiveKnowledge: vi.fn(),
+  getKnowledgeOrganize: vi.fn(),
+  acceptKnowledgeOrganize: vi.fn(),
+  regenerateKnowledgeOrganize: vi.fn(),
 }))
 vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
 
@@ -26,6 +29,8 @@ const baseItem = {
   source_type: 'manual',
   title: '手写笔记',
   content: '# 正文',
+  summary: '',
+  keywords: [],
   version: 2,
   is_favorite: false,
   archived_at: null,
@@ -60,6 +65,7 @@ async function render() {
     global: {
       plugins: [router],
       stubs: {
+        KnowledgeOrganizePanel: true,
         KnowledgeVectorPanel: true,
         KnowledgeTagEditor: true,
         KnowledgeHistoryDialog: true,

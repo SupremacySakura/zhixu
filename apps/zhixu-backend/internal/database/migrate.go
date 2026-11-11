@@ -176,6 +176,7 @@ func Migrate() error {
 		&model.ChatTurnUsage{},
 		&model.ChatConversationState{},
 		&model.RetrievalLog{},
+		&model.AiTask{},
 	); err != nil {
 		return err
 	}

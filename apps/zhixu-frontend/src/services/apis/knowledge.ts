@@ -1,5 +1,6 @@
 import request from '../request'
 import type { ResponseData } from '../types'
+import type { Tag } from './tag'
 
 export type KnowledgeStatus = 'pending' | 'running' | 'ready' | 'failed'
 export type KnowledgeVectorState = '' | 'pending' | 'running' | 'ready' | 'partial'
@@ -14,6 +15,10 @@ export interface KnowledgeItem {
   title: string
   content: string
   version: number
+  /** AI 整理摘要：只有用户在详情页确认采纳后才有值。 */
+  summary: string
+  /** AI 整理关键词：采纳后写入，列表与检索侧复用。 */
+  keywords: string[]
   is_favorite: boolean
   archived_at: string | null
   status: KnowledgeStatus
@@ -229,6 +234,82 @@ export async function restoreKnowledgeVersion(id: number, version: number, signa
     (
       await request.post<ResponseData<KnowledgeItem>>(
         `/api/knowledge/${id}/versions/${version}/restore`,
+        undefined,
+        { signal },
+      )
+    ).data,
+  )
+}
+export type KnowledgeOrganizeStatus = 'pending' | 'running' | 'succeeded' | 'failed'
+export interface KnowledgeOrganizeTask {
+  id: number
+  task_type: string
+  status: KnowledgeOrganizeStatus
+  error_message: string
+  retry_count: number
+  updated_at: string
+}
+export interface KnowledgeOrganizeTag {
+  name: string
+  /** 非零表示用户已有同名标签，采纳时按 ID 复用。 */
+  tag_id: number
+  existing: boolean
+}
+export interface KnowledgeOrganizeDraft {
+  summary: string
+  keywords: string[]
+  suggested_tags: KnowledgeOrganizeTag[]
+  concepts: string[]
+  accepted: boolean
+  accepted_at?: string | null
+  /** 草稿生成后正文被编辑过：采纳前应提示重新生成。 */
+  stale: boolean
+  base_version: number
+}
+export interface KnowledgeOrganizeState {
+  task: KnowledgeOrganizeTask | null
+  draft: KnowledgeOrganizeDraft | null
+}
+export interface KnowledgeOrganizeAcceptInput {
+  summary: string
+  keywords: string[]
+  tag_ids: number[]
+  tag_names: string[]
+}
+export interface KnowledgeOrganizeAcceptResult {
+  item: KnowledgeItem
+  tags: Tag[]
+  draft: KnowledgeOrganizeDraft | null
+}
+export async function getKnowledgeOrganize(id: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.get<ResponseData<KnowledgeOrganizeState>>(`/api/knowledge/${id}/organize`, {
+        signal,
+      })
+    ).data,
+  )
+}
+export async function acceptKnowledgeOrganize(
+  id: number,
+  input: KnowledgeOrganizeAcceptInput,
+  signal?: AbortSignal,
+) {
+  return unwrap(
+    (
+      await request.post<ResponseData<KnowledgeOrganizeAcceptResult>>(
+        `/api/knowledge/${id}/organize/accept`,
+        input,
+        { signal },
+      )
+    ).data,
+  )
+}
+export async function regenerateKnowledgeOrganize(id: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.post<ResponseData<KnowledgeOrganizeState>>(
+        `/api/knowledge/${id}/organize/regenerate`,
         undefined,
         { signal },
       )
