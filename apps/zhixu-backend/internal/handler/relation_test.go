@@ -63,11 +63,54 @@ func (relationHandlerTasks) Latest(_ context.Context, _ uint, taskType string, t
 	return nil, gorm.ErrRecordNotFound
 }
 
+func (relationHandlerStore) Get(_ context.Context, _, id uint) (*repository.RelationRecord, error) {
+	var status model.RelationStatus
+	relationType := model.RelationTypeRelated
+	switch id {
+	case 42:
+		status = model.RelationSuggested
+	case 43:
+		status = model.RelationConfirmed
+	case 44:
+		status = model.RelationRejected
+	case 45:
+		status = model.RelationConfirmed
+		relationType = model.RelationTypeDependsOn
+	default:
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &repository.RelationRecord{
+		KnowledgeRelation: model.KnowledgeRelation{
+			ID: id, UserID: 2, SourceID: 3, TargetID: 9, RelationType: relationType,
+			Status: status, Source: model.RelationSourceAI, Confidence: 0.72,
+		},
+		CounterpartID: 9, CounterpartTitle: "目标知识",
+	}, nil
+}
+
+func (relationHandlerStore) UpdateStatus(_ context.Context, _, _ uint, _ model.RelationStatus, _ *time.Time) error {
+	return nil
+}
+
+func (relationHandlerStore) UpdateType(_ context.Context, _, id uint, relationType model.RelationType) (*model.KnowledgeRelation, error) {
+	if id == 45 {
+		return nil, repository.ErrRelationDuplicate
+	}
+	return &model.KnowledgeRelation{ID: id, SourceID: 3, TargetID: 9, RelationType: relationType}, nil
+}
+
 func (relationHandlerStore) Delete(_ context.Context, _, id uint) error {
 	if id == 404 {
 		return gorm.ErrRecordNotFound
 	}
 	return nil
+}
+
+func (relationHandlerTasks) EnqueueRelationTask(_ context.Context, _, knowledgeID, _ uint) (*model.AiTask, error) {
+	return &model.AiTask{
+		ID: 8, UserID: 2, TaskType: model.AiTaskTypeRelation, TargetID: knowledgeID,
+		Status: model.AiTaskPending, UpdatedAt: time.Now(),
+	}, nil
 }
 
 type relationHandlerKnowledge struct {
@@ -99,6 +142,10 @@ func serveRelation(t *testing.T, user uint, method, path, body string) *httptest
 	r.GET("/knowledge/:id/relations", h.List)
 	r.POST("/knowledge/:id/relations", h.Create)
 	r.DELETE("/relations/:id", h.Delete)
+	r.POST("/relations/:id/confirm", h.Confirm)
+	r.POST("/relations/:id/reject", h.Reject)
+	r.PUT("/relations/:id", h.Update)
+	r.POST("/knowledge/:id/relations/regenerate", h.Regenerate)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(body)))
 	return w
@@ -137,6 +184,48 @@ func TestRelationHandlerRoutes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := serveRelation(t, tc.user, tc.method, tc.path, tc.body)
 			require.Equal(t, tc.status, w.Code)
+			if tc.contains != "" {
+				require.Contains(t, w.Body.String(), tc.contains)
+			}
+		})
+	}
+}
+func TestRelationHandlerConfirmationRoutes(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		method   string
+		path     string
+		body     string
+		user     uint
+		status   int
+		contains string
+	}{
+		{"confirm suggested", "POST", "/relations/42/confirm", "", 2, 200, "\"status\":\"confirmed\""},
+		{"confirm is idempotent", "POST", "/relations/43/confirm", "", 2, 200, "\"status\":\"confirmed\""},
+		{"confirm rejected", "POST", "/relations/44/confirm", "", 2, 409, "已被忽略"},
+		{"confirm missing", "POST", "/relations/404/confirm", "", 2, 404, "关系不存在"},
+		{"confirm invalid id", "POST", "/relations/x/confirm", "", 2, 400, "关系ID无效"},
+		{"confirm unauthorized", "POST", "/relations/42/confirm", "", 0, 401, ""},
+		{"reject suggested", "POST", "/relations/42/reject", "", 2, 200, "\"status\":\"rejected\""},
+		{"reject is idempotent", "POST", "/relations/44/reject", "", 2, 200, "\"status\":\"rejected\""},
+		{"reject confirmed", "POST", "/relations/43/reject", "", 2, 409, "已确认"},
+		{"reject missing", "POST", "/relations/404/reject", "", 2, 404, "关系不存在"},
+		{"update type", "PUT", "/relations/43", `{"relation_type":"updates"}`, 2, 200, "\"relation_type\":\"updates\""},
+		{"update invalid type", "PUT", "/relations/43", `{"relation_type":"friend"}`, 2, 400, "关系类型无效"},
+		{"update requires confirmed", "PUT", "/relations/42", `{"relation_type":"updates"}`, 2, 409, "已确认"},
+		{"update duplicate pair", "PUT", "/relations/45", `{"relation_type":"related"}`, 2, 409, "已存在"},
+		{"update bad json", "PUT", "/relations/43", `{`, 2, 400, "关系参数无效"},
+		{"update missing", "PUT", "/relations/404", `{"relation_type":"updates"}`, 2, 404, "关系不存在"},
+		{"regenerate", "POST", "/knowledge/3/relations/regenerate", "", 2, 202, "\"task\""},
+		{"regenerate queued", "POST", "/knowledge/3/relations/regenerate", "", 2, 202, "\"status\":\"pending\""},
+		{"regenerate archived", "POST", "/knowledge/88/relations/regenerate", "", 2, 409, "归档"},
+		{"regenerate foreign", "POST", "/knowledge/77/relations/regenerate", "", 2, 404, "知识不存在"},
+		{"regenerate invalid id", "POST", "/knowledge/x/relations/regenerate", "", 2, 400, ""},
+		{"regenerate unauthorized", "POST", "/knowledge/3/relations/regenerate", "", 0, 401, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := serveRelation(t, tc.user, tc.method, tc.path, tc.body)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
 			if tc.contains != "" {
 				require.Contains(t, w.Body.String(), tc.contains)
 			}

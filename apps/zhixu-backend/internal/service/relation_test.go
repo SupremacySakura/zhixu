@@ -20,6 +20,24 @@ type relationFakeStore struct {
 	listErr   error
 	deleteErr error
 	deleted   []uint
+
+	row           *repository.RelationRecord
+	getErr        error
+	statusUpdates []relationStatusUpdate
+	statusErr     error
+	typeUpdates   []relationTypeUpdate
+	typeErr       error
+}
+
+type relationStatusUpdate struct {
+	id          uint
+	status      model.RelationStatus
+	confirmedAt *time.Time
+}
+
+type relationTypeUpdate struct {
+	id           uint
+	relationType model.RelationType
 }
 
 func (f *relationFakeStore) Create(_ context.Context, relation *model.KnowledgeRelation) (*model.KnowledgeRelation, error) {
@@ -46,6 +64,32 @@ func (f *relationFakeStore) Delete(_ context.Context, _, id uint) error {
 	return nil
 }
 
+func (f *relationFakeStore) Get(_ context.Context, _ uint, id uint) (*repository.RelationRecord, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	if f.row == nil || f.row.ID != id {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return f.row, nil
+}
+
+func (f *relationFakeStore) UpdateStatus(_ context.Context, _ uint, id uint, status model.RelationStatus, confirmedAt *time.Time) error {
+	if f.statusErr != nil {
+		return f.statusErr
+	}
+	f.statusUpdates = append(f.statusUpdates, relationStatusUpdate{id: id, status: status, confirmedAt: confirmedAt})
+	return nil
+}
+
+func (f *relationFakeStore) UpdateType(_ context.Context, _ uint, id uint, relationType model.RelationType) (*model.KnowledgeRelation, error) {
+	if f.typeErr != nil {
+		return nil, f.typeErr
+	}
+	f.typeUpdates = append(f.typeUpdates, relationTypeUpdate{id: id, relationType: relationType})
+	return &model.KnowledgeRelation{ID: id, RelationType: relationType}, nil
+}
+
 type relationFakeKnowledge struct{ items map[uint]*model.KnowledgeItem }
 
 func (f *relationFakeKnowledge) Get(_ context.Context, _ uint, id uint) (*model.KnowledgeItem, error) {
@@ -60,6 +104,16 @@ type relationFakeTasks struct {
 	task  *model.AiTask
 	err   error
 	calls int
+
+	enqueued     *model.AiTask
+	enqueueErr   error
+	enqueueCalls []relationEnqueueCall
+}
+
+type relationEnqueueCall struct {
+	userID      uint
+	knowledgeID uint
+	baseVersion uint
 }
 
 func (f *relationFakeTasks) Latest(_ context.Context, _ uint, _ string, _ uint) (*model.AiTask, error) {
@@ -71,6 +125,14 @@ func (f *relationFakeTasks) Latest(_ context.Context, _ uint, _ string, _ uint) 
 		return nil, gorm.ErrRecordNotFound
 	}
 	return f.task, nil
+}
+
+func (f *relationFakeTasks) EnqueueRelationTask(_ context.Context, userID, knowledgeID, baseVersion uint) (*model.AiTask, error) {
+	f.enqueueCalls = append(f.enqueueCalls, relationEnqueueCall{userID: userID, knowledgeID: knowledgeID, baseVersion: baseVersion})
+	if f.enqueueErr != nil {
+		return nil, f.enqueueErr
+	}
+	return f.enqueued, nil
 }
 
 func newRelationFixture() (*RelationService, *relationFakeStore, *relationFakeKnowledge) {
@@ -235,4 +297,217 @@ func TestDeleteRelationPropagatesUnexpectedError(t *testing.T) {
 	svc, store, _ := newRelationFixture()
 	store.deleteErr = errors.New("db down")
 	require.ErrorContains(t, svc.Delete(context.Background(), 2, 41), "db down")
+}
+func suggestedRecord(id uint) *repository.RelationRecord {
+	return &repository.RelationRecord{
+		KnowledgeRelation: model.KnowledgeRelation{
+			ID: id, UserID: 2, SourceID: 3, TargetID: 9,
+			RelationType: model.RelationTypeRelated, Status: model.RelationSuggested,
+			Source: model.RelationSourceAI, Confidence: 0.72,
+			Evidence: "{\"reason\":\"主题相近\"}",
+		},
+		CounterpartID: 9, CounterpartTitle: "目标知识",
+	}
+}
+
+// 确认建议：状态置 confirmed 并记录确认时间；返回行直接带对端信息。
+func TestConfirmSuggestionRecordsConfirmationTime(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = suggestedRecord(42)
+
+	view, err := svc.Confirm(context.Background(), 2, 42)
+
+	require.NoError(t, err)
+	require.NotNil(t, view)
+	require.Equal(t, model.RelationConfirmed, view.Status)
+	require.NotNil(t, view.ConfirmedAt)
+	require.WithinDuration(t, time.Now(), *view.ConfirmedAt, time.Minute)
+	require.Equal(t, "目标知识", view.CounterpartTitle)
+	require.Len(t, store.statusUpdates, 1)
+	require.Equal(t, uint(42), store.statusUpdates[0].id)
+	require.Equal(t, model.RelationConfirmed, store.statusUpdates[0].status)
+	require.NotNil(t, store.statusUpdates[0].confirmedAt)
+}
+
+// 已确认的关系再次确认保持幂等：成功返回，不重复写库。
+func TestConfirmRelationIsIdempotent(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	confirmedAt := time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC)
+	store.row = suggestedRecord(42)
+	store.row.Status = model.RelationConfirmed
+	store.row.ConfirmedAt = &confirmedAt
+
+	view, err := svc.Confirm(context.Background(), 2, 42)
+
+	require.NoError(t, err)
+	require.Equal(t, model.RelationConfirmed, view.Status)
+	require.Equal(t, &confirmedAt, view.ConfirmedAt)
+	require.Empty(t, store.statusUpdates)
+}
+
+// 已忽略的建议不能直接确认，需走手动添加恢复（409）。
+func TestConfirmRejectedRelationConflicts(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = suggestedRecord(42)
+	store.row.Status = model.RelationRejected
+
+	_, err := svc.Confirm(context.Background(), 2, 42)
+
+	require.ErrorIs(t, err, ErrRelationConflict)
+	require.Contains(t, err.Error(), "已被忽略")
+	require.Empty(t, store.statusUpdates)
+}
+
+func TestConfirmMissingRelationIsNotFound(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = nil
+
+	_, err := svc.Confirm(context.Background(), 2, 404)
+
+	require.ErrorIs(t, err, ErrRelationNotFound)
+}
+
+// 忽略建议：置 rejected，保留行用于永久抑制。
+func TestRejectSuggestionMarksRejected(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = suggestedRecord(42)
+
+	view, err := svc.Reject(context.Background(), 2, 42)
+
+	require.NoError(t, err)
+	require.Equal(t, model.RelationRejected, view.Status)
+	require.Len(t, store.statusUpdates, 1)
+	require.Equal(t, model.RelationRejected, store.statusUpdates[0].status)
+	require.Nil(t, store.statusUpdates[0].confirmedAt)
+}
+
+// 已忽略的关系再次忽略保持幂等。
+func TestRejectRelationIsIdempotent(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = suggestedRecord(42)
+	store.row.Status = model.RelationRejected
+
+	view, err := svc.Reject(context.Background(), 2, 42)
+
+	require.NoError(t, err)
+	require.Equal(t, model.RelationRejected, view.Status)
+	require.Empty(t, store.statusUpdates)
+}
+
+// 已确认的关系不能忽略，提示先删除（409）。
+func TestRejectConfirmedRelationConflicts(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = suggestedRecord(42)
+	store.row.Status = model.RelationConfirmed
+
+	_, err := svc.Reject(context.Background(), 2, 42)
+
+	require.ErrorIs(t, err, ErrRelationConflict)
+	require.Contains(t, err.Error(), "已确认")
+	require.Empty(t, store.statusUpdates)
+}
+
+func TestRejectMissingRelationIsNotFound(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = nil
+
+	_, err := svc.Reject(context.Background(), 2, 404)
+	require.ErrorIs(t, err, ErrRelationNotFound)
+}
+
+// 修改类型：仅已确认关系可改，改后返回新类型。
+func TestUpdateRelationTypeChangesConfirmedRow(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = suggestedRecord(42)
+	store.row.Status = model.RelationConfirmed
+
+	view, err := svc.UpdateType(context.Background(), 2, 42, model.RelationTypeUpdates)
+
+	require.NoError(t, err)
+	require.Equal(t, model.RelationTypeUpdates, view.RelationType)
+	require.Len(t, store.typeUpdates, 1)
+	require.Equal(t, uint(42), store.typeUpdates[0].id)
+	require.Equal(t, model.RelationTypeUpdates, store.typeUpdates[0].relationType)
+}
+
+func TestUpdateRelationTypeRejectsInvalidType(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = suggestedRecord(42)
+
+	_, err := svc.UpdateType(context.Background(), 2, 42, "friend")
+
+	require.ErrorIs(t, err, ErrRelationInvalid)
+	require.Empty(t, store.typeUpdates)
+}
+
+func TestUpdateRelationTypeRequiresConfirmedRow(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = suggestedRecord(42)
+
+	_, err := svc.UpdateType(context.Background(), 2, 42, model.RelationTypeUpdates)
+
+	require.ErrorIs(t, err, ErrRelationConflict)
+	require.Contains(t, err.Error(), "已确认")
+	require.Empty(t, store.typeUpdates)
+}
+
+// 归一后与既有同类型行冲突时返回 409，不做静默合并。
+func TestUpdateRelationTypeConflictOnDuplicatePair(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = suggestedRecord(42)
+	store.row.Status = model.RelationConfirmed
+	store.typeErr = repository.ErrRelationDuplicate
+
+	_, err := svc.UpdateType(context.Background(), 2, 42, model.RelationTypeDependsOn)
+
+	require.ErrorIs(t, err, ErrRelationConflict)
+	require.Contains(t, err.Error(), "已存在")
+}
+
+func TestUpdateRelationTypeMissingIsNotFound(t *testing.T) {
+	svc, store, _ := newRelationFixture()
+	store.row = nil
+
+	_, err := svc.UpdateType(context.Background(), 2, 404, model.RelationTypeRelated)
+	require.ErrorIs(t, err, ErrRelationNotFound)
+}
+
+// 手动触发推荐：以知识当前版本入队，返回任务状态。
+func TestRegenerateRelationTaskReturnsQueuedTask(t *testing.T) {
+	svc, _, knowledge, tasks := newRelationFixtureWithTasks(nil)
+	knowledge.items[3].Version = 6
+	now := time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC)
+	tasks.enqueued = &model.AiTask{ID: 12, UserID: 2, TaskType: model.AiTaskTypeRelation, TargetID: 3, Status: model.AiTaskPending, UpdatedAt: now}
+
+	task, err := svc.Regenerate(context.Background(), 2, 3)
+
+	require.NoError(t, err)
+	require.NotNil(t, task)
+	require.Equal(t, uint(12), task.ID)
+	require.Equal(t, model.AiTaskPending, task.Status)
+	require.Len(t, tasks.enqueueCalls, 1)
+	require.Equal(t, uint(3), tasks.enqueueCalls[0].knowledgeID)
+	require.Equal(t, uint(6), tasks.enqueueCalls[0].baseVersion)
+}
+
+// 已归档的知识不再生成新建议（409）。
+func TestRegenerateArchivedKnowledgeConflicts(t *testing.T) {
+	svc, _, knowledge, tasks := newRelationFixtureWithTasks(nil)
+	now := time.Now()
+	knowledge.items[3].ArchivedAt = &now
+
+	_, err := svc.Regenerate(context.Background(), 2, 3)
+
+	require.ErrorIs(t, err, ErrRelationConflict)
+	require.Contains(t, err.Error(), "归档")
+	require.Empty(t, tasks.enqueueCalls)
+}
+
+func TestRegenerateForeignKnowledgeIsNotFound(t *testing.T) {
+	svc, _, _, tasks := newRelationFixtureWithTasks(nil)
+
+	_, err := svc.Regenerate(context.Background(), 2, 77)
+
+	require.ErrorIs(t, err, ErrKnowledgeNotFound)
+	require.Empty(t, tasks.enqueueCalls)
 }

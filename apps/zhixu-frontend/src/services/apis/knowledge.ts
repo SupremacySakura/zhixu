@@ -353,12 +353,21 @@ export interface KnowledgeRelation {
   counterpart_id: number
   counterpart_title: string
   created_at: string
+  /** 确认时间：确认或手动建立的关系才有值。 */
+  confirmed_at: string | null
+}
+export interface RelationTask {
+  id: number
+  status: 'pending' | 'running' | 'succeeded' | 'failed'
+  error_message: string
+  retry_count: number
+  updated_at: string
 }
 export interface KnowledgeRelationList {
   confirmed: KnowledgeRelation[]
   suggested: KnowledgeRelation[]
-  /** 建议任务状态：本批不下发任务，恒为 null。 */
-  task: { id: number; status: string } | null
+  /** 当前知识的关联推荐任务；尚未触发过时为 null。 */
+  task: RelationTask | null
 }
 export async function listKnowledgeRelations(id: number, signal?: AbortSignal) {
   return unwrap(
@@ -385,4 +394,53 @@ export async function createKnowledgeRelation(
 export async function deleteKnowledgeRelation(relationId: number, signal?: AbortSignal) {
   const res = await request.delete<ResponseData<null>>(`/api/relations/${relationId}`, { signal })
   if (res.data.code !== 0) throw new Error(res.data.msg || '删除关系失败')
+}
+export async function confirmKnowledgeRelation(relationId: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.post<ResponseData<KnowledgeRelation>>(
+        `/api/relations/${relationId}/confirm`,
+        undefined,
+        { signal },
+      )
+    ).data,
+  )
+}
+export async function rejectKnowledgeRelation(relationId: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.post<ResponseData<KnowledgeRelation>>(
+        `/api/relations/${relationId}/reject`,
+        undefined,
+        { signal },
+      )
+    ).data,
+  )
+}
+export async function updateKnowledgeRelationType(
+  relationId: number,
+  relationType: RelationType,
+  signal?: AbortSignal,
+) {
+  return unwrap(
+    (
+      await request.put<ResponseData<KnowledgeRelation>>(
+        `/api/relations/${relationId}`,
+        { relation_type: relationType },
+        { signal },
+      )
+    ).data,
+  )
+}
+/** 手动触发一次关联推荐；活跃任务由后端复用，返回当前任务状态。 */
+export async function regenerateKnowledgeRelations(id: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.post<ResponseData<{ task: RelationTask }>>(
+        `/api/knowledge/${id}/relations/regenerate`,
+        undefined,
+        { signal },
+      )
+    ).data,
+  )
 }

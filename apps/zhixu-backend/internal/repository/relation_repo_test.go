@@ -91,6 +91,7 @@ func TestCreateRelationReusesExistingRow(t *testing.T) {
 	}).AddRow(8, 2, 3, 9, "related", "rejected", "ai"))
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `knowledge_relations` SET .* WHERE id = \\? AND user_id = \\?").
+		WithArgs(sqlmock.AnyArg(), "manual", "confirmed", sqlmock.AnyArg(), 8, 2).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
@@ -170,6 +171,134 @@ func TestDeleteRelationReportsMissing(t *testing.T) {
 
 	repo := NewRelationRepository(db)
 	err := repo.Delete(context.Background(), 2, 7)
+
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// Get 按关系 ID 读取归属当前用户的单行。
+func TestGetRelationReturnsOwnedRow(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM `knowledge_relations` WHERE id = \\? AND user_id = \\?.*").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "user_id", "source_id", "target_id", "relation_type", "status", "source",
+			"confidence", "evidence", "created_at", "updated_at",
+		}).AddRow(8, 2, 3, 9, "related", "suggested", "ai", 0.72, "{}", now, now))
+
+	row, err := NewRelationRepository(db).Get(context.Background(), 2, 8)
+
+	require.NoError(t, err)
+	require.Equal(t, uint(8), row.ID)
+	require.Equal(t, model.RelationSuggested, row.Status)
+	require.Equal(t, model.RelationSourceAI, row.Source)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 不存在或属于他人时按 not found 处理。
+func TestGetRelationReportsMissing(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery("SELECT \\* FROM `knowledge_relations` WHERE id = \\? AND user_id = \\?.*").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	_, err := NewRelationRepository(db).Get(context.Background(), 2, 404)
+
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 确认/忽略按关系 ID 更新状态；确认时写入确认时间。
+func TestUpdateRelationStatusWritesConfirmedAt(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	confirmedAt := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `knowledge_relations` SET .* WHERE id = \\? AND user_id = \\?").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err := NewRelationRepository(db).UpdateStatus(context.Background(), 2, 8, model.RelationConfirmed, &confirmedAt)
+
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 忽略不写确认时间。
+func TestUpdateRelationStatusWithoutTime(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `knowledge_relations` SET .* WHERE id = \\? AND user_id = \\?").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err := NewRelationRepository(db).UpdateStatus(context.Background(), 2, 8, model.RelationRejected, nil)
+
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUpdateRelationStatusReportsMissing(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `knowledge_relations` SET .* WHERE id = \\? AND user_id = \\?").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+
+	err := NewRelationRepository(db).UpdateStatus(context.Background(), 2, 404, model.RelationRejected, nil)
+
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 修改类型时对称类型先按 min/max 归一，再写回关系类型与方向。
+func TestUpdateRelationTypeNormalizesSymmetricPair(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery("SELECT \\* FROM `knowledge_relations` WHERE id = \\? AND user_id = \\?.*").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "user_id", "source_id", "target_id", "relation_type", "status", "source",
+		}).AddRow(8, 2, 9, 3, "depends_on", "confirmed", "manual"))
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `knowledge_relations` SET .* WHERE id = \\? AND user_id = \\?").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	_, err := NewRelationRepository(db).UpdateType(context.Background(), 2, 8, model.RelationTypeRelated)
+
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 归一后命中唯一键时返回可映射为 409 的重复错误。
+func TestUpdateRelationTypeReportsDuplicatePair(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery("SELECT \\* FROM `knowledge_relations` WHERE id = \\? AND user_id = \\?.*").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "user_id", "source_id", "target_id", "relation_type", "status", "source",
+		}).AddRow(8, 2, 3, 9, "depends_on", "confirmed", "manual"))
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `knowledge_relations` SET .* WHERE id = \\? AND user_id = \\?").
+		WillReturnError(&mysqlDriver.MySQLError{Number: 1062, Message: "Duplicate entry"})
+	mock.ExpectRollback()
+
+	_, err := NewRelationRepository(db).UpdateType(context.Background(), 2, 8, model.RelationTypeRelated)
+
+	require.ErrorIs(t, err, ErrRelationDuplicate)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUpdateRelationTypeReportsMissing(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery("SELECT \\* FROM `knowledge_relations` WHERE id = \\? AND user_id = \\?.*").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	_, err := NewRelationRepository(db).UpdateType(context.Background(), 2, 404, model.RelationTypeRelated)
 
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	require.NoError(t, mock.ExpectationsWereMet())

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"zhixu-backend/internal/model"
 
@@ -16,6 +17,9 @@ type RelationRecord struct {
 	CounterpartID    uint   `gorm:"column:counterpart_id" json:"counterpart_id"`
 	CounterpartTitle string `gorm:"column:counterpart_title" json:"counterpart_title"`
 }
+
+// ErrRelationDuplicate 表示修改类型后命中了唯一键：同一对知识已存在同类型关系。
+var ErrRelationDuplicate = errors.New("relation duplicate")
 
 type RelationRepository struct{ DB *gorm.DB }
 
@@ -91,17 +95,77 @@ func (r *RelationRepository) confirm(ctx context.Context, relation *model.Knowle
 	if relation.Status == model.RelationConfirmed {
 		return relation, nil
 	}
+	confirmedAt := time.Now()
+	updates := map[string]any{
+		"status":       model.RelationConfirmed,
+		"source":       model.RelationSourceManual,
+		"confirmed_at": confirmedAt,
+	}
 	if err := r.DB.WithContext(ctx).Model(&model.KnowledgeRelation{}).
 		Where("id = ? AND user_id = ?", relation.ID, relation.UserID).
-		Updates(map[string]any{
-			"status": model.RelationConfirmed,
-			"source": model.RelationSourceManual,
-		}).Error; err != nil {
+		Updates(updates).Error; err != nil {
 		return nil, err
 	}
 	relation.Status = model.RelationConfirmed
 	relation.Source = model.RelationSourceManual
+	relation.ConfirmedAt = &confirmedAt
 	return relation, nil
+}
+
+// Get 按关系 ID 读取归属当前用户的单行；不存在或属于他人时返回 gorm.ErrRecordNotFound。
+func (r *RelationRepository) Get(ctx context.Context, userID, id uint) (*RelationRecord, error) {
+	var row RelationRecord
+	err := r.DB.WithContext(ctx).
+		Where("id = ? AND user_id = ?", id, userID).
+		Take(&row).Error
+	return &row, err
+}
+
+// UpdateStatus 置关系状态；confirmedAt 非空时同时记录确认时间（忽略不写）。
+func (r *RelationRepository) UpdateStatus(ctx context.Context, userID, id uint, status model.RelationStatus, confirmedAt *time.Time) error {
+	updates := map[string]any{"status": status}
+	if confirmedAt != nil {
+		updates["confirmed_at"] = *confirmedAt
+	}
+	res := r.DB.WithContext(ctx).Model(&model.KnowledgeRelation{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Updates(updates)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateType 修改已确认关系的类型：对称类型按 min/max 归一后写回，
+// 归一后命中唯一键时返回 ErrRelationDuplicate，供上层映射为 409。
+func (r *RelationRepository) UpdateType(ctx context.Context, userID, id uint, relationType model.RelationType) (*model.KnowledgeRelation, error) {
+	var row model.KnowledgeRelation
+	if err := r.DB.WithContext(ctx).
+		Where("id = ? AND user_id = ?", id, userID).
+		Take(&row).Error; err != nil {
+		return nil, err
+	}
+	sourceID, targetID := normalizeRelationPair(relationType, row.SourceID, row.TargetID)
+	err := r.DB.WithContext(ctx).Model(&model.KnowledgeRelation{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]any{
+			"relation_type": relationType,
+			"source_id":     sourceID,
+			"target_id":     targetID,
+		}).Error
+	if err != nil {
+		if isDuplicateRelation(err) {
+			return nil, ErrRelationDuplicate
+		}
+		return nil, err
+	}
+	row.RelationType = relationType
+	row.SourceID = sourceID
+	row.TargetID = targetID
+	return &row, nil
 }
 
 // ListByKnowledge 返回某条知识两个方向的关系，按创建时间倒序；对端标题随行返回。
