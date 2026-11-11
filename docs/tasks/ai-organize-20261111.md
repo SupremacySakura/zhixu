@@ -26,6 +26,7 @@ applicable_to: 在 Go+Gin+GORM 后端与 Mastra AI 服务之间落地「LLM 结�
 - Go 单测用 sqlmock 时，SQL 里的反引号在 Go 双引号字符串中无法转义，正则改用 `.` 匹配；GORM 默认事务要显式 `ExpectBegin/ExpectCommit`。
 - 本机 `go` 编译缓存目录被沙箱拒绝，所有命令需 `GOCACHE=/tmp/zhixu-go-cache GOTMPDIR=/tmp`。
 - run_code 程序里拼接含反引号的 TS 源码会被模板字面量截断，用 `String.fromCharCode(96)` 或按行数组 join。
+- 根目录 `pnpm lint` 会卡住数分钟：ESLint 9 不读 `.gitignore`，把 `apps/zhixu-ai/.mastra/output`（349 个打包文件 / 26MB）也当作源码格式化。在 `eslint.config.js` 的 ignores 里补 `**/.mastra/**` 后 lint 从「>10 分钟」降到 5 秒。
 
 ## 可沉淀模式
 
