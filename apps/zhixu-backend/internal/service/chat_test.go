@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,24 @@ func TestChatInputAndUserIsolation(t *testing.T) {
 		require.Error(t, ValidateChat(ChatInput{Messages: msgs}))
 	}
 }
+func TestValidateChatMessageLimits(t *testing.T) {
+	long := func(n int) string { return strings.Repeat("字", n) }
+	user := func(content string) ChatMessage { return ChatMessage{Role: "user", Content: content} }
+	assistant := func(content string) ChatMessage { return ChatMessage{Role: "assistant", Content: content} }
+
+	// The turn being sent is capped at 2000 characters.
+	require.NoError(t, ValidateChat(ChatInput{Messages: []ChatMessage{user(long(ChatMessageMaxRunes))}}))
+	require.Error(t, ValidateChat(ChatInput{Messages: []ChatMessage{user(long(ChatMessageMaxRunes + 1))}}))
+
+	// Assistant replies keep the larger legacy cap.
+	require.NoError(t, ValidateChat(ChatInput{Messages: []ChatMessage{user("问"), assistant(long(ChatHistoryMaxRunes)), user("再问")}}))
+	require.Error(t, ValidateChat(ChatInput{Messages: []ChatMessage{user("问"), assistant(long(ChatHistoryMaxRunes + 1)), user("再问")}}))
+
+	// Historical user messages are not re-capped, so reopened conversations stay usable.
+	require.NoError(t, ValidateChat(ChatInput{Messages: []ChatMessage{user(long(ChatHistoryMaxRunes)), assistant("答"), user("再问")}}))
+	require.Error(t, ValidateChat(ChatInput{Messages: []ChatMessage{user(long(ChatHistoryMaxRunes + 1)), assistant("答"), user("再问")}}))
+}
+
 func TestChatCapabilityLifetime(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &ChatService{}

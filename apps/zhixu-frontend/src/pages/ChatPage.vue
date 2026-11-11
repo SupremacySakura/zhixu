@@ -348,7 +348,7 @@ onMounted(() => {
             id="chat-prompt"
             ref="input"
             v-model="prompt"
-            maxlength="8000"
+            maxlength="2000"
             rows="2"
             class="w-full resize-none bg-transparent text-subhead leading-7 outline-none"
             :disabled="!selected || running || loadingHistory || incomplete"
@@ -360,7 +360,7 @@ onMounted(() => {
           >
             <span class="hidden sm:inline">Enter 发送 · Shift + Enter 换行</span>
             <div class="ml-auto flex items-center gap-3">
-              <span>{{ prompt.length }} / 8000</span
+              <span>{{ prompt.length }} / 2000</span
               ><button
                 v-if="running"
                 type="button"

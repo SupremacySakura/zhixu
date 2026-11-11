@@ -102,19 +102,32 @@ func NormalizeChatHistory(messages []ChatMessage) []ChatMessage {
 	return out
 }
 
+// ChatMessageMaxRunes bounds the message being sent in this turn. Only the final
+// user turn is capped at 2000, keeping prompts short enough for grounded retrieval;
+// historical messages keep the larger legacy cap so opened conversations stay usable.
+const ChatMessageMaxRunes = 2000
+
+// ChatHistoryMaxRunes bounds every historical message (and every assistant reply).
+const ChatHistoryMaxRunes = 8000
+
 func ValidateChat(input ChatInput) error {
 	if len(input.Messages) == 0 || len(input.Messages) > 80 || len(input.Messages)%2 != 1 {
 		return configInvalid("请提供交替排列、以用户消息结束的会话，最多 79 条消息")
 	}
 	total := 0
+	last := len(input.Messages) - 1
 	for i, message := range input.Messages {
 		expected := "user"
 		if i%2 == 1 {
 			expected = "assistant"
 		}
+		limit := ChatHistoryMaxRunes
+		if i == last {
+			limit = ChatMessageMaxRunes
+		}
 		size := utf8.RuneCountInString(message.Content)
-		if message.Role != expected || !utf8.ValidString(message.Content) || strings.TrimSpace(message.Content) == "" || size > 8000 {
-			return configInvalid("消息角色或内容无效，每条最多 8000 字符")
+		if message.Role != expected || !utf8.ValidString(message.Content) || strings.TrimSpace(message.Content) == "" || size > limit {
+			return configInvalid("消息角色或内容无效：本次提问最多 2000 字符，历史消息与回答最多 8000 字符")
 		}
 		total += size
 	}

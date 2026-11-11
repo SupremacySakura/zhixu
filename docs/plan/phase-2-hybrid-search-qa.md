@@ -12,7 +12,7 @@ status: pending
 ## 需求变更记录（2026-11-10，用户确认）
 
 - **FR-QA-06 拒答改为"未命中声明"**：不再做 Go 侧预检索门禁与固定拒答话术。保留"模型自主决定是否调用知识库"的工具驱动设计：未调用检索或检索未命中时，模型在回复中明确说明知识库没有相关内容，然后基于自己的训练知识回答；命中时基于知识库回答并展示来源。引用防伪造机制（引用卡片只由工具结果重建）保证通用知识回答不会出现伪造引用。
-- **架构基线**：问答 Agent 在 [chat.ts](../../apps/zhixu-ai/src/mastra/chat.ts) 内联构建（SYSTEM_PROMPT），检索由 AI 服务以工具形式回调 Go 的 `POST /internal/tools/v1/search`（RagSearcher）。[agent.ts](../../apps/zhixu-ai/src/mastra/agents/agent.ts) 是 Mastra starter 遗留，不参与问答。Go/Mastra 分工（Go 管检索/持久化/能力令牌，AI 管 Agent/提示词/工具编排）保持不变。
+- **架构基线**：问答 Agent 在 [chat.ts](../../apps/zhixu-ai/src/mastra/chat.ts) 内联构建（SYSTEM_PROMPT），检索由 AI 服务以工具形式回调 Go 的 `POST /internal/tools/v1/search`（RagSearcher）。Mastra starter 遗留的占位 Agent 已在 W2.4 删除，不参与问答。Go/Mastra 分工（Go 管检索/持久化/能力令牌，AI 管 Agent/提示词/工具编排）保持不变。
 - **RRF 融合放 Go 侧**：架构文档原计划 AI 服务侧经 `/v1/retrieve` 融合，但该入口不存在；现状检索入口就是 Go，Go 侧融合改动最小且保留降级能力。原计划中的 `GET /internal/files/keyword-search` 契约不再需要。
 
 ## 现状基线
@@ -45,7 +45,7 @@ status: pending
   - 未命中模式：未调用检索（寒暄/通用问题）或检索无命中时，先明确说明"知识库中没有找到相关内容"，再基于自己的训练知识回答；该模式下**不得出现 [n] 引用**。
   - 保留现有工具契约、每轮最多三次检索、指代展开规则；引用防伪造机制不变（Go 侧重建引用卡片）。
 - **问题长度**：前端输入框 ≤2000 字符（计数器 + 超限禁止发送）；Go `ValidateChat` 用户消息限 2000（助手历史消息维持 8000，避免截断历史会话）。
-- **starter 清理**：删除或改造 [agent.ts](../../apps/zhixu-ai/src/mastra/agents/agent.ts)（starter 模板，带 web_search/web_fetch 工具且无人使用，属攻击面与混淆源），同步清理 index.ts 注册。
+- **starter 清理**：已删除 Mastra starter 模板 `agents/agent.ts` 与 `tools/schedule-tools.ts`（带 web_search/web_fetch 工具且无人使用，属攻击面与混淆源），`index.ts` 注册同步清理。
 - **依赖**：无。**验收**：AC-06——命中时答案基于检索内容且引用全部能回填真实分块；未命中时回复先声明知识库无相关内容再用通用知识回答，且无伪造引用。
 
 ### W2.5 引用高亮定位（FR-KM-08 收尾、AC-09）

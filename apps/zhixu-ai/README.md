@@ -1,48 +1,29 @@
 # zhixu-ai
 
-Welcome to your new [Mastra](https://mastra.ai) project! We're excited to see what you build.
+「知序」知识库的 AI 服务，基于 [Mastra](https://mastra.ai) 运行。Go 后端通过内部凭证调用它完成向量化与问答；它自身不对外暴露公网接口。
 
-This starter provides you with a general-purpose Mastra agent that can research current information, manage multi-step tasks, work with local files, run approved shell commands, and create recurring schedules.
+## 职责
 
-## Features
+- `/vectorize`：接收向量化任务，分块、调用 Embedding 模型并写入 Qdrant。
+- `/chat`：处理一次问答轮次。模型自主决定是否调用 `search_knowledge` 工具检索知识库；命中时基于片段回答并按工具返回顺序生成引用卡片，未命中时先声明知识库没有相关内容、再用通用知识回答并明确标注来源。
+- `/internal/conversations`：会话线程的读取、删除与标题更新，供后端会话列表使用。
+- `/internal/health`：就绪检查。
 
-- A local `workspace/` for files and command execution (created under `src/mastra/public/workspace/` when running `mastra dev`)
-- Approval gates for file changes, deletions, and shell commands
-- Conversation memory, generated thread titles, and task tracking
-- Built-in web search and direct web page fetching
-- Recurring schedules that persist across restarts
-- Local libSQL storage and DuckDB observability, with optional Turso storage
-- A bundled Mastra skill that helps coding agents use current Mastra APIs
-
-## Get started
-
-Set your `OPENAI_API_KEY` in `.env` or in your environment, then run:
+## 运行
 
 ```shell
 pnpm run dev
 ```
 
-Open [http://localhost:4111](http://localhost:4111) in your browser to access [Mastra Studio](https://mastra.ai/docs/studio/overview).
+Mastra Studio 默认监听 `http://localhost:4111`，仅用于本地开发。
 
-Select **Agent** in Mastra Studio and try one of these prompts:
+## 与 zhixu 后端联调
 
-- `Get the weather forecast for Austin this weekend.`
-- `Create a landing page for a Japanese sakura festival.`
-- `Check the SPCX stock price now, then check it every minute.`
+Go 后端（`apps/zhixu-backend`）启动本服务时需设置：
 
-The agent asks for approval before it changes files or runs commands. When it creates a schedule, it returns an ID that you can use to pause the schedule.
-
-## Workspace safety
-
-The local filesystem tools stay inside the `workspace/` directory, which resolves relative to the server's working directory (`src/mastra/public/workspace/` during `mastra dev`). Shell commands start in that directory, but `LocalSandbox` does not provide operating-system isolation by default. Review command approvals carefully, and do not expose this template through an unauthenticated public server.
-
-## Running with the zhixu backend
-
-When used by the Go backend (`apps/zhixu-backend`), set these in the environment that starts the service:
-
-- `INTERNAL_API_SECRET`: shared secret with the backend. `/chat`, `/vectorize`, `/internal/conversations`, `/internal/conversations/*`, and `/internal/health` answer `403` unless it is configured and the request carries `Authorization: Bearer <secret>`.
-- `MASTRA_HOST`: listen address. Defaults to `127.0.0.1`; set `0.0.0.0` when the backend runs in a container and connects through the host gateway (`host.docker.internal`). Binding `0.0.0.0` exposes every interface, so keep the machine off untrusted networks: the API routes require `INTERNAL_API_SECRET`, but Mastra Studio (dev server UI) does not.
-- `CHAT_BACKEND_URL`: origin of the Go backend (defaults to `http://127.0.0.1:9000`, where the backend listens; set `http://127.0.0.1:9001` when it is reached through the compose port mapping). Knowledge-search requests may only target its `/internal/tools/v1/search` path.
+- `INTERNAL_API_SECRET`：与后端共享的密钥。`/chat`、`/vectorize`、`/internal/conversations`、`/internal/conversations/*` 与 `/internal/health` 未配置密钥或请求未携带 `Authorization: Bearer <secret>` 时返回 `403`。
+- `MASTRA_HOST`：监听地址。默认 `127.0.0.1`；后端运行在容器内并通过宿主网关访问时设为 `0.0.0.0`。绑定 `0.0.0.0` 会暴露所有网卡，请勿在不可信网络中运行。
+- `CHAT_BACKEND_URL`：Go 后端 origin（默认 `http://127.0.0.1:9000`）。知识检索请求只允许发往它的 `/internal/tools/v1/search` 路径。
 
 ### Outbound address guard
 
@@ -62,21 +43,16 @@ Literal private IPs need both entries: `MODEL_ALLOWED_PRIVATE_ENDPOINTS` on the 
 
 ## Storage
 
-The default `file:./mastra.db` database stores agent memory, tasks, and schedules locally. To use Turso, set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.env`.
+默认使用 `file:./mastra.db` 保存会话记忆；设置 `TURSO_DATABASE_URL` 与 `TURSO_AUTH_TOKEN` 可切换到 Turso。
 
-Recurring schedules continue to use model tokens until you pause them. Ask the agent to pause a schedule with the ID returned by `start_schedule`.
+## 代码结构
 
-## Making it yours
-
-- Edit `src/mastra/agents/agent.ts` to change the model, instructions, memory, workspace, or approval policy.
-- Edit `src/mastra/tools/` to customize scheduling.
-- Edit `src/mastra/index.ts` to change storage and observability.
-- Add files or reusable skills under `src/mastra/public/workspace/` for the agent to use during `mastra dev`.
+- `src/mastra/chat.ts`：问答 Agent、系统提示词（命中/未命中双模式）与 `search_knowledge` 工具。
+- `src/mastra/vectorize.ts`：向量化任务处理。
+- `src/mastra/conversations.ts`、`src/mastra/health.ts`：会话与健康检查路由。
+- `src/mastra/index.ts`：Mastra 实例、路由注册、存储与可观测性。
+- `src/lib/`：请求模式校验、会话历史、内部鉴权与出站地址守卫。
 
 ## Learn more
 
-To learn more about Mastra, visit our [documentation](https://mastra.ai/docs/). If you're new to AI agents, check out our [course](https://mastra.ai/learn) and [YouTube videos](https://youtube.com/@mastra-ai). You can also join our [Discord](https://discord.gg/mastra-ai) community to get help and share your projects.
-
-## Deploy to the Mastra platform
-
-The [Mastra platform](https://projects.mastra.ai) provides two products for deploying and managing AI applications built with the Mastra framework. Learn more in the [Mastra platform documentation](https://mastra.ai/docs/mastra-platform/overview).
+Mastra 文档：<https://mastra.ai/docs/>。API 用法见 <https://mastra.ai/learn>，社区见 <https://discord.gg/mastra-ai>。
