@@ -49,7 +49,7 @@ status: in-progress
 - **前端**：详情页"AI 整理"面板：摘要/关键词/推荐标签并排预览，支持逐项编辑、一键采纳、重新生成；采纳前列表页摘要不展示（或展示但标注 AI 待确认）。
 - **依赖**：W3.2。**验收**：AC-04——生成 → 预览 → 编辑 → 采纳闭环；未采纳不污染正式字段。
 
-### W3.4 关联推荐（FR-REL-01 + FR-ORG-06）⏳ 未开始（第四批，设计已定 2026-11-11）
+### W3.4 关联推荐（FR-REL-01 + FR-ORG-06）✅ 已完成（2026-11-11，第四批）
 
 - **数据库**：`knowledge_relations`（id、user_id、source_id、target_id、relation_type、confidence、evidence JSON、status、source: ai/manual、created_at/updated_at；唯一键 `(user_id, source_id, target_id, relation_type)`）。
 - **关系类型（5 种，2026-11-11 定）**：related / depends_on / supplements / contrasts / updates（界面显示相关、依赖、补充说明、对比、更新替代）。合并了原计划的 extends/supports/contradicts，只补 P4-W4.3 需要的 updates；理由与取舍见 [ADR-0001](../adr/0001-knowledge-relation-model.md)。
@@ -62,7 +62,7 @@ status: in-progress
 - **前端**：详情页右栏「相关知识」面板（已确认列表 + 待确认建议 + 查找/手动添加 + 图谱入口），任务运行中 3s 轮询。
 - **依赖**：W3.2（复用 `ai_tasks` 与 organize 的同步契约路线）。**验收**：AC-07——导入相似主题文档后出现相关知识推荐，点击可跳转，确认/拒绝闭环。
 
-### W3.5 关系管理（FR-REL-02）⏳ 未开始（第四批，设计已定 2026-11-11）
+### W3.5 关系管理（FR-REL-02）✅ 已完成（2026-11-11，第四批）
 
 - **后端**：
   - `GET /api/v1/knowledge/:id/relations`（confirmed / suggested 两区 + relation 任务状态）。
@@ -86,8 +86,10 @@ status: in-progress
 | W3.1 ai_tasks 状态机 | `ai_tasks` 表（dedupe_key 唯一索引做 `(type,target)` 幂等、仅 pending/running 非空）；`AiTaskService` 2s 轮询、`FOR UPDATE SKIP LOCKED` 领取、3 分钟租约回收、失败退避 30/60/120s、≤3 次转 failed；创建/导入完成后自动入队 organize；`GET /api/v1/knowledge/:id/organize` 返回任务视图 | 重复触发不产生重复任务；进程重启后过期租约被回收 |
 | W3.2 organize 工作流 | AI 侧 `POST /organize`（Bearer INTERNAL_API_SECRET、90s 超时、422 契约错误 / 502 上游错误分离）；`OrganizeAgent` 结构化输出摘要/关键词/推荐标签/概念；Go 侧 `OrganizeProcessor` 解析用户默认对话模型、正文截断 12000 字符、带用户已有标签 50 个作提示；草稿写 `ai_tasks.payload` | 新知识十几秒内出现草稿；`knowledge_items.summary` 在采纳前保持为空；AI 未配置时任务 failed 且有中文原因 |
 | W3.3 预览与确认 | `GET /organize` 返回 `draft`（含 `suggested_tags[{name,tag_id,existing}]`、`accepted`、`stale`）；`POST /organize/accept` 校验摘要 ≤200 字、关键词 0~10 个、事务内写正式字段 + 追加标签 + 记录采纳时间；`POST /organize/regenerate` 重新入队；前端 `KnowledgeOrganizePanel`（逐项编辑、推荐标签切换、采纳/重新生成、3s 轮询）与列表卡片摘要 | AC-04 生成→预览→编辑→采纳闭环；采纳不新增版本、不改正文与向量状态；手工标签不被覆盖 |
+| W3.4 关联推荐 | `knowledge_relations` 表（5 种类型、唯一键含类型、对称类型按 min/max 归一、source: ai/manual）；relation 任务（向量化 ready 后入队、代表文本嵌入召回 top50 → 按知识归并 → Top10 送 AI、`POST /relate` 结构化判定、置信度 <0.6 与证据过滤）；详情页「相关知识」面板与「查找相关知识」 | AC-07 导入相似主题出现建议、确认/拒绝闭环；同对可多类型、rejected 永久抑制 |
+| W3.5 关系管理 | GET/POST/PUT/DELETE 与 confirm/reject/regenerate；rejected 行保留抑制、手动添加复用为 confirmed+manual；有向存储与对端标题归一；删除知识同事务级联删关系 | FR-REL-02 增删改查、改类型、确认/拒绝、重复建议抑制 |
 
 **验证**：`go vet ./... && go test ./...` 全绿（repository/service/handler/router）；`pnpm --filter zhixu-ai test` 39 项通过（含 organize 契约与清洗 6 项）；前端 `pnpm lint`、`pnpm typecheck`、`pnpm test`（260 项，含新增面板 5 项）与 `pnpm build` 通过。端到端（真实模型生成→采纳）需重启后端与 Mastra 后按 W3.3 验收路径手测。
 
-**尚未完成（第四批）**：W3.4 关联推荐、W3.5 关系管理（`knowledge_relations` 表与相关接口），P3 因此仍为 in-progress；AC-07 待第四批验收。
+**P3 状态**：W3.4/W3.5 已于 2026-11-11 随第四批完成（GitHub #2–#4），P3 全部工作项完成；AC-07 代码、单测与图谱联动闭环，真机端到端待用户验收。AC-10 属 P4-W4.1，见 [phase-4](./phase-4-graph-evolution.md)。
 

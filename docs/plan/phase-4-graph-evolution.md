@@ -18,7 +18,7 @@ status: pending
 
 ## 工作项
 
-### W4.1 知识图谱可视化（FR-REL-03）⏳ 未开始（第四批，设计已定 2026-11-11）
+### W4.1 知识图谱可视化（FR-REL-03）✅ 已完成（2026-11-11，第四批先行）
 
 - **后端**：`GET /api/v1/knowledge/graph?center_id=&depth=1&include_suggested=0&tag_id=&source_type=`——节点=知识条目（标题/来源类型/摘要、度数），边=关系（类型/置信度/来源）；默认只画已确认关系，`include_suggested=1` 时叠加建议关系；默认排除归档知识；`depth` 固定 1（局部视图）；节点上限 100，超过按连接度截断并在响应标 `truncated`；无 `center_id` 时取最近更新的 50 条知识及其间的已确认关系。
 - **筛选（FR-REL-03 硬要求）**：`tag_id` 与 `source_type` 同时作用于节点与边（只保留两端都被筛中的边）；前端工具栏两个下拉，标签列表复用 `GET /api/v1/tags`。
@@ -27,6 +27,8 @@ status: pending
   - 交互：点击节点打开右侧抽屉（标题/摘要/一跳关系，可跳详情或「以此为中心」重绘）、顶部中心知识搜索框、显示建议边开关、图例。
   - 空状态引导「先去知识详情页建立关系」。
 - **依赖**：P3-W3.4/W3.5。**验收**：AC-10——图谱展示节点与关系，点击进入详情，局部渲染流畅（百节点级）。
+
+**完成情况（2026-11-11）**：`GET /api/v1/knowledge/graph`（center/depth/include_suggested/tag_id/source_type、节点上限 100 与 truncated、默认排除归档）与 `/home/knowledge/graph` 页面（ECharts 按需引入、力导向、筛选、建议边虚线、点击抽屉、中心搜索、空状态）已实现并合入；验收细节见 [docs/tasks/relations-graph-20261111.md](../tasks/relations-graph-20261111.md)。AC-10 待真机验收。
 
 ### W4.2 重复检测（FR-EVO-01）
 
