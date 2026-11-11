@@ -73,6 +73,8 @@ func main() {
 	vectorCleanup := &service.VectorCleanupService{
 		Store: &repository.VectorCleanupRepository{DB: database.DB}, Vectors: qdrant,
 	}
+	graphService := service.NewGraphService(repository.NewGraphRepository(database.DB))
+	router.RegisterGraphRouter(r, graphService)
 	router.RegisterKnowledgeRouter(r, knowledgeService)
 	tagService := service.NewTagService(repository.NewTagRepository(database.DB))
 	router.RegisterTagRouter(r, &handler.TagHandler{Service: tagService})

@@ -13,6 +13,11 @@ const NavItems: NavItem[] = [
   { label: '仪表盘', icon: 'material-symbols:dashboard', to: '/home/dashboard' },
   { label: '文件管理', icon: 'material-symbols:folder-open', to: '/home/files' },
   { label: '知识库', icon: 'material-symbols:menu-book-outline', to: '/home/knowledge' },
+  {
+    label: '知识图谱',
+    icon: 'material-symbols:account-tree-outline',
+    to: '/home/knowledge/graph',
+  },
   { label: '对话', icon: 'material-symbols:chat-bubble-outline', to: '/home/chat' },
   { label: '取件码', icon: 'material-symbols:key-outline', to: '/home/pickup-codes' },
   { label: '上传', icon: 'material-symbols:cloud-upload', to: '/home/upload' },
@@ -46,9 +51,10 @@ function confirmLogout() {
 }
 
 const currentNavLabel = computed(() => {
-  const matched = NavItems.find(
+  // 取最长匹配，避免 /home/knowledge/graph 被更短的「知识库」前缀抢先命中。
+  const matched = NavItems.filter(
     item => route.path === item.to || route.path.startsWith(`${item.to}/`),
-  )
+  ).sort((a, b) => b.to.length - a.to.length)[0]
   return matched?.label || '知序'
 })
 
