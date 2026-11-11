@@ -1,12 +1,17 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import KnowledgeRelationsPanel from '../KnowledgeRelationsPanel.vue'
 import {
+  confirmKnowledgeRelation,
   createKnowledgeRelation,
   deleteKnowledgeRelation,
   listKnowledge,
   listKnowledgeRelations,
+  regenerateKnowledgeRelations,
+  rejectKnowledgeRelation,
+  updateKnowledgeRelationType,
   type KnowledgeRelation,
+  type RelationTask,
 } from '../../../services/apis/knowledge'
 import { RELATION_TYPE_LABELS, RELATION_TYPE_OPTIONS } from '../../../utils/relation'
 
@@ -15,6 +20,10 @@ vi.mock('../../../services/apis/knowledge', () => ({
   createKnowledgeRelation: vi.fn(),
   deleteKnowledgeRelation: vi.fn(),
   listKnowledge: vi.fn(),
+  confirmKnowledgeRelation: vi.fn(),
+  rejectKnowledgeRelation: vi.fn(),
+  updateKnowledgeRelationType: vi.fn(),
+  regenerateKnowledgeRelations: vi.fn(),
 }))
 
 const current = {
@@ -36,8 +45,39 @@ const relation = (over: Partial<KnowledgeRelation> = {}): KnowledgeRelation => (
   counterpart_id: 9,
   counterpart_title: '目标知识',
   created_at: '2026-11-11T10:00:00+08:00',
+  confirmed_at: null,
   ...over,
 })
+
+const task = (over: Partial<RelationTask> = {}): RelationTask => ({
+  id: 7,
+  status: 'pending',
+  error_message: '',
+  retry_count: 0,
+  updated_at: '2026-11-11T10:00:00+08:00',
+  ...over,
+})
+
+const suggestion = (over: Partial<KnowledgeRelation> = {}): KnowledgeRelation =>
+  relation({
+    id: 43,
+    status: 'suggested',
+    source: 'ai',
+    relation_type: 'contrasts',
+    confidence: 0.72,
+    evidence: JSON.stringify({
+      reason: '两者从相反角度论证同一问题',
+      source_quote: '本文的论证引文',
+      target_quote: '对端的论证引文',
+    }),
+    counterpart_title: '对比知识',
+    ...over,
+  })
+
+/** 在假定时器下用微任务推进组件里已 resolve 的 Promise。 */
+const settle = async () => {
+  for (let index = 0; index < 8; index += 1) await Promise.resolve()
+}
 
 const mountPanel = () =>
   mount(KnowledgeRelationsPanel, {
@@ -72,6 +112,10 @@ describe('relation type labels', () => {
 })
 
 describe('KnowledgeRelationsPanel', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(listKnowledgeRelations).mockResolvedValue({
@@ -126,7 +170,7 @@ describe('KnowledgeRelationsPanel', () => {
     expect(wrapper.text()).not.toContain('已归档知识')
     expect(wrapper.text()).not.toContain('当前知识')
     await options[0].trigger('click')
-    await wrapper.find('select').setValue('contrasts')
+    await wrapper.find('select[aria-label="关系类型"]').setValue('contrasts')
     vi.mocked(createKnowledgeRelation).mockResolvedValue(
       relation({
         id: 42,
@@ -171,5 +215,138 @@ describe('KnowledgeRelationsPanel', () => {
     await findButton(wrapper, '添加关系')!.trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('关系类型无效')
+  })
+})
+describe('KnowledgeRelationsPanel suggestions', () => {
+  const suggestedList = (items: KnowledgeRelation[], currentTask: RelationTask | null = null) => ({
+    confirmed: [] as KnowledgeRelation[],
+    suggested: items,
+    task: currentTask,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('loads once on mount and polls every three seconds only while a task is running', async () => {
+    vi.useFakeTimers()
+    vi.mocked(listKnowledgeRelations).mockResolvedValue(suggestedList([], task()))
+    const wrapper = mountPanel()
+    await settle()
+    expect(listKnowledgeRelations).toHaveBeenCalledTimes(1)
+    expect(listKnowledgeRelations).toHaveBeenCalledWith(10, expect.any(AbortSignal))
+    expect(wrapper.text()).toContain('正在查找')
+
+    await vi.advanceTimersByTimeAsync(3000)
+    await settle()
+    expect(listKnowledgeRelations).toHaveBeenCalledTimes(2)
+
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(9000)
+    await settle()
+    expect(listKnowledgeRelations).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows AI suggestions with Chinese type, counterpart and confidence, and expands evidence', async () => {
+    vi.mocked(listKnowledgeRelations).mockResolvedValue(suggestedList([suggestion()]))
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.text()).toContain('待确认建议')
+    expect(wrapper.text()).toContain('对比')
+    expect(wrapper.text()).toContain('对比知识')
+    expect(wrapper.text()).toContain('72%')
+    expect(wrapper.text()).not.toContain('两者从相反角度论证同一问题')
+
+    await findButton(wrapper, '查看理由')!.trigger('click')
+    expect(wrapper.text()).toContain('两者从相反角度论证同一问题')
+    expect(wrapper.text()).toContain('本文的论证引文')
+    expect(wrapper.text()).toContain('对端的论证引文')
+    // 长引文靠 line-clamp 与断词截断，避免撑破面板。
+    expect(wrapper.findAll('.line-clamp-3')).toHaveLength(2)
+  })
+
+  it('confirms a suggestion and moves it into the confirmed list', async () => {
+    vi.mocked(listKnowledgeRelations).mockResolvedValue(suggestedList([suggestion()]))
+    vi.mocked(confirmKnowledgeRelation).mockResolvedValue(
+      suggestion({ status: 'confirmed', confirmed_at: '2026-11-11T11:00:00+08:00' }),
+    )
+    const wrapper = mountPanel()
+    await flushPromises()
+    await findButton(wrapper, '确认')!.trigger('click')
+    await flushPromises()
+    expect(confirmKnowledgeRelation).toHaveBeenCalledWith(43)
+    expect(wrapper.text()).toContain('暂无待确认建议')
+    expect(wrapper.text()).toContain('对比知识')
+    expect(wrapper.find('a[href="/home/knowledge/9"]').exists()).toBe(true)
+  })
+
+  it('rejects a suggestion and keeps it suppressed after regenerating', async () => {
+    const list = vi.mocked(listKnowledgeRelations)
+    list.mockResolvedValueOnce(suggestedList([suggestion()]))
+    vi.mocked(rejectKnowledgeRelation).mockResolvedValue(suggestion({ status: 'rejected' }))
+    const wrapper = mountPanel()
+    await flushPromises()
+    await findButton(wrapper, '忽略')!.trigger('click')
+    await flushPromises()
+    expect(rejectKnowledgeRelation).toHaveBeenCalledWith(43)
+    expect(wrapper.text()).toContain('暂无待确认建议')
+
+    list.mockResolvedValue(suggestedList([]))
+    vi.mocked(regenerateKnowledgeRelations).mockResolvedValue({ task: task() })
+    await findButton(wrapper, '查找相关知识')!.trigger('click')
+    await flushPromises()
+    expect(regenerateKnowledgeRelations).toHaveBeenCalledWith(10)
+    expect(wrapper.text()).not.toContain('对比知识')
+  })
+
+  it('disables regenerate while running and shows progress', async () => {
+    vi.mocked(listKnowledgeRelations).mockResolvedValue(
+      suggestedList([], task({ status: 'running' })),
+    )
+    const wrapper = mountPanel()
+    await flushPromises()
+    const button = findButton(wrapper, '查找相关知识')
+    expect(button?.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('正在查找')
+  })
+
+  it('shows a Chinese failure reason and retries the task', async () => {
+    const list = vi.mocked(listKnowledgeRelations)
+    list.mockResolvedValueOnce(
+      suggestedList([], task({ status: 'failed', error_message: 'AI 服务暂时不可用' })),
+    )
+    list.mockResolvedValue(suggestedList([], task({ status: 'running' })))
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.text()).toContain('AI 服务暂时不可用')
+    vi.mocked(regenerateKnowledgeRelations).mockResolvedValue({ task: task() })
+    await findButton(wrapper, '重试')!.trigger('click')
+    await flushPromises()
+    expect(regenerateKnowledgeRelations).toHaveBeenCalledWith(10)
+    expect(wrapper.text()).toContain('正在查找')
+  })
+
+  it('updates the type of a confirmed relation in place', async () => {
+    vi.mocked(listKnowledgeRelations).mockResolvedValue({
+      confirmed: [relation()],
+      suggested: [],
+      task: null,
+    })
+    vi.mocked(updateKnowledgeRelationType).mockResolvedValue(relation({ relation_type: 'updates' }))
+    const wrapper = mountPanel()
+    await flushPromises()
+    const select = wrapper.find('select[aria-label="修改与目标知识的关系类型"]')
+    await select.setValue('updates')
+    await flushPromises()
+    expect(updateKnowledgeRelationType).toHaveBeenCalledWith(41, 'updates')
+    expect((select.element as HTMLSelectElement).value).toBe('updates')
+  })
+
+  it('links to the graph centered on the current knowledge', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    const link = wrapper.find('a[href="/home/knowledge/graph?center=10"]')
+    expect(link.exists()).toBe(true)
+    expect(link.text()).toContain('在图谱中查看')
   })
 })

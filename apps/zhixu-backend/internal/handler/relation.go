@@ -57,6 +57,83 @@ func (h *RelationHandler) Create(c *gin.Context) {
 	response.SuccessWithStatus(c, http.StatusCreated, view)
 }
 
+// Confirm 确认一条 AI 建议（POST /relations/:id/confirm）。
+func (h *RelationHandler) Confirm(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	relationID, ok := relationIDParam(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	view, err := h.Service.Confirm(c.Request.Context(), userID, relationID)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, view)
+}
+
+// Reject 忽略一条 AI 建议（POST /relations/:id/reject）。
+func (h *RelationHandler) Reject(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	relationID, ok := relationIDParam(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	view, err := h.Service.Reject(c.Request.Context(), userID, relationID)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, view)
+}
+
+// Update 修改已确认关系的类型（PUT /relations/:id）。
+func (h *RelationHandler) Update(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	relationID, ok := relationIDParam(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	var req service.RelationUpdateInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.FailWithStatus(c, http.StatusBadRequest, response.CodeInvalidParam, "关系参数无效")
+		return
+	}
+	view, err := h.Service.UpdateType(c.Request.Context(), userID, relationID, req.RelationType)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, view)
+}
+
+// Regenerate 手动触发一次关联推荐（POST /knowledge/:id/relations/regenerate）。
+func (h *RelationHandler) Regenerate(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	knowledgeID, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	task, err := h.Service.Regenerate(c.Request.Context(), userID, knowledgeID)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.SuccessWithStatus(c, http.StatusAccepted, gin.H{"task": task})
+}
+
 // Delete 物理删除关系（DELETE /relations/:id）。
 func (h *RelationHandler) Delete(c *gin.Context) {
 	userID, ok := knowledgeUser(c)
@@ -91,6 +168,8 @@ func (h *RelationHandler) fail(c *gin.Context, err error) {
 		response.FailWithStatus(c, http.StatusBadRequest, response.CodeInvalidParam, err.Error())
 	case errors.Is(err, service.ErrRelationNotFound):
 		response.FailWithStatus(c, http.StatusNotFound, response.CodeNotFound, "关系不存在")
+	case errors.Is(err, service.ErrRelationConflict):
+		response.FailWithStatus(c, http.StatusConflict, response.CodeConflict, err.Error())
 	case errors.Is(err, service.ErrKnowledgeNotFound):
 		response.FailWithStatus(c, http.StatusNotFound, response.CodeNotFound, "知识不存在")
 	default:

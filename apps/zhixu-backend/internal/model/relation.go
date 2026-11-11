@@ -59,6 +59,7 @@ type KnowledgeRelation struct {
 	Source       RelationSource `gorm:"type:varchar(16);not null;default:'manual'" json:"source"`
 	Confidence   float64        `gorm:"not null;default:0" json:"confidence"`
 	Evidence     string         `gorm:"type:text;not null" json:"evidence"`
+	ConfirmedAt  *time.Time     `json:"confirmed_at"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 }

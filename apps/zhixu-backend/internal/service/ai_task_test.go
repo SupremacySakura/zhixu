@@ -210,3 +210,17 @@ func TestAiTaskServiceViewHidesInternals(t *testing.T) {
 	require.Equal(t, model.AiTaskFailed, view.Status)
 	require.Nil(t, NewAiTaskView(nil))
 }
+func TestAiTaskServiceEnqueueRelationTaskReturnsActiveTask(t *testing.T) {
+	svc, store, _ := newAiTaskFixture(model.AiTaskTypeOrganize)
+
+	task, err := svc.EnqueueRelationTask(context.Background(), 2, 9, 5)
+
+	require.NoError(t, err)
+	require.Equal(t, uint(11), task.ID)
+	require.Equal(t, model.AiTaskPending, task.Status)
+	require.Equal(t, model.AiTaskTypeRelation, store.enqueued.TaskType)
+	require.Equal(t, uint(9), store.enqueued.TargetID)
+	require.NotNil(t, store.enqueued.DedupeKey)
+	require.Equal(t, "relation:9", *store.enqueued.DedupeKey)
+	require.JSONEq(t, `{"knowledge_id":9,"base_version":5}`, store.enqueued.Payload)
+}
