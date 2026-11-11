@@ -261,3 +261,33 @@ func TestRagSearchEmptyResultIsAvailable(t *testing.T) {
 	require.True(t, result.Available)
 	require.Empty(t, result.Sources)
 }
+
+type retrievalLogFake struct {
+	rows []*model.RetrievalLog
+}
+
+func (f *retrievalLogFake) Save(_ context.Context, row *model.RetrievalLog) error {
+	f.rows = append(f.rows, row)
+	return nil
+}
+
+func TestRagSearchRecordsRetrievalLog(t *testing.T) {
+	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
+		{ID: 11, KnowledgeID: 9, UserID: 7, Seq: 3, Section: "部署", Content: "回滚步骤与注意事项", State: "ready"},
+	})
+	vectors.matches = []VectorMatch{{ChunkID: 11, Score: 0.91}}
+	logs := &retrievalLogFake{}
+	searcher.Logs = logs
+	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "回滚步骤", ConversationID: "conv-1"})
+	require.NoError(t, err)
+	require.Len(t, logs.rows, 1)
+	row := logs.rows[0]
+	require.Equal(t, uint(7), row.UserID)
+	require.Equal(t, "conv-1", row.ConversationID)
+	require.Equal(t, "回滚步骤", row.Query)
+	require.Equal(t, RagModeHybrid, row.Mode)
+	require.Equal(t, len(result.Sources), row.HitCount)
+	require.GreaterOrEqual(t, row.LatencyMS, 0)
+	require.Contains(t, row.Hits, `"chunk_id":11`)
+	require.Contains(t, row.Hits, `"source":"`)
+}

@@ -49,6 +49,7 @@ func main() {
 		Chat:     chat.Service,
 		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 		Vectors:  qdrant, Chunks: &repository.RagRepository{DB: database.DB},
+		Logs: repository.NewRetrievalLogRepository(database.DB),
 	}
 	r.POST("/chat", middleware.AuthMiddleware(), chat.Send)
 	r.GET("/chat/conversations", middleware.AuthMiddleware(), conversationHandler.List)

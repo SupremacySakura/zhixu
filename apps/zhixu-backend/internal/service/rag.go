@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"zhixu-backend/internal/log"
@@ -85,6 +87,10 @@ type RagSearcher struct {
 		Search(context.Context, string, uint, []float64, int, float64) ([]VectorMatch, error)
 	}
 	Chunks RagChunkStore
+	// Logs records one row per retrieval for the experiment dataset; nil disables logging.
+	Logs interface {
+		Save(context.Context, *model.RetrievalLog) error
+	}
 }
 
 // Query mirrors the user id carried by the one-time capability; the chat handler
@@ -96,6 +102,8 @@ type RagQuery struct {
 	UserID uint
 	Query  string
 	Mode   string
+	// ConversationID ties the audit row to the chat conversation, when there is one.
+	ConversationID string
 }
 
 // RagSettings resolves the effective retrieval breadth and similarity threshold,
@@ -119,7 +127,15 @@ func (s *ChatService) RagSettings(ctx context.Context, user uint) (int, float64,
 // Search dispatches on the retrieval mode: hybrid (default) fuses the keyword and
 // semantic legs with reciprocal rank fusion, while single-leg modes exist for the
 // three-mode comparison experiment.
+// Search runs the selected retrieval and records one audit row for experiments.
 func (s *RagSearcher) Search(ctx context.Context, query RagQuery) (*RagResult, error) {
+	start := time.Now()
+	result, err := s.search(ctx, query)
+	s.logRetrieval(query, result, time.Since(start))
+	return result, err
+}
+
+func (s *RagSearcher) search(ctx context.Context, query RagQuery) (*RagResult, error) {
 	if strings.TrimSpace(query.Query) == "" || utf8.RuneCountInString(query.Query) > 512 {
 		return nil, errors.New("检索关键词为空或过长")
 	}
@@ -387,4 +403,45 @@ func (s *RagSearcher) hydrate(ctx context.Context, user uint, ranked []rankedChu
 		}
 	}
 	return &RagResult{Available: true, Sources: sources}, nil
+}
+
+type retrievalLogHit struct {
+	ChunkID uint    `json:"chunk_id"`
+	Score   float64 `json:"score"`
+	Source  string  `json:"source"`
+}
+
+// logRetrieval persists a best-effort audit row. It runs after the answer is
+// ready and never fails the retrieval: experiments lose one row, never the reply.
+func (s *RagSearcher) logRetrieval(query RagQuery, result *RagResult, elapsed time.Duration) {
+	if s.Logs == nil {
+		return
+	}
+	mode := query.Mode
+	if mode == "" {
+		mode = RagModeHybrid
+	}
+	row := &model.RetrievalLog{
+		UserID:         query.UserID,
+		ConversationID: query.ConversationID,
+		Query:          query.Query,
+		Mode:           mode,
+		Hits:           "[]",
+		LatencyMS:      int(elapsed.Milliseconds()),
+	}
+	if result != nil {
+		hits := make([]retrievalLogHit, 0, len(result.Sources))
+		for _, source := range result.Sources {
+			hits = append(hits, retrievalLogHit{ChunkID: source.ChunkID, Score: source.Score, Source: source.Source})
+		}
+		if data, err := json.Marshal(hits); err == nil {
+			row.Hits = string(data)
+		}
+		row.HitCount = len(result.Sources)
+	}
+	saveCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := s.Logs.Save(saveCtx, row); err != nil {
+		log.Warn().Err(err).Msg("检索日志保存失败")
+	}
 }

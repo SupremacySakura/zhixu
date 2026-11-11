@@ -41,9 +41,10 @@ func (h *ChatHandler) RagSearch(c *gin.Context) {
 		return
 	}
 	result, err := h.Rag.Search(cap.Context, service.RagQuery{
-		UserID: cap.RagQuery.UserID,
-		Query:  strings.TrimSpace(input.Query),
-		Mode:   input.Mode,
+		UserID:         cap.RagQuery.UserID,
+		Query:          strings.TrimSpace(input.Query),
+		Mode:           input.Mode,
+		ConversationID: cap.RagQuery.ConversationID,
 	})
 	if err != nil {
 		// Never echo embedding, database, or Qdrant failures back to the AI service.
