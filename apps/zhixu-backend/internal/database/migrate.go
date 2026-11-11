@@ -167,6 +167,7 @@ func Migrate() error {
 		&model.KnowledgeVersion{},
 		&model.Tag{},
 		&model.KnowledgeTag{},
+		&model.KnowledgeRelation{},
 		&model.VectorizeTask{},
 		&model.VectorCleanupTask{},
 		&model.ModelProvider{},

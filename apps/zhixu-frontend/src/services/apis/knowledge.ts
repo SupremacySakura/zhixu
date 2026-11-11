@@ -336,3 +336,53 @@ export async function retryKnowledgeVectorize(id: number, signal?: AbortSignal) 
     ).data,
   )
 }
+
+export type RelationType = 'related' | 'depends_on' | 'supplements' | 'contrasts' | 'updates'
+export type RelationStatus = 'suggested' | 'confirmed' | 'rejected'
+export type RelationSource = 'ai' | 'manual'
+export interface KnowledgeRelation {
+  id: number
+  source_id: number
+  target_id: number
+  relation_type: RelationType
+  status: RelationStatus
+  source: RelationSource
+  confidence: number
+  evidence: string
+  /** 对端知识：详情页直接展示标题并跳转。 */
+  counterpart_id: number
+  counterpart_title: string
+  created_at: string
+}
+export interface KnowledgeRelationList {
+  confirmed: KnowledgeRelation[]
+  suggested: KnowledgeRelation[]
+  /** 建议任务状态：本批不下发任务，恒为 null。 */
+  task: { id: number; status: string } | null
+}
+export async function listKnowledgeRelations(id: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.get<ResponseData<KnowledgeRelationList>>(`/api/knowledge/${id}/relations`, {
+        signal,
+      })
+    ).data,
+  )
+}
+export async function createKnowledgeRelation(
+  id: number,
+  input: { target_id: number; relation_type: RelationType },
+  signal?: AbortSignal,
+) {
+  return unwrap(
+    (
+      await request.post<ResponseData<KnowledgeRelation>>(`/api/knowledge/${id}/relations`, input, {
+        signal,
+      })
+    ).data,
+  )
+}
+export async function deleteKnowledgeRelation(relationId: number, signal?: AbortSignal) {
+  const res = await request.delete<ResponseData<null>>(`/api/relations/${relationId}`, { signal })
+  if (res.data.code !== 0) throw new Error(res.data.msg || '删除关系失败')
+}
