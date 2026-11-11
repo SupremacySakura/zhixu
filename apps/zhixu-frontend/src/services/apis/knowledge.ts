@@ -444,3 +444,43 @@ export async function regenerateKnowledgeRelations(id: number, signal?: AbortSig
     ).data,
   )
 }
+
+export interface KnowledgeGraphNode {
+  id: number
+  title: string
+  /** 知识来源类型：manual/web/markdown/text/pdf/docx/csv/xlsx 等。 */
+  source_type: string
+  summary: string
+  /** 该节点在当前子图中的连接度（双向关系计数）。 */
+  degree: number
+  updated_at: string
+}
+export interface KnowledgeGraphEdge {
+  id: number
+  /** 关系方向保留 source_id → target_id。 */
+  source_id: number
+  target_id: number
+  relation_type: RelationType
+  status: RelationStatus
+  source: RelationSource
+  confidence: number
+}
+export interface KnowledgeGraph {
+  nodes: KnowledgeGraphNode[]
+  edges: KnowledgeGraphEdge[]
+  /** 节点超过上限时按连接度截断。 */
+  truncated: boolean
+}
+/** 局部图谱：不带中心取最近更新的 50 条知识，带中心只展开一跳。 */
+export async function getKnowledgeGraph(
+  centerId?: number,
+  includeSuggested = false,
+  signal?: AbortSignal,
+) {
+  const params: Record<string, number> = { depth: 1, include_suggested: includeSuggested ? 1 : 0 }
+  if (centerId && centerId > 0) params.center_id = centerId
+  return unwrap(
+    (await request.get<ResponseData<KnowledgeGraph>>('/api/knowledge/graph', { params, signal }))
+      .data,
+  )
+}
