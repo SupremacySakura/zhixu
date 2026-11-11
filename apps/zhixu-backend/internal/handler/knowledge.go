@@ -124,6 +124,8 @@ func (h *KnowledgeHandler) fail(c *gin.Context, err error) {
 		response.FailWithStatus(c, http.StatusBadRequest, response.CodeInvalidParam, err.Error())
 	case errors.Is(err, service.ErrWebFetchFailed):
 		response.FailWithStatus(c, http.StatusBadGateway, response.CodeServerError, err.Error())
+	case errors.Is(err, service.ErrOrganizeNoDraft):
+		response.FailWithStatus(c, http.StatusConflict, response.CodeConflict, err.Error())
 	default:
 		c.Error(err)
 		response.FailWithStatus(c, http.StatusInternalServerError, response.CodeServerError, "知识库服务暂时不可用")
@@ -617,6 +619,113 @@ func (h *KnowledgeHandler) Retry(c *gin.Context) {
 		return
 	}
 	response.SuccessWithStatus(c, http.StatusAccepted, item)
+}
+
+// Organize godoc
+// @Summary 查询知识的 AI 整理任务状态
+// @Description 返回最近一次整理任务（status/pending running succeeded failed）；从未整理过时 task 为 null。
+// @Tags knowledge
+// @Produce json
+// @Param id path int true "知识ID"
+// @Success 200 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/organize [get]
+func (h *KnowledgeHandler) Organize(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	task, draft, err := h.Service.OrganizeState(c.Request.Context(), userID, id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, gin.H{"task": task, "draft": draft})
+}
+
+// OrganizeAcceptRequest 是用户在预览面板确认后的最终内容；summary/keywords 缺省表示沿用草稿原值。
+type OrganizeAcceptRequest struct {
+	Summary  *string   `json:"summary"`
+	Keywords *[]string `json:"keywords"`
+	TagIDs   []uint    `json:"tag_ids"`
+	TagNames []string  `json:"tag_names"`
+}
+
+// AcceptOrganize godoc
+// @Summary 采纳 AI 整理结果
+// @Description 用户可编辑摘要/关键词后采纳：只写摘要与关键词两列（外加追加标签），正文、版本与向量状态不变。
+// @Tags knowledge
+// @Accept json
+// @Produce json
+// @Param id path int true "知识ID"
+// @Param data body OrganizeAcceptRequest true "确认后的摘要、关键词与标签"
+// @Success 200 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Failure 409 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/organize/accept [post]
+func (h *KnowledgeHandler) AcceptOrganize(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+	var req OrganizeAcceptRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.FailWithStatus(c, http.StatusBadRequest, response.CodeInvalidParam, "请求格式不正确或超出大小限制")
+		return
+	}
+	item, tags, draft, err := h.Service.AcceptOrganize(c.Request.Context(), userID, id, service.OrganizeAcceptInput{
+		Summary: req.Summary, Keywords: req.Keywords, TagIDs: req.TagIDs, TagNames: req.TagNames,
+	})
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.Success(c, gin.H{"item": item, "tags": tags, "draft": draft})
+}
+
+// RegenerateOrganize godoc
+// @Summary 重新生成 AI 整理结果
+// @Description 入队一条新的整理任务；已有排队/运行中的任务时复用，不重复消耗模型调用。
+// @Tags knowledge
+// @Produce json
+// @Param id path int true "知识ID"
+// @Success 202 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Failure 409 {object} response.Response
+// @Security ApiKeyAuth
+// @Router /knowledge/{id}/organize/regenerate [post]
+func (h *KnowledgeHandler) RegenerateOrganize(c *gin.Context) {
+	userID, ok := knowledgeUser(c)
+	if !ok {
+		return
+	}
+	id, ok := knowledgeID(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	task, draft, err := h.Service.RegenerateOrganize(c.Request.Context(), userID, id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	response.SuccessWithStatus(c, http.StatusAccepted, gin.H{"task": task, "draft": draft})
 }
 
 // RetryVectorize godoc

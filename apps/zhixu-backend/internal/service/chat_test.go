@@ -3,7 +3,11 @@ package service
 import (
 	"context"
 	"net"
+	"strings"
 	"testing"
+
+	"zhixu-backend/internal/model"
+	"zhixu-backend/internal/repository"
 
 	"github.com/stretchr/testify/require"
 )
@@ -26,6 +30,24 @@ func TestChatInputAndUserIsolation(t *testing.T) {
 		require.Error(t, ValidateChat(ChatInput{Messages: msgs}))
 	}
 }
+func TestValidateChatMessageLimits(t *testing.T) {
+	long := func(n int) string { return strings.Repeat("字", n) }
+	user := func(content string) ChatMessage { return ChatMessage{Role: "user", Content: content} }
+	assistant := func(content string) ChatMessage { return ChatMessage{Role: "assistant", Content: content} }
+
+	// The turn being sent is capped at 2000 characters.
+	require.NoError(t, ValidateChat(ChatInput{Messages: []ChatMessage{user(long(ChatMessageMaxRunes))}}))
+	require.Error(t, ValidateChat(ChatInput{Messages: []ChatMessage{user(long(ChatMessageMaxRunes + 1))}}))
+
+	// Assistant replies keep the larger legacy cap.
+	require.NoError(t, ValidateChat(ChatInput{Messages: []ChatMessage{user("问"), assistant(long(ChatHistoryMaxRunes)), user("再问")}}))
+	require.Error(t, ValidateChat(ChatInput{Messages: []ChatMessage{user("问"), assistant(long(ChatHistoryMaxRunes + 1)), user("再问")}}))
+
+	// Historical user messages are not re-capped, so reopened conversations stay usable.
+	require.NoError(t, ValidateChat(ChatInput{Messages: []ChatMessage{user(long(ChatHistoryMaxRunes)), assistant("答"), user("再问")}}))
+	require.Error(t, ValidateChat(ChatInput{Messages: []ChatMessage{user(long(ChatHistoryMaxRunes + 1)), assistant("答"), user("再问")}}))
+}
+
 func TestChatCapabilityLifetime(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &ChatService{}
@@ -67,6 +89,40 @@ func TestChatRuntimeEndpointPolicy(t *testing.T) {
 	require.Error(t, chat.validateRuntimeModelURL("http://localhost:11434/v1"))
 	chat.AllowedPrivateEndpoints = "http://localhost:11434/v1"
 	require.NoError(t, chat.validateRuntimeModelURL("http://localhost:11434/v1"))
+}
+
+// 对话与嵌入是不同能力：ResolveChatModel 只认 Kind=="chat"，ResolveEmbedding 只认 Kind=="embedding"，
+// 即使两个模型属于同一供应商、model_id 不同也不能串用。
+func TestChatResolvesEachModelKind(t *testing.T) {
+	store := &memoryAIConfig{states: map[uint]*repository.AIConfigState{7: {
+		Providers: []model.ModelProvider{{ID: 3, ProviderID: "gateway", BaseURL: "https://example.com/v1", Protocol: "chat", AuthType: "none"}},
+		Models: []model.ProviderModel{
+			{ID: 11, ProviderID: 3, ModelID: "chat-model", Kind: "chat"},
+			{ID: 12, ProviderID: 3, ModelID: "embedding-model", Kind: "embedding", Dimension: 1024},
+		},
+		Settings: model.UserAISettings{ChatModelID: 11, EmbeddingModelID: 12, EmbeddingVersion: 4, ConfigVersion: 2},
+	}}}
+	chat := &ChatService{Store: store}
+
+	cap, err := chat.ResolveChatModel(context.Background(), 7)
+	require.NoError(t, err)
+	require.Equal(t, "chat-model", cap.Model.ModelID)
+	require.Equal(t, "chat", cap.Model.Kind)
+
+	embedding, version, _, err := chat.ResolveEmbedding(context.Background(), 7)
+	require.NoError(t, err)
+	require.Equal(t, "embedding-model", embedding.Model.ModelID)
+	require.Equal(t, "embedding", embedding.Model.Kind)
+	require.Equal(t, uint64(4), version)
+	require.NotEqual(t, cap.Model.ModelID, embedding.Model.ModelID)
+
+	// 设置指错 Kind 时不能降级复用另一个模型。
+	store.state(7).Settings.ChatModelID = 12
+	_, err = chat.ResolveChatModel(context.Background(), 7)
+	require.ErrorContains(t, err, "未配置可用的对话模型")
+	store.state(7).Settings.EmbeddingModelID = 11
+	_, _, _, err = chat.ResolveEmbedding(context.Background(), 7)
+	require.ErrorContains(t, err, "未配置可用的 Embedding 模型")
 }
 
 func TestNormalizeChatHistoryDropsInterruptedTurns(t *testing.T) {

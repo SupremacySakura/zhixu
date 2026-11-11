@@ -47,6 +47,11 @@ func DeleteKnowledgeRows(tx *gorm.DB, userID uint, query *gorm.DB) (int, error) 
 			return 0, err
 		}
 	}
+	// 关系行没有 knowledge_id 单列：源头或目标命中都要清理，与知识删除同事务完成。
+	if err := tx.Where("user_id = ? AND (source_id IN (?) OR target_id IN (?))", userID, query.Select("id"), query.Select("id")).
+		Delete(&model.KnowledgeRelation{}).Error; err != nil {
+		return 0, err
+	}
 	if err := query.Delete(&model.KnowledgeItem{}).Error; err != nil {
 		return 0, err
 	}
@@ -89,6 +94,19 @@ func (r *KnowledgeRepository) Get(ctx context.Context, userID, id uint) (*model.
 	return &item, err
 }
 
+// ListByIDs 批量读取候选知识的最小字段集；不加载全文以外的关键词、版本历史等关联数据。
+func (r *KnowledgeRepository) ListByIDs(ctx context.Context, userID uint, ids []uint) ([]model.KnowledgeItem, error) {
+	if len(ids) == 0 {
+		return []model.KnowledgeItem{}, nil
+	}
+	var items []model.KnowledgeItem
+	err := r.DB.WithContext(ctx).
+		Select("id, user_id, title, summary, content, status, archived_at, version").
+		Where("user_id = ? AND id IN ?", userID, ids).
+		Find(&items).Error
+	return items, err
+}
+
 func (r *KnowledgeRepository) Create(ctx context.Context, item *model.KnowledgeItem) (*model.KnowledgeItem, bool, error) {
 	err := r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var source model.FileModel
@@ -120,6 +138,18 @@ func (r *KnowledgeRepository) CreateManual(ctx context.Context, item *model.Know
 		}
 		return EnqueueVectorization(tx, item.UserID, item.ID)
 	})
+}
+
+// UpdateMetadata 只更新 AI 整理产出的摘要与关键词：不触碰正文、版本号、分块与向量状态，
+// 因此采纳整理结果不会让已有引用失效。先确认归属（0 行更新的 MySQL 语义无法区分"不存在"和"值未变"）。
+func (r *KnowledgeRepository) UpdateMetadata(ctx context.Context, userID, id uint, summary, keywords string) error {
+	db := r.DB.WithContext(ctx)
+	var item model.KnowledgeItem
+	if err := db.Select("id").Where("id = ? AND user_id = ?", id, userID).Take(&item).Error; err != nil {
+		return err
+	}
+	return db.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]any{"summary": summary, "keywords": keywords}).Error
 }
 
 // SetFavorite 幂等设置收藏标记：值未变化时不写库。

@@ -26,8 +26,54 @@ var queryIndexes = []struct {
 	{"folder_models", "idx_folders_parent_user", "parent_id, user_id"},
 }
 
+// fulltextIndexes carries the ngram full-text indexes behind keyword retrieval.
+// MySQL's ngram parser splits Chinese text into bigrams, which is what makes a
+// two-character Chinese query match at all; GORM cannot express this, so it is
+// created with raw DDL the same way as the plain indexes above.
+var fulltextIndexes = []struct {
+	table, name, columns, parser string
+}{
+	{"knowledge_chunks", "ft_knowledge_chunks_content", "content", "ngram"},
+}
+
 func ensureQueryIndexes(db *gorm.DB) error {
+	return ensureIndexes(db, queryIndexDDLs())
+}
+
+func ensureFulltextIndexes(db *gorm.DB) error {
+	return ensureIndexes(db, fulltextIndexDDLs())
+}
+
+func queryIndexDDLs() []indexDDL {
+	ddls := make([]indexDDL, 0, len(queryIndexes))
 	for _, index := range queryIndexes {
+		ddls = append(ddls, indexDDL{
+			table: index.table,
+			name:  index.name,
+			ddl:   fmt.Sprintf("CREATE INDEX `%s` ON `%s` (%s)", index.name, index.table, index.columns),
+		})
+	}
+	return ddls
+}
+
+func fulltextIndexDDLs() []indexDDL {
+	ddls := make([]indexDDL, 0, len(fulltextIndexes))
+	for _, index := range fulltextIndexes {
+		ddls = append(ddls, indexDDL{
+			table: index.table,
+			name:  index.name,
+			ddl:   fmt.Sprintf("CREATE FULLTEXT INDEX `%s` ON `%s` (%s) WITH PARSER %s", index.name, index.table, index.columns, index.parser),
+		})
+	}
+	return ddls
+}
+
+type indexDDL struct {
+	table, name, ddl string
+}
+
+func ensureIndexes(db *gorm.DB, indexes []indexDDL) error {
+	for _, index := range indexes {
 		var count int64
 		if err := db.Raw(
 			"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?",
@@ -38,9 +84,8 @@ func ensureQueryIndexes(db *gorm.DB) error {
 		if count != 0 {
 			continue
 		}
-		// Identifiers come only from the fixed list above, never from user input.
-		ddl := fmt.Sprintf("CREATE INDEX `%s` ON `%s` (%s)", index.name, index.table, index.columns)
-		if err := normalizeUploadIdentityIndexError(db.Exec(ddl).Error); err != nil {
+		// Identifiers come only from the fixed lists above, never from user input.
+		if err := normalizeUploadIdentityIndexError(db.Exec(index.ddl).Error); err != nil {
 			return fmt.Errorf("create index %s: %w", index.name, err)
 		}
 	}
@@ -122,6 +167,7 @@ func Migrate() error {
 		&model.KnowledgeVersion{},
 		&model.Tag{},
 		&model.KnowledgeTag{},
+		&model.KnowledgeRelation{},
 		&model.VectorizeTask{},
 		&model.VectorCleanupTask{},
 		&model.ModelProvider{},
@@ -130,10 +176,15 @@ func Migrate() error {
 		&model.ChatTurnSource{},
 		&model.ChatTurnUsage{},
 		&model.ChatConversationState{},
+		&model.RetrievalLog{},
+		&model.AiTask{},
 	); err != nil {
 		return err
 	}
 	if err := ensureQueryIndexes(DB); err != nil {
+		return err
+	}
+	if err := ensureFulltextIndexes(DB); err != nil {
 		return err
 	}
 

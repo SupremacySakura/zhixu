@@ -29,6 +29,7 @@ const (
 	OperationLogActionKnowledgeArchive     OperationLogAction = "knowledge_archive"      // 归档知识
 	OperationLogActionKnowledgeUnarchive   OperationLogAction = "knowledge_unarchive"    // 恢复归档
 	OperationLogActionKnowledgeWebImport   OperationLogAction = "knowledge_web_import"   // 从网页导入知识
+	OperationLogActionKnowledgeOrganize    OperationLogAction = "knowledge_organize_accept" // 采纳 AI 整理结果
 )
 
 // OperationLogTargetType 操作目标的实体类型

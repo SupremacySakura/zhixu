@@ -13,6 +13,7 @@ import (
 
 type ragChunkStoreFake struct {
 	chunks      []model.KnowledgeChunk
+	keyword     []model.KnowledgeChunk
 	titles      map[uint]string
 	err         error
 	collections []string
@@ -20,6 +21,10 @@ type ragChunkStoreFake struct {
 
 func (f *ragChunkStoreFake) Collections(context.Context, uint, uint64) ([]string, error) {
 	return f.collections, f.err
+}
+
+func (f *ragChunkStoreFake) SearchChunksKeyword(_ context.Context, _ uint, _ string, _ int) ([]model.KnowledgeChunk, error) {
+	return f.keyword, nil
 }
 
 func (f *ragChunkStoreFake) ChunksByIDs(_ context.Context, _ uint, ids []uint) ([]model.KnowledgeChunk, error) {
@@ -90,9 +95,9 @@ func newRagFixture(chunks []model.KnowledgeChunk) (*RagSearcher, *ragVectorFake)
 
 func TestRagSearchReturnsRankedSources(t *testing.T) {
 	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
-		{ID: 11, KnowledgeID: 9, UserID: 7, Section: "部署 / 回滚", Content: "回滚步骤与注意事项", State: "ready"},
-		{ID: 12, KnowledgeID: 9, UserID: 7, Section: "部署", Content: "发布前的检查清单", State: "ready"},
-		{ID: 13, KnowledgeID: 9, UserID: 7, Section: "旧任务", Content: "仍在等待向量化", State: "pending"},
+		{ID: 11, KnowledgeID: 9, UserID: 7, Seq: 3, Section: "部署 / 回滚", Content: "回滚步骤与注意事项", State: "ready"},
+		{ID: 12, KnowledgeID: 9, UserID: 7, Seq: 5, Section: "部署", Content: "发布前的检查清单", State: "ready"},
+		{ID: 13, KnowledgeID: 9, UserID: 7, Seq: 6, Section: "旧任务", Content: "仍在等待向量化", State: "pending"},
 	})
 	vectors.matches = []VectorMatch{{ChunkID: 12, Score: 0.91}, {ChunkID: 11, Score: 0.83}, {ChunkID: 13, Score: 0.4}, {ChunkID: 99, Score: 0.1}}
 	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "回滚步骤"})
@@ -108,6 +113,8 @@ func TestRagSearchReturnsRankedSources(t *testing.T) {
 	require.Equal(t, "发布流程", result.Sources[0].Title)
 	require.InDelta(t, 0.91, result.Sources[0].Score, 1e-9)
 	require.Equal(t, uint(9), result.Sources[0].KnowledgeID)
+	require.Equal(t, uint(12), result.Sources[0].ChunkID)
+	require.Equal(t, 5, result.Sources[0].Seq)
 	require.Equal(t, "回滚步骤与注意事项", result.Sources[1].Content)
 }
 
@@ -188,8 +195,63 @@ func TestRagSearchRejectsInvalidInput(t *testing.T) {
 func TestRagSearchPropagatesVectorFailure(t *testing.T) {
 	searcher, vectors := newRagFixture(nil)
 	vectors.err = errors.New("qdrant down")
-	_, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "回滚"})
+	_, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "回滚", Mode: RagModeSemantic})
 	require.Error(t, err)
+}
+
+func TestRagHybridFallsBackToKeywordWhenSemanticUnavailable(t *testing.T) {
+	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
+		{ID: 11, KnowledgeID: 9, State: "ready", Content: "关键词命中"},
+	})
+	searcher.Chunks.(*ragChunkStoreFake).keyword = []model.KnowledgeChunk{
+		{ID: 11, KnowledgeID: 9, State: "ready", Section: "部署", Content: "关键词命中"},
+	}
+	vectors.err = errors.New("qdrant down")
+	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "手机"})
+	require.NoError(t, err)
+	require.True(t, result.Available)
+	require.Len(t, result.Sources, 1)
+	require.Equal(t, RagModeKeyword, result.Sources[0].Source)
+	require.Zero(t, result.Sources[0].Score)
+	require.Len(t, result.Sources, 1)
+}
+
+func TestRagKeywordModeSkipsEmbedding(t *testing.T) {
+	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
+		{ID: 12, KnowledgeID: 9, State: "ready", Content: "手机清单"},
+	})
+	searcher.Chunks.(*ragChunkStoreFake).keyword = []model.KnowledgeChunk{
+		{ID: 12, KnowledgeID: 9, State: "ready", Section: "清单", Content: "手机清单"},
+	}
+	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "有哪些手机", Mode: RagModeKeyword})
+	require.NoError(t, err)
+	require.Equal(t, 0, vectors.calls)
+	require.Empty(t, searcher.Embedder.(*vectorEmbedderFake).texts)
+	require.Len(t, result.Sources, 1)
+	require.Equal(t, RagModeKeyword, result.Sources[0].Source)
+	require.Equal(t, "手机清单", result.Sources[0].Content)
+}
+
+func TestRagHybridFusesKeywordAndSemantic(t *testing.T) {
+	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
+		{ID: 11, KnowledgeID: 9, State: "ready", Section: "双路", Content: "双路命中"},
+		{ID: 12, KnowledgeID: 9, State: "ready", Section: "关键词", Content: "仅关键词命中"},
+	})
+	searcher.Chunks.(*ragChunkStoreFake).keyword = []model.KnowledgeChunk{
+		{ID: 12, KnowledgeID: 9, State: "ready", Section: "关键词", Content: "仅关键词命中"},
+		{ID: 11, KnowledgeID: 9, State: "ready", Section: "双路", Content: "双路命中"},
+	}
+	vectors.matches = []VectorMatch{{ChunkID: 11, Score: 0.9}}
+	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "有哪些手机"})
+	require.NoError(t, err)
+	require.Len(t, result.Sources, 2)
+	// 11 appears in both legs and therefore outranks the keyword-only 12.
+	require.Equal(t, "双路", result.Sources[0].Section)
+	require.Equal(t, RagSourceBoth, result.Sources[0].Source)
+	require.InDelta(t, 0.9, result.Sources[0].Score, 1e-9)
+	require.Equal(t, "关键词", result.Sources[1].Section)
+	require.Equal(t, RagModeKeyword, result.Sources[1].Source)
+	require.Zero(t, result.Sources[1].Score)
 }
 
 func TestRagSearchEmptyResultIsAvailable(t *testing.T) {
@@ -198,4 +260,34 @@ func TestRagSearchEmptyResultIsAvailable(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Available)
 	require.Empty(t, result.Sources)
+}
+
+type retrievalLogFake struct {
+	rows []*model.RetrievalLog
+}
+
+func (f *retrievalLogFake) Save(_ context.Context, row *model.RetrievalLog) error {
+	f.rows = append(f.rows, row)
+	return nil
+}
+
+func TestRagSearchRecordsRetrievalLog(t *testing.T) {
+	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
+		{ID: 11, KnowledgeID: 9, UserID: 7, Seq: 3, Section: "部署", Content: "回滚步骤与注意事项", State: "ready"},
+	})
+	vectors.matches = []VectorMatch{{ChunkID: 11, Score: 0.91}}
+	logs := &retrievalLogFake{}
+	searcher.Logs = logs
+	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "回滚步骤", ConversationID: "conv-1"})
+	require.NoError(t, err)
+	require.Len(t, logs.rows, 1)
+	row := logs.rows[0]
+	require.Equal(t, uint(7), row.UserID)
+	require.Equal(t, "conv-1", row.ConversationID)
+	require.Equal(t, "回滚步骤", row.Query)
+	require.Equal(t, RagModeHybrid, row.Mode)
+	require.Equal(t, len(result.Sources), row.HitCount)
+	require.GreaterOrEqual(t, row.LatencyMS, 0)
+	require.Contains(t, row.Hits, `"chunk_id":11`)
+	require.Contains(t, row.Hits, `"source":"`)
 }

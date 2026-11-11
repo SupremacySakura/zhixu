@@ -19,6 +19,8 @@ import {
 import { renderKnowledgeContent } from '../utils/markdown'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
 import KnowledgeHistoryDialog from '../components/knowledge/KnowledgeHistoryDialog.vue'
+import KnowledgeOrganizePanel from '../components/knowledge/KnowledgeOrganizePanel.vue'
+import KnowledgeRelationsPanel from '../components/knowledge/KnowledgeRelationsPanel.vue'
 import KnowledgeTagEditor from '../components/knowledge/KnowledgeTagEditor.vue'
 import KnowledgeVectorPanel from '../components/knowledge/KnowledgeVectorPanel.vue'
 const route = useRoute()
@@ -27,6 +29,8 @@ const error = ref('')
 const loading = ref(false)
 const showHistory = ref(false)
 const actionBusy = ref('')
+// 采纳 AI 整理结果会追加标签，用 key 重挂标签面板让它重新拉取。
+const tagVersion = ref(0)
 let controller: AbortController | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
 const html = computed(() =>
@@ -95,6 +99,10 @@ function onRestored(restored: KnowledgeItem) {
   item.value = restored
   showHistory.value = false
   load(true)
+}
+function onOrganized(updated: KnowledgeItem) {
+  item.value = updated
+  tagVersion.value += 1
 }
 </script>
 <template>
@@ -213,8 +221,10 @@ function onRestored(restored: KnowledgeItem) {
             >
           </article>
           <div class="space-y-5">
+            <KnowledgeRelationsPanel :item="item" />
+            <KnowledgeOrganizePanel :item="item" @accepted="onOrganized" />
             <KnowledgeVectorPanel :item="item" @retried="item = $event" />
-            <KnowledgeTagEditor :knowledge-id="item.id" />
+            <KnowledgeTagEditor :key="tagVersion" :knowledge-id="item.id" />
             <aside class="rounded-lg border border-hairline bg-surface p-5">
               <h2 class="mb-5 text-body font-semibold">来源信息</h2>
               <dl class="space-y-5">

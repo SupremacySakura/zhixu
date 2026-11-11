@@ -40,6 +40,11 @@ AI 工具进入项目时应优先读取的必读层。
 
 - [README.md](./plan/README.md) — 完成度矩阵、阶段总览、数据库与 API 契约变更总表
 
+### 领域术语与决策记录
+
+- [../GLOSSARY.md](../GLOSSARY.md) — 领域术语表（知识管理、AI 工作流、知识关联、知识图谱）
+- [adr/0001-knowledge-relation-model.md](./adr/0001-knowledge-relation-model.md) — ADR-0001 知识关系模型（有向行、五种类型、唯一键含类型）
+
 ### 详细结构参考
 
 - [../README.md](../README.md#两种启动方式) — 本地开发与 Docker 启动、端口和升级约束

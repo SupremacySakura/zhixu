@@ -38,12 +38,20 @@ type VectorDatabase interface {
 	DeletePoints(context.Context, string, []uint) error
 }
 
+// RelationEnqueuer 在向量化就绪后按需排入关联建议任务（*AiTaskService 满足）。
+type RelationEnqueuer interface {
+	EnqueueRelation(context.Context, uint, uint, uint) error
+	HasTaskForTarget(context.Context, uint, string, uint) (bool, error)
+}
+
 type VectorizeService struct {
 	Store     VectorizeStore
 	Knowledge KnowledgeStore
 	Chat      *ChatService
 	Embedder  VectorEmbedder
 	Vectors   VectorDatabase
+	// Relations 为可选依赖：为 nil 时不排入关联建议任务（测试与未启用 AI 的部署）。
+	Relations RelationEnqueuer
 }
 
 func vectorCollection(user uint, version uint64) string {
@@ -175,7 +183,23 @@ func (s *VectorizeService) ProcessNext(ctx context.Context) (bool, error) {
 			break
 		}
 	}
-	return true, s.Store.Finish(ctx, task, failure)
+	if err := s.Store.Finish(ctx, task, failure); err != nil {
+		return true, err
+	}
+	// 向量化成功就绪后只在“这个知识从未跑过关联任务”时自动入队一次。
+	// 编辑正文同样会重新向量化，但规格不允许它顺带重跑推荐；手动“查找相关知识”走显式入队。
+	// 查询或入队失败只记日志，不回滚已完成的向量化。
+	if failure == "" && s.Relations != nil {
+		exists, err := s.Relations.HasTaskForTarget(ctx, task.UserID, model.AiTaskTypeRelation, task.KnowledgeID)
+		if err != nil {
+			log.Warn().Err(err).Uint("knowledge_id", task.KnowledgeID).Msg("关联任务查询失败，跳过自动入队")
+		} else if !exists {
+			if err := s.Relations.EnqueueRelation(ctx, task.UserID, task.KnowledgeID, item.Version); err != nil {
+				log.Warn().Err(err).Uint("knowledge_id", task.KnowledgeID).Msg("关联任务入队失败")
+			}
+		}
+	}
+	return true, nil
 }
 
 // cleanupStaleVectors 删除编辑前旧分块的向量点：只按任务记录的 ID 删除，不影响本次新分块。

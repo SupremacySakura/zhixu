@@ -62,6 +62,14 @@ func (f *knowledgeFake) Create(_ context.Context, item *model.KnowledgeItem) (*m
 	f.item = item
 	return item, true, nil
 }
+func (f *knowledgeFake) UpdateMetadata(_ context.Context, user, id uint, summary, keywords string) error {
+	if f.item == nil || f.item.UserID != user || f.item.ID != id {
+		return gorm.ErrRecordNotFound
+	}
+	f.item.Summary, f.item.Keywords = summary, keywords
+	return nil
+}
+
 func (f *knowledgeFake) SetFavorite(_ context.Context, user, id uint, favorite bool) error {
 	if f.item == nil || f.item.UserID != user || f.item.ID != id {
 		return gorm.ErrRecordNotFound

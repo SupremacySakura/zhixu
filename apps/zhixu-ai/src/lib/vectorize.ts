@@ -12,7 +12,9 @@ export const vectorizeSchema = z
       api_key: z.string(),
     }),
     dimension: z.number().int().min(1).max(65536),
-    texts: z.array(z.string().min(1).max(1024)).min(1).max(16),
+    // 4096 覆盖「标题 ≤200 字 + 代表文本 1000 字」的最坏 UTF-16 长度，也覆盖长提问的
+    // 查询向量化。上限过紧会让整批请求 400（历史上 relation 任务正是这样必失败）。
+    texts: z.array(z.string().min(1).max(4096)).min(1).max(16),
   })
   .strict();
 

@@ -52,6 +52,14 @@
 - 已加入文件直接跳转详情。详情来源目录链接使用加入时快照，因此文件后续移动或删除时不能保证定位原件；不声称精确定位。
 - 接入行为与验收边界见 [Markdown 知识前端](./markdown-knowledge-frontend.md)。
 
+## 知识关系与图谱
+
+- 知识详情页右栏最上方为「相关知识」面板 `components/knowledge/KnowledgeRelationsPanel.vue`：已确认关系（中文类型、来源 ai/manual、可改类型/删除）与待确认建议（置信度、可展开 AI 理由、确认/忽略）；「查找相关知识」在任务运行中禁用并 3 秒轮询，卸载时清理定时器与 AbortController；底部「在图谱中查看」跳转 `/home/knowledge/graph?center=<id>`。
+- 图谱页 `pages/KnowledgeGraph.vue`（路由 `/home/knowledge/graph`，懒加载）+ `components/knowledge/KnowledgeGraphChart.vue`：ECharts 按需引入（core + GraphChart + Tooltip + Canvas + LabelLayout），力导向布局；节点大小按度数、颜色按来源类型从 `src/style.css` 的 `@theme` 令牌解析；边区分 AI/手动来源，建议关系虚线并显示中文关系类型标签。
+- 页面交互与副作用（三个请求的取消、250ms 搜索防抖、路由 center 同步、筛选与建议边开关状态）集中在 `composables/useKnowledgeGraph.ts`；页面只保留展示与事件编排。工具栏含标签下拉（`GET /api/tags`）、来源类型下拉（manual/web 与文件格式）、「显示建议边」开关与图例；点击节点打开右侧抽屉（摘要、一跳关系、跳详情、以此为中心），空图按"无知识 / 无关系 / 筛选无结果"分别引导。
+- 前端 API 契约集中在 `services/apis/knowledge.ts`（`getKnowledgeRelations`、`createKnowledgeRelation`、`updateRelation`、`deleteRelation`、`confirmRelation`、`rejectRelation`、`regenerateKnowledgeRelations`、`getKnowledgeGraph`）。
+- 依赖：新增 `echarts ^5.6.0`，图谱页构建为独立懒加载 chunk（约 460 kB，gzip 约 150 kB），不进首屏；颜色解析在挂载时读取一次 CSS 令牌，主题切换后需重新进入页面。
+
 ## 对话页
 
 - `/home/chat` 根高度为 `h-[calc(100dvh-60px)] lg:h-auto`，扣除移动端顶栏后内部滚动；桌面端会话历史 `ConversationSidebar` 常驻，移动端（`<lg`）改为左侧抽屉（复用 HomePage 导航抽屉模式：motion-v 弹簧滑入、遮罩点击与拖拽左滑关闭），入口为头部 `lg:hidden` 的历史按钮，选择会话或新建后自动关闭。

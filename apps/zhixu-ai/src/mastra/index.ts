@@ -8,10 +8,10 @@ import {
   Observability,
   SensitiveDataFilter,
 } from "@mastra/observability";
-import { agent } from "./agents/agent";
-import { startScheduleTool, stopScheduleTool } from "./tools/schedule-tools";
 import { chatRoute } from "./chat";
 import { vectorizeRoute } from "./vectorize";
+import { organizeRoute } from "./organize";
+import { relateRoute } from "./relate";
 import { conversationRoutes } from "./conversations";
 import { healthRoute } from "./health";
 import { installEgressGuard } from "../lib/egress-guard";
@@ -24,13 +24,18 @@ export const mastra = new Mastra({
     // MASTRA_HOST=0.0.0.0 is required when the Go backend runs in a container
     // and reaches this service through the host gateway.
     host: process.env.MASTRA_HOST || "127.0.0.1",
-    apiRoutes: [chatRoute, vectorizeRoute, healthRoute, ...conversationRoutes],
+    apiRoutes: [
+      chatRoute,
+      vectorizeRoute,
+      organizeRoute,
+      relateRoute,
+      healthRoute,
+      ...conversationRoutes,
+    ],
   },
   bundler: {
     externals: ["@duckdb/node-bindings"],
   },
-  agents: { agent },
-  tools: { startScheduleTool, stopScheduleTool },
   storage: new MastraCompositeStore({
     id: "composite-storage",
     default: new LibSQLStore({

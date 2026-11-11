@@ -32,6 +32,12 @@ type tagFake struct {
 	replacedSource string
 	replaceTags    []model.Tag
 	replaceErr     error
+
+	attachedIDs    []uint
+	attachedNames  []string
+	attachedSource string
+	attachedTags   []model.Tag
+	attachErr      error
 }
 
 func (f *tagFake) List(context.Context, uint) ([]repository.TagUsage, error) { return f.rows, nil }
@@ -62,6 +68,11 @@ func (f *tagFake) ReplaceForKnowledge(_ context.Context, _ uint, _ uint, names [
 	f.replacedNames = names
 	f.replacedSource = source
 	return f.replaceTags, f.replaceErr
+}
+
+func (f *tagFake) AttachForKnowledge(_ context.Context, _ uint, _ uint, tagIDs []uint, names []string, source string) ([]model.Tag, error) {
+	f.attachedIDs, f.attachedNames, f.attachedSource = tagIDs, names, source
+	return f.attachedTags, f.attachErr
 }
 
 func TestTagList(t *testing.T) {

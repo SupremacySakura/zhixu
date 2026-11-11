@@ -40,6 +40,16 @@ test("vectorize schema rejects the retired gateway indirection", () => {
   assert.equal(vectorizeSchema.safeParse(legacy).success, false);
 });
 
+// 回归：Go 侧发给 /vectorize 的文本是「标题 + 换行 + 1000 字代表文本」，
+// 上限卡在 1024 时，长中文标题会让整批请求 400，「查找相关知识」直接失败。
+test("vectorize schema accepts long representative texts", () => {
+  const text = "题".repeat(28) + "\n" + "文".repeat(1000);
+  assert.equal(text.length, 1029);
+  assert.equal(vectorizeSchema.safeParse({ ...valid, texts: [text] }).success, true);
+  assert.equal(vectorizeSchema.safeParse({ ...valid, texts: ["字".repeat(4096)] }).success, true);
+  assert.equal(vectorizeSchema.safeParse({ ...valid, texts: ["字".repeat(4097)] }).success, false);
+});
+
 test("vectorize schema rejects unusable model configuration and batches", () => {
   const cases = [
     { ...valid, model: { ...valid.model, model_id: " " } },

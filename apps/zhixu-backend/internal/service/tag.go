@@ -42,6 +42,7 @@ type TagStore interface {
 	Delete(context.Context, uint, uint) error
 	TagsByKnowledge(context.Context, uint, uint) ([]model.Tag, error)
 	ReplaceForKnowledge(context.Context, uint, uint, []string, string) ([]model.Tag, error)
+	AttachForKnowledge(context.Context, uint, uint, []uint, []string, string) ([]model.Tag, error)
 }
 
 type TagService struct{ store TagStore }
@@ -123,6 +124,33 @@ func (s *TagService) ReplaceForKnowledge(ctx context.Context, userID, knowledgeI
 		normalized = append(normalized, clean)
 	}
 	tags, err := s.store.ReplaceForKnowledge(ctx, userID, knowledgeID, normalized, model.TagSourceManual)
+	if err != nil {
+		return nil, knowledgeTagError(err)
+	}
+	return tagViews(tags), nil
+}
+
+// AttachForKnowledge 追加标签绑定（只增不删），用于采纳 AI 推荐标签。
+// 与 ReplaceForKnowledge 的区别：不会删除用户此前手工绑定的标签。
+func (s *TagService) AttachForKnowledge(ctx context.Context, userID, knowledgeID uint, tagIDs []uint, names []string) ([]TagView, error) {
+	if len(tagIDs)+len(names) > TagMaxPerKnowledge {
+		return nil, fmt.Errorf("%w: 单条知识最多绑定 %d 个标签", ErrTagInvalid, TagMaxPerKnowledge)
+	}
+	seen := make(map[string]struct{}, len(names))
+	cleaned := make([]string, 0, len(names))
+	for _, name := range names {
+		clean, err := validateTagName(name)
+		if err != nil {
+			return nil, err
+		}
+		key := strings.ToLower(clean)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		cleaned = append(cleaned, clean)
+	}
+	tags, err := s.store.AttachForKnowledge(ctx, userID, knowledgeID, tagIDs, cleaned, model.TagSourceAI)
 	if err != nil {
 		return nil, knowledgeTagError(err)
 	}

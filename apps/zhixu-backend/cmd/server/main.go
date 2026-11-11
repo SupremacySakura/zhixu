@@ -49,6 +49,7 @@ func main() {
 		Chat:     chat.Service,
 		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 		Vectors:  qdrant, Chunks: &repository.RagRepository{DB: database.DB},
+		Logs: repository.NewRetrievalLogRepository(database.DB),
 	}
 	r.POST("/chat", middleware.AuthMiddleware(), chat.Send)
 	r.GET("/chat/conversations", middleware.AuthMiddleware(), conversationHandler.List)
@@ -57,21 +58,43 @@ func main() {
 	r.DELETE("/chat/conversations/:id", middleware.AuthMiddleware(), conversationHandler.Delete)
 	r.POST("/internal/tools/v1/search", chat.RagSearch)
 	knowledgeService := service.NewKnowledgeService(repository.NewKnowledgeRepository(database.DB), cfg.FileStoragePath)
+	aiTasks := service.NewAiTaskService(&repository.AiTaskRepository{DB: database.DB})
+	knowledgeService.Tasks = aiTasks
 	vectorStore := &repository.VectorizeRepository{DB: database.DB}
 	knowledgeService.Vectors = vectorStore
 	knowledgeService.Logs = repository.NewOperationLogRepository(database.DB)
 	knowledgeService.Fetcher = service.NewWebFetcher()
 	vectorService := &service.VectorizeService{
 		Store: vectorStore, Knowledge: repository.NewKnowledgeRepository(database.DB), Chat: chat.Service,
-		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
-		Vectors:  qdrant,
+		Embedder:  &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+		Vectors:   qdrant,
+		Relations: aiTasks,
 	}
 	vectorCleanup := &service.VectorCleanupService{
 		Store: &repository.VectorCleanupRepository{DB: database.DB}, Vectors: qdrant,
 	}
+	graphService := service.NewGraphService(repository.NewGraphRepository(database.DB))
+	router.RegisterGraphRouter(r, graphService)
 	router.RegisterKnowledgeRouter(r, knowledgeService)
 	tagService := service.NewTagService(repository.NewTagRepository(database.DB))
 	router.RegisterTagRouter(r, &handler.TagHandler{Service: tagService})
+	relationRepo := repository.NewRelationRepository(database.DB)
+	relationService := service.NewRelationService(relationRepo, knowledgeService, aiTasks)
+	router.RegisterRelationRouter(r, &handler.RelationHandler{Service: relationService})
+	// 采纳 AI 整理结果时需要追加标签：只增不删，不覆盖用户手工标签。
+	knowledgeService.Tags = tagService
+	// AI 整理工作流：Go worker 直接调用 AI 服务 /organize，草稿只写 ai_tasks.payload，等用户确认后才落正式字段。
+	aiTasks.Register(&service.OrganizeProcessor{
+		Chat: chat.Service, Knowledge: knowledgeService, Tags: tagService,
+		Client: &service.OrganizeClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+	})
+	// 关联建议工作流：向量化就绪后入队，候选由向量召回，模型只负责关系判定。
+	aiTasks.Register(&service.RelationProcessor{
+		Chat: chat.Service, Embedding: chat.Service, Knowledge: knowledgeService, Relations: relationRepo,
+		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+		Vectors:  qdrant,
+		Client:   &service.RelateClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+	})
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})
 	go func() {
@@ -93,6 +116,11 @@ func main() {
 	go func() {
 		defer close(conversationCleanupDone)
 		conversations.Run(workerCtx)
+	}()
+	aiTaskDone := make(chan struct{})
+	go func() {
+		defer close(aiTaskDone)
+		aiTasks.Run(workerCtx)
 	}()
 
 	port := cfg.Port
@@ -152,6 +180,11 @@ func main() {
 	case <-conversationCleanupDone:
 	case <-ctx.Done():
 		log.Warn().Msg("会话清理任务将在下次启动恢复")
+	}
+	select {
+	case <-aiTaskDone:
+	case <-ctx.Done():
+		log.Warn().Msg("AI 任务将在下次启动恢复")
 	}
 	log.Info().Msg("服务器已退出")
 }

@@ -348,6 +348,9 @@ onMounted(() => {
               />
             </div>
             <h2 class="mb-2 mt-3 break-all text-headline">{{ entry.title }}</h2>
+            <p v-if="entry.summary" class="mb-2 line-clamp-2 text-subhead leading-6 text-label">
+              {{ entry.summary }}
+            </p>
             <p class="text-subhead leading-6 text-label-secondary">
               {{ knowledgeDescription(entry) }}
             </p>
@@ -404,7 +407,7 @@ onMounted(() => {
         @change="changePage"
       />
       <p class="mt-5 text-caption leading-6 text-label-secondary">
-        首版支持 Markdown 正文阅读。AI 摘要、标签与智能问答将在后续加入。
+        列表摘要来自 AI 整理结果，需在详情页确认采纳后才会展示。
       </p>
     </div>
     <KnowledgeTaskPanel

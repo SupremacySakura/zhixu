@@ -134,6 +134,7 @@ func TestKnowledgeDeleteAtomicAndScoped(t *testing.T) {
 				mock.ExpectExec("DELETE FROM `"+table+"` WHERE user_id = .*knowledge_id IN .*user_id").
 					WithArgs(uint(2), uint(10), uint(2)).WillReturnResult(sqlmock.NewResult(0, 1))
 			}
+			mock.ExpectExec("DELETE FROM `knowledge_relations` WHERE user_id = .*").WillReturnResult(sqlmock.NewResult(0, 1))
 			query := mock.ExpectExec("DELETE FROM `knowledge_items` WHERE id = .*user_id").
 				WithArgs(uint(10), uint(2))
 			if fail {
@@ -170,6 +171,7 @@ func TestDeleteKnowledgeRowsReturnsCount(t *testing.T) {
 		mock.ExpectExec("DELETE FROM `" + table + "` WHERE user_id = .*knowledge_id IN").
 			WillReturnResult(sqlmock.NewResult(0, 2))
 	}
+	mock.ExpectExec("DELETE FROM `knowledge_relations` WHERE user_id = .*").WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("DELETE FROM `knowledge_items` WHERE user_id = .*source_file_id IN").
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectCommit()
@@ -200,6 +202,7 @@ func TestDeleteKnowledgeRowsReturnsZeroWhenEmpty(t *testing.T) {
 		mock.ExpectExec("DELETE FROM `" + table + "` WHERE user_id = .*knowledge_id IN").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 	}
+	mock.ExpectExec("DELETE FROM `knowledge_relations` WHERE user_id = .*").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM `knowledge_items` WHERE id = .*user_id").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()

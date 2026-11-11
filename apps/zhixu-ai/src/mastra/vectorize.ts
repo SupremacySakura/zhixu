@@ -27,7 +27,14 @@ export const vectorizeRoute = registerApiRoute("/vectorize", {
       const embeddings = await vectorizeAgent.execute(input, controller.signal);
       c.header("Cache-Control", "no-store");
       return c.json({ embeddings });
-    } catch {
+    } catch (error) {
+      // 服务端留痕：不记录正文、凭据或供应商响应，只记错误摘要，否则排障时无从下手。
+      console.error(
+        "[vectorize] embedding failed:",
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : "unknown error",
+      );
       // Never persist or echo provider responses, source text, or the capability.
       return c.json(
         { error: "Embedding failed; check model configuration and services" },

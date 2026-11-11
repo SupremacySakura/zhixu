@@ -58,3 +58,13 @@
 - `internal/repository/ai_config_repo.go` 使用用户行锁实现配置写入事务；`internal/service/ai_config.go` 管理版本、用途、默认模型与重建校验。
 - `internal/service/model_credentials.go` 提供绑定用户和供应商的 AES-GCM 凭据加密。
 - JWT 配置接口由 `internal/router/ai_config.go` 注册；完整契约见 [模型配置后端](./model-settings-backend.md)。本轮不调用模型或向量库。
+
+## 知识关系与图谱模块
+
+- `internal/model/relation.go` 定义 `knowledge_relations`（有向行、5 种类型、status: suggested/confirmed/rejected、source: ai/manual、confidence、evidence JSON、confirmed_at）；唯一键 `(user_id, source_id, target_id, relation_type)`，对称类型（related/contrasts）写入前按 min/max id 归一。
+- `internal/repository/relation.go` 负责用户隔离、唯一键去重、rejected 行复用与手动/建议关系查询；`internal/repository/graph.go` 负责局部图谱的节点/边查询（默认排除归档、按 tag/source_type 先筛节点再取两端均在集合内的边）。
+- `internal/service/relation.go` 编排手动关系增删改查、确认/拒绝、改类型与对端标题归一；`internal/service/relate.go` 是与 AI 服务 `POST /relate` 的同步客户端（100 秒超时、422/504/502 分类、不回显上游响应）；`internal/service/relation_task.go` 是 `ai_tasks` 的 relation 处理器（嵌入召回候选 → 送 AI 判定 → 落建议行）。
+- `internal/service/graph.go` 负责中心/最近两种子图、节点上限 100 按度数截断（中心不裁）、degree 重算与 truncated 标记。
+- 路由：`internal/router/relation.go`（/relations 与 /knowledge/:id/relations）与 `internal/router/graph.go`（/knowledge/graph）均挂 JWT 鉴权；删除知识条目时由 `knowledge_repo.go` 在同一事务级联删除关系行。
+- 触发与失败：向量化 ready 后入队 relation 任务（仅首次，编辑正文不自动重跑）；候选 <2、422、知识归档/删除按终端失败，Qdrant/AI 超时与 5xx 按 30/60/120 秒退避三次。
+- 设计取舍见 [ADR-0001](./adr/0001-knowledge-relation-model.md) 与根 [GLOSSARY](../GLOSSARY.md)。

@@ -56,11 +56,20 @@ const normalizePath = (path: string) => {
   return normalized || '/'
 }
 
-const isActive = (to: string) => {
+// 取最长前缀命中的导航项，避免 /home/knowledge/graph 同时点亮「知识库」与「知识图谱」。
+const activeTarget = computed(() => {
   const current = normalizePath(route.path)
-  const target = normalizePath(to)
-  return current === target || (target !== '/' && current.startsWith(`${target}/`))
-}
+  let matched = ''
+  for (const item of items.value) {
+    const target = normalizePath(item.to)
+    const hit = current === target || (target !== '/' && current.startsWith(`${target}/`))
+    if (hit && target.length > matched.length) matched = target
+  }
+  return matched
+})
+
+const isActive = (to: string) =>
+  activeTarget.value !== '' && normalizePath(to) === activeTarget.value
 
 // 无头像时使用用户名首字符占位（中英文均取第一个字符）
 const avatarInitial = computed(() => (props.userName.trim()[0] || '?').toUpperCase())

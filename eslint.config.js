@@ -14,6 +14,8 @@ export default [
       '**/coverage/**',
       '**/dist/**',
       '**/data/**',
+      // Mastra 的构建产物（已 gitignore）：几万个打包文件会让 lint 卡住数分钟
+      '**/.mastra/**',
     ],
   },
   {

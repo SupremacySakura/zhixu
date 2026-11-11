@@ -85,9 +85,9 @@ func TestQdrantSearchFiltersUserAndReadsMatches(t *testing.T) {
 		require.Equal(t, http.MethodPost, r.Method)
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		_ = json.NewEncoder(w).Encode(map[string]any{"result": []map[string]any{
-			{"id": 11, "score": 0.9, "payload": map[string]any{"user_id": 7, "chunk_id": 11}},
-			{"id": 12, "score": 0.4, "payload": map[string]any{"user_id": 8, "chunk_id": 12}},
-			{"id": 13, "score": 0.8, "payload": map[string]any{"user_id": 7, "chunk_id": 13}},
+			{"id": 11, "score": 0.9, "payload": map[string]any{"user_id": 7, "chunk_id": 11, "knowledge_id": 21}},
+			{"id": 12, "score": 0.4, "payload": map[string]any{"user_id": 8, "chunk_id": 12, "knowledge_id": 22}},
+			{"id": 13, "score": 0.8, "payload": map[string]any{"user_id": 7, "chunk_id": 13, "knowledge_id": 23}},
 		}})
 	}))
 	defer server.Close()
@@ -96,8 +96,10 @@ func TestQdrantSearchFiltersUserAndReadsMatches(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, matches, 2)
 	require.Equal(t, uint(11), matches[0].ChunkID)
+	require.Equal(t, uint(21), matches[0].KnowledgeID)
 	require.InDelta(t, 0.9, matches[0].Score, 1e-9)
 	require.Equal(t, uint(13), matches[1].ChunkID)
+	require.Equal(t, uint(23), matches[1].KnowledgeID)
 	_, ok := body["filter"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, true, body["with_payload"])

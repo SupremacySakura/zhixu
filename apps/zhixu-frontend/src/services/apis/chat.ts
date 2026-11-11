@@ -7,6 +7,9 @@ export interface ChatWireMessage {
 }
 export interface ChatSource {
   knowledge_id: number
+  // Present on new turns; old persisted sources may lack them.
+  chunk_id?: number
+  seq?: number
   title: string
   section: string
   content: string

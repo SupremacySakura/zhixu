@@ -102,19 +102,32 @@ func NormalizeChatHistory(messages []ChatMessage) []ChatMessage {
 	return out
 }
 
+// ChatMessageMaxRunes bounds the message being sent in this turn. Only the final
+// user turn is capped at 2000, keeping prompts short enough for grounded retrieval;
+// historical messages keep the larger legacy cap so opened conversations stay usable.
+const ChatMessageMaxRunes = 2000
+
+// ChatHistoryMaxRunes bounds every historical message (and every assistant reply).
+const ChatHistoryMaxRunes = 8000
+
 func ValidateChat(input ChatInput) error {
 	if len(input.Messages) == 0 || len(input.Messages) > 80 || len(input.Messages)%2 != 1 {
 		return configInvalid("请提供交替排列、以用户消息结束的会话，最多 79 条消息")
 	}
 	total := 0
+	last := len(input.Messages) - 1
 	for i, message := range input.Messages {
 		expected := "user"
 		if i%2 == 1 {
 			expected = "assistant"
 		}
+		limit := ChatHistoryMaxRunes
+		if i == last {
+			limit = ChatMessageMaxRunes
+		}
 		size := utf8.RuneCountInString(message.Content)
-		if message.Role != expected || !utf8.ValidString(message.Content) || strings.TrimSpace(message.Content) == "" || size > 8000 {
-			return configInvalid("消息角色或内容无效，每条最多 8000 字符")
+		if message.Role != expected || !utf8.ValidString(message.Content) || strings.TrimSpace(message.Content) == "" || size > limit {
+			return configInvalid("消息角色或内容无效：本次提问最多 2000 字符，历史消息与回答最多 8000 字符")
 		}
 		total += size
 	}
@@ -128,11 +141,21 @@ func (s *ChatService) Resolve(ctx context.Context, user uint, input ChatInput) (
 	if err := ValidateChat(input); err != nil {
 		return nil, err
 	}
+	return s.resolveModel(ctx, user, input.ModelID)
+}
+
+// ResolveChatModel 解析默认对话模型能力，供后台 AI 任务（整理、关联）复用：
+// 这些任务不是会话，不适用 ValidateChat 的消息交替与长度约束。
+func (s *ChatService) ResolveChatModel(ctx context.Context, user uint) (*ChatCapability, error) {
+	return s.resolveModel(ctx, user, 0)
+}
+
+func (s *ChatService) resolveModel(ctx context.Context, user uint, modelID uint) (*ChatCapability, error) {
 	state, err := s.Store.Read(ctx, user)
 	if err != nil {
 		return nil, err
 	}
-	id := input.ModelID
+	id := modelID
 	if id == 0 {
 		id = state.Settings.ChatModelID
 	}

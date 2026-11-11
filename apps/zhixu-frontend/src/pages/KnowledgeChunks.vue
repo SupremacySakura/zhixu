@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onScopeDispose, ref, watch } from 'vue'
+import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getKnowledge, type KnowledgeItem } from '../services/apis/knowledge'
 import { useKnowledgeChunks } from '../composables/useKnowledgeChunks'
@@ -8,6 +8,11 @@ import KnowledgeVectorPanel from '../components/knowledge/KnowledgeVectorPanel.v
 
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
+// Citation links carry ?chunk=<seq> so the matching passage is highlighted.
+const highlightSeq = computed(() => {
+  const raw = Number(route.query.chunk)
+  return Number.isInteger(raw) && raw > 0 ? raw : 0
+})
 const { items, loading, error, load } = useKnowledgeChunks(id, false)
 const item = ref<KnowledgeItem | null>(null)
 const detailError = ref('')
@@ -57,11 +62,20 @@ async function refresh() {
     item.value = data
     await load()
     if (current.signal.aborted) return
+    await nextTick()
+    if (highlightSeq.value) locate(highlightSeq.value)
     if (isKnowledgeVectorActive(data.vector_state)) timer = setTimeout(refresh, 3000)
   } catch (e) {
     if (!current.signal.aborted) detailError.value = knowledgeError(e)
   }
 }
+watch(
+  () => route.query.chunk,
+  async () => {
+    await nextTick()
+    if (highlightSeq.value) locate(highlightSeq.value)
+  },
+)
 watch(
   id,
   () => {
@@ -149,7 +163,10 @@ onScopeDispose(() => {
             :id="`chunk-${chunk.seq}`"
             :key="chunk.id"
             class="scroll-mt-4 rounded-lg border bg-surface p-5 sm:p-6"
-            :class="chunk.state === 'failed' ? 'border-danger' : 'border-hairline'"
+            :class="[
+              chunk.state === 'failed' ? 'border-danger' : 'border-hairline',
+              chunk.seq === highlightSeq ? 'border-primary ring-2 ring-primary' : '',
+            ]"
           >
             <header class="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0">

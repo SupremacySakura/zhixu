@@ -14,6 +14,9 @@ vi.mock('../../services/apis/knowledge', () => ({
   favoriteKnowledge: vi.fn(),
   archiveKnowledge: vi.fn(),
   unarchiveKnowledge: vi.fn(),
+  getKnowledgeOrganize: vi.fn(),
+  acceptKnowledgeOrganize: vi.fn(),
+  regenerateKnowledgeOrganize: vi.fn(),
 }))
 vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
 
@@ -26,6 +29,8 @@ const baseItem = {
   source_type: 'manual',
   title: '手写笔记',
   content: '# 正文',
+  summary: '',
+  keywords: [],
   version: 2,
   is_favorite: false,
   archived_at: null,
@@ -60,6 +65,8 @@ async function render() {
     global: {
       plugins: [router],
       stubs: {
+        KnowledgeRelationsPanel: true,
+        KnowledgeOrganizePanel: true,
         KnowledgeVectorPanel: true,
         KnowledgeTagEditor: true,
         KnowledgeHistoryDialog: true,
@@ -85,6 +92,16 @@ describe('KnowledgeDetail', () => {
     await flushPromises()
     expect(favoriteKnowledge).toHaveBeenCalledWith(10, true)
     expect(wrapper.text()).toContain('已收藏')
+  })
+
+  it('shows related knowledge above the AI organize panel', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({ ...baseItem } as never)
+    const wrapper = await render()
+    const html = wrapper.html()
+    const relationsPanel = html.indexOf('knowledge-relations-panel-stub')
+    const organizePanel = html.indexOf('knowledge-organize-panel-stub')
+    expect(relationsPanel).toBeGreaterThan(-1)
+    expect(relationsPanel).toBeLessThan(organizePanel)
   })
 
   it('archives and restores knowledge', async () => {

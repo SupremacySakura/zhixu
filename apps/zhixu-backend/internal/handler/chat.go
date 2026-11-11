@@ -133,7 +133,7 @@ func (h *ChatHandler) Send(c *gin.Context) {
 	// Retrieval is a tool owned by the AI service: the model decides when to search.
 	// This short-lived, read-only token authorizes that tool for this turn only.
 	token, revoke, err := h.Service.Register(&service.ChatCapability{
-		Context: ctx, RagQuery: &service.RagQuery{UserID: user},
+		Context: ctx, RagQuery: &service.RagQuery{UserID: user, ConversationID: conversationID},
 	})
 	if err != nil {
 		response.FailWithStatus(c, 500, response.CodeServerError, "对话服务不可用")
