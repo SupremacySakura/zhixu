@@ -60,12 +60,12 @@ type graphEnvelope struct {
 			Degree     int    `json:"degree"`
 		} `json:"nodes"`
 		Edges []struct {
-			ID           uint   `json:"id"`
-			SourceID     uint   `json:"source_id"`
-			TargetID     uint   `json:"target_id"`
-			RelationType string `json:"relation_type"`
-			Status       string `json:"status"`
-			Source       string `json:"source"`
+			ID           uint    `json:"id"`
+			SourceID     uint    `json:"source_id"`
+			TargetID     uint    `json:"target_id"`
+			RelationType string  `json:"relation_type"`
+			Status       string  `json:"status"`
+			Source       string  `json:"source"`
 			Confidence   float64 `json:"confidence"`
 		} `json:"edges"`
 		Truncated bool `json:"truncated"`
@@ -88,6 +88,8 @@ func TestGraphHandlerDefaults(t *testing.T) {
 	require.Equal(t, uint(2), reader.userID)
 	require.Zero(t, reader.query.CenterID)
 	require.False(t, reader.query.IncludeSuggested)
+	require.Zero(t, reader.query.TagID)
+	require.Empty(t, reader.query.SourceType)
 	body := decodeGraphBody(t, recorder)
 	require.Zero(t, body.Code)
 	require.Empty(t, body.Data.Nodes)
@@ -166,4 +168,46 @@ func TestGraphHandlerHidesInternalErrors(t *testing.T) {
 	require.Equal(t, 1004, body.Code)
 	require.Contains(t, body.Msg, "图谱服务暂时不可用")
 	require.NotContains(t, body.Msg, "database down")
+}
+
+// 标签与来源筛选原样透传给服务；交集语义由服务/仓储保证。
+func TestGraphHandlerPassesTagAndSourceFilter(t *testing.T) {
+	reader := &graphHandlerReader{view: service.GraphView{Nodes: []service.GraphNode{}, Edges: []service.GraphEdge{}}}
+	recorder := serveGraph(t, 2, "/knowledge/graph?tag_id=7&source_type=web&include_suggested=0", reader)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, 1, reader.calls)
+	require.Equal(t, uint(7), reader.query.TagID)
+	require.Equal(t, "web", reader.query.SourceType)
+	require.False(t, reader.query.IncludeSuggested)
+}
+
+// source_type 不在 handler 拒绝：未知值交由服务返回空集 200（避免把筛选无匹配当成客户端错误）。
+func TestGraphHandlerPassesUnknownSourceTypeThrough(t *testing.T) {
+	reader := &graphHandlerReader{view: service.GraphView{Nodes: []service.GraphNode{}, Edges: []service.GraphEdge{}}}
+	recorder := serveGraph(t, 2, "/knowledge/graph?tag_id=7&source_type=bogus", reader)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, 1, reader.calls)
+	require.Equal(t, "bogus", reader.query.SourceType)
+}
+
+// 文件导入格式是合法来源，handler 不做白名单，原样交给服务筛选。
+func TestGraphHandlerPassesFileSourceTypeThrough(t *testing.T) {
+	reader := &graphHandlerReader{view: service.GraphView{Nodes: []service.GraphNode{}, Edges: []service.GraphEdge{}}}
+	recorder := serveGraph(t, 2, "/knowledge/graph?source_type=pdf", reader)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, 1, reader.calls)
+	require.Equal(t, "pdf", reader.query.SourceType)
+}
+
+// tag_id 非法格式或 0 属于参数错误，直接 400，不进入服务。
+func TestGraphHandlerRejectsInvalidTagID(t *testing.T) {
+	for _, value := range []string{"abc", "0", "-1", "1.5"} {
+		t.Run(value, func(t *testing.T) {
+			reader := &graphHandlerReader{}
+			recorder := serveGraph(t, 2, "/knowledge/graph?tag_id="+value, reader)
+			require.Equal(t, http.StatusBadRequest, recorder.Code)
+			require.Zero(t, reader.calls)
+			require.Contains(t, recorder.Body.String(), "标签 ID 无效")
+		})
+	}
 }

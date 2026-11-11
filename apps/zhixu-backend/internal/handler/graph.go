@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"zhixu-backend/internal/response"
 	"zhixu-backend/internal/service"
@@ -20,7 +21,8 @@ type GraphReader interface {
 type GraphHandler struct{ Service GraphReader }
 
 // Get 返回当前用户的局部图谱（GET /knowledge/graph）。
-// 参数：center_id 可选；depth 本批固定 1；include_suggested 0/1，默认 0。
+// 参数：center_id 可选；depth 本批固定 1；include_suggested 0/1，默认 0；
+// tag_id 可选（正整数）；source_type 可选（manual/web，其他值由服务返回空集）。
 func (h *GraphHandler) Get(c *gin.Context) {
 	userID, ok := knowledgeUser(c)
 	if !ok {
@@ -42,8 +44,18 @@ func (h *GraphHandler) Get(c *gin.Context) {
 	} else if flag != nil {
 		includeSuggested = *flag
 	}
+	var tagID uint
+	if raw := c.Query("tag_id"); raw != "" {
+		parsed, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil || parsed == 0 {
+			response.FailWithStatus(c, http.StatusBadRequest, response.CodeInvalidParam, "标签 ID 无效")
+			return
+		}
+		tagID = uint(parsed)
+	}
 	view, err := h.Service.Graph(c.Request.Context(), userID, service.GraphQuery{
 		CenterID: centerID, IncludeSuggested: includeSuggested,
+		TagID: tagID, SourceType: c.Query("source_type"),
 	})
 	if err != nil {
 		switch {

@@ -11,7 +11,8 @@ import {
   type KnowledgeItem,
   type RelationStatus,
 } from '../services/apis/knowledge'
-import { knowledgeError, knowledgeSourceLabel } from '../utils/knowledge'
+import { listTags, type Tag } from '../services/apis/tag'
+import { KNOWLEDGE_FORMATS, knowledgeError, knowledgeSourceLabel } from '../utils/knowledge'
 import { relationTypeLabel } from '../utils/relation'
 import { springSnappy } from '../utils/motion'
 
@@ -27,6 +28,23 @@ const searchResults = ref<KnowledgeItem[]>([])
 const searchOpen = ref(false)
 const searching = ref(false)
 const searchHint = ref('')
+const tags = ref<Tag[]>([])
+const tagId = ref(0)
+const sourceType = ref('')
+const showSuggested = ref(false)
+
+/** 标签/来源会裁剪节点，空图时要给出“无匹配”而不是“还没有知识”。 */
+const nodeFiltersActive = computed(() => tagId.value > 0 || sourceType.value !== '')
+/** 建议边开关不裁剪节点，但也算筛选状态，用于显示“清空筛选”。 */
+const filtersActive = computed(() => nodeFiltersActive.value || showSuggested.value)
+
+/** 来源选项与知识列表共用能力表，文件导入格式（markdown/pdf 等）同样可筛选。 */
+const sourceOptions = [
+  { key: '', label: '全部来源' },
+  { key: 'manual', label: '手动创建' },
+  { key: 'web', label: '网页导入' },
+  ...KNOWLEDGE_FORMATS.map(format => ({ key: format.type, label: format.label })),
+]
 
 const STATUS_LABELS: Record<RelationStatus, string> = {
   suggested: '建议',
@@ -72,6 +90,7 @@ function parseCenter(raw: unknown): number | undefined {
 
 let controller: AbortController | null = null
 let searchController: AbortController | null = null
+let tagsController: AbortController | null = null
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 
 async function loadGraph(centerId: number | undefined) {
@@ -81,7 +100,15 @@ async function loadGraph(centerId: number | undefined) {
   loading.value = true
   error.value = ''
   try {
-    const next = await getKnowledgeGraph(centerId, false, current.signal)
+    const next = await getKnowledgeGraph(
+      {
+        centerId,
+        includeSuggested: showSuggested.value,
+        tagId: tagId.value || undefined,
+        sourceType: sourceType.value || undefined,
+      },
+      current.signal,
+    )
     if (controller !== current) return
     graph.value = next
     if (selectedId.value && !next.nodes.some(node => node.id === selectedId.value)) {
@@ -104,6 +131,30 @@ watch(
   },
   { immediate: true },
 )
+
+/** 筛选只改变图的数据范围，中心仍以 URL 为准；旧图保留到新结果返回。 */
+watch([tagId, sourceType, showSuggested], () => {
+  void loadGraph(parseCenter(route.query.center))
+})
+
+function clearFilters() {
+  tagId.value = 0
+  sourceType.value = ''
+  showSuggested.value = false
+}
+
+async function loadTags() {
+  const current = new AbortController()
+  tagsController?.abort()
+  tagsController = current
+  try {
+    const page = await listTags(current.signal)
+    if (!current.signal.aborted) tags.value = page.items
+  } catch {
+    // 标签列表失败不阻断图谱；下拉仍保留“全部标签”。
+    if (!current.signal.aborted) tags.value = []
+  }
+}
 
 function scheduleSearch() {
   searchOpen.value = true
@@ -175,12 +226,16 @@ function onKeydown(event: KeyboardEvent) {
   searchOpen.value = false
 }
 
-onMounted(() => window.addEventListener('keydown', onKeydown))
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  void loadTags()
+})
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   controller?.abort()
   searchController?.abort()
+  tagsController?.abort()
   if (searchTimer) clearTimeout(searchTimer)
 })
 </script>
@@ -233,6 +288,47 @@ onBeforeUnmount(() => {
         <button type="button" class="knowledge-button-secondary" @click="backToRecent">
           回到最近
         </button>
+        <label class="flex items-center gap-2 text-caption text-label-secondary">
+          <span>标签</span>
+          <select
+            v-model.number="tagId"
+            data-test="tag-filter"
+            class="knowledge-input w-auto py-1 text-caption"
+          >
+            <option :value="0">全部标签</option>
+            <option v-for="tag in tags" :key="tag.id" :value="tag.id">{{ tag.name }}</option>
+          </select>
+        </label>
+        <label class="flex items-center gap-2 text-caption text-label-secondary">
+          <span>来源</span>
+          <select
+            v-model="sourceType"
+            data-test="source-filter"
+            class="knowledge-input w-auto py-1 text-caption"
+          >
+            <option v-for="option in sourceOptions" :key="option.key" :value="option.key">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+        <label class="flex items-center gap-2 text-caption text-label-secondary">
+          <input
+            v-model="showSuggested"
+            data-test="suggested-toggle"
+            type="checkbox"
+            class="size-4 accent-primary"
+          />
+          显示建议边
+        </label>
+        <button
+          v-if="filtersActive"
+          type="button"
+          class="knowledge-text-action"
+          data-test="clear-filters"
+          @click="clearFilters"
+        >
+          清空筛选
+        </button>
       </section>
 
       <p
@@ -250,31 +346,58 @@ onBeforeUnmount(() => {
         {{ error }}
       </p>
       <p
-        v-if="loading"
+        v-if="loading && graph.nodes.length === 0"
         class="rounded-lg border border-hairline bg-surface p-6 text-subhead text-label-secondary"
       >
         正在装载图谱…
+      </p>
+      <p
+        v-else-if="loading"
+        class="mb-4 rounded-lg border border-hairline bg-surface p-4 text-subhead text-label-secondary"
+        role="status"
+      >
+        正在更新图谱…
       </p>
 
       <div
         v-if="!loading && !error && graph.nodes.length === 0"
         class="rounded-lg border border-hairline bg-surface px-6 py-16 text-center"
       >
-        <h2 class="text-title-3">还没有可展示的知识</h2>
-        <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
-          先导入或创建知识，再回到这里查看它们之间的关系。
-        </p>
-        <RouterLink to="/home/knowledge" class="knowledge-button-primary mt-5">
-          去知识库
-        </RouterLink>
+        <template v-if="nodeFiltersActive">
+          <h2 class="text-title-3">没有符合筛选条件的知识</h2>
+          <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
+            试试放宽标签或来源类型，或者清空筛选查看全部知识。
+          </p>
+          <button
+            type="button"
+            class="knowledge-button-secondary mt-5"
+            data-test="clear-filters-empty"
+            @click="clearFilters"
+          >
+            清空筛选
+          </button>
+        </template>
+        <template v-else>
+          <h2 class="text-title-3">还没有可展示的知识</h2>
+          <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
+            先导入或创建知识，再回到这里查看它们之间的关系。
+          </p>
+          <RouterLink to="/home/knowledge" class="knowledge-button-primary mt-5">
+            去知识库
+          </RouterLink>
+        </template>
       </div>
 
-      <template v-if="!loading && !error && graph.nodes.length">
+      <template v-if="!error && graph.nodes.length">
         <p
           v-if="graph.edges.length === 0"
           class="mb-4 rounded-lg border border-hairline bg-surface p-4 text-subhead text-label-secondary"
         >
-          这些知识之间还没有已确认关系。打开任意知识详情页，在「知识关系」面板中建立或确认关系后再回来查看。
+          {{
+            showSuggested
+              ? '这些知识之间还没有已确认或建议关系。打开任意知识详情页，在「知识关系」面板中建立或确认关系后再回来查看。'
+              : '这些知识之间还没有已确认关系。打开任意知识详情页，在「知识关系」面板中建立或确认关系后再回来查看。'
+          }}
         </p>
         <section class="rounded-lg border border-hairline bg-surface p-2 shadow-card">
           <KnowledgeGraphChart
@@ -283,6 +406,28 @@ onBeforeUnmount(() => {
             :selected-id="selectedId"
             @node-click="selectedId = $event"
           />
+          <div
+            class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-hairline px-2 pb-1 pt-3 text-caption text-label-secondary"
+            data-test="graph-legend"
+            aria-label="图例"
+          >
+            <span class="flex items-center gap-2">
+              <span class="h-0 w-6 border-t-2 border-solid border-label-secondary" />
+              已确认关系
+            </span>
+            <span class="flex items-center gap-2">
+              <span class="h-0 w-6 border-t-2 border-dashed border-label-secondary" />
+              建议关系
+            </span>
+            <span class="flex items-center gap-2">
+              <span class="size-2 rounded-full bg-info" />
+              AI 关联
+            </span>
+            <span class="flex items-center gap-2">
+              <span class="size-2 rounded-full bg-label-tertiary" />
+              手动关联
+            </span>
+          </div>
         </section>
       </template>
     </div>

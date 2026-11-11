@@ -17,9 +17,12 @@ const (
 )
 
 // GraphQuery 是局部图谱查询参数；深度固定为 1，由 handler 校验。
+// TagID 与 SourceType 先裁剪节点集合，再取两端都在集合内的关系；两者同时给出时取交集。
 type GraphQuery struct {
 	CenterID         uint
 	IncludeSuggested bool
+	TagID            uint
+	SourceType       string
 }
 
 // GraphNode 是图谱节点视图，degree 只统计本次响应内的边。
@@ -53,9 +56,10 @@ type GraphView struct {
 // GraphStore 是图谱读取的最小仓储能力（*repository.GraphRepository 满足）。
 type GraphStore interface {
 	GetNode(context.Context, uint, uint) (*repository.GraphNodeRow, error)
-	ListRecentNodes(context.Context, uint, int) ([]repository.GraphNodeRow, error)
-	ListNodesByIDs(context.Context, uint, []uint) ([]repository.GraphNodeRow, error)
+	ListRecentNodes(context.Context, uint, repository.GraphNodeFilter, int) ([]repository.GraphNodeRow, error)
+	ListNodesByIDs(context.Context, uint, repository.GraphNodeFilter, []uint) ([]repository.GraphNodeRow, error)
 	ListRelations(context.Context, uint, []uint, bool) ([]model.KnowledgeRelation, error)
+	ListRelationsAmong(context.Context, uint, []uint, bool) ([]model.KnowledgeRelation, error)
 }
 
 type GraphService struct{ store GraphStore }
@@ -65,14 +69,32 @@ func NewGraphService(store GraphStore) *GraphService { return &GraphService{stor
 // Graph 组装局部图谱：无中心时取最近 50 条知识，有中心时取中心与一跳邻居。
 // 关系只保留两端都在候选节点内的行，节点超过 100 时按连接度截断。
 func (s *GraphService) Graph(ctx context.Context, userID uint, query GraphQuery) (GraphView, error) {
+	if !validGraphSourceType(query.SourceType) {
+		// source_type 接受与知识列表一致的已知来源；未知值按「无匹配节点」处理，返回空图而不是 4xx/5xx。
+		return emptyGraphView(), nil
+	}
 	if query.CenterID == 0 {
 		return s.recentGraph(ctx, userID, query)
 	}
 	return s.centerGraph(ctx, userID, query)
 }
 
+// validGraphSourceType 与列表筛选共用 knowledgeSourceTypes，文件导入的 markdown/pdf 等
+// 格式同样可以作为图谱来源条件；空串表示不筛选。
+func validGraphSourceType(sourceType string) bool {
+	if sourceType == "" {
+		return true
+	}
+	_, ok := knowledgeSourceTypes[sourceType]
+	return ok
+}
+
+func graphFilter(query GraphQuery) repository.GraphNodeFilter {
+	return repository.GraphNodeFilter{TagID: query.TagID, SourceType: query.SourceType}
+}
+
 func (s *GraphService) recentGraph(ctx context.Context, userID uint, query GraphQuery) (GraphView, error) {
-	rows, err := s.store.ListRecentNodes(ctx, userID, graphRecentLimit)
+	rows, err := s.store.ListRecentNodes(ctx, userID, graphFilter(query), graphRecentLimit)
 	if err != nil {
 		return emptyGraphView(), err
 	}
@@ -83,7 +105,7 @@ func (s *GraphService) recentGraph(ctx context.Context, userID uint, query Graph
 	if len(ids) == 0 {
 		return emptyGraphView(), nil
 	}
-	relations, err := s.store.ListRelations(ctx, userID, ids, query.IncludeSuggested)
+	relations, err := s.store.ListRelationsAmong(ctx, userID, ids, query.IncludeSuggested)
 	if err != nil {
 		return emptyGraphView(), err
 	}
@@ -92,18 +114,19 @@ func (s *GraphService) recentGraph(ctx context.Context, userID uint, query Graph
 
 // centerGraph 读取中心与其直接关系，再批量取对端节点；中心不存在/归档/属于他人时
 // 仓储返回 gorm.ErrRecordNotFound，这里统一映射为知识不存在（HTTP 404）。
+// 中心本身也要通过筛选：不满足时返回空图 200（而不是 404），符合「筛选是节点集合条件」的语义。
 func (s *GraphService) centerGraph(ctx context.Context, userID uint, query GraphQuery) (GraphView, error) {
 	center, err := s.store.GetNode(ctx, userID, query.CenterID)
 	if err != nil {
 		return emptyGraphView(), knowledgeError(err)
 	}
-	rows := []repository.GraphNodeRow{*center}
 	relations, err := s.store.ListRelations(ctx, userID, []uint{center.ID}, query.IncludeSuggested)
 	if err != nil {
 		return emptyGraphView(), err
 	}
 	relations = filterGraphRelations(relations, query.IncludeSuggested)
-	neighborIDs := make([]uint, 0, len(relations))
+	candidateIDs := make([]uint, 1, len(relations)+1)
+	candidateIDs[0] = center.ID
 	seen := map[uint]bool{center.ID: true}
 	for _, relation := range relations {
 		var counterpart uint
@@ -119,16 +142,33 @@ func (s *GraphService) centerGraph(ctx context.Context, userID uint, query Graph
 			continue
 		}
 		seen[counterpart] = true
-		neighborIDs = append(neighborIDs, counterpart)
+		candidateIDs = append(candidateIDs, counterpart)
 	}
-	if len(neighborIDs) > 0 {
-		neighbors, err := s.store.ListNodesByIDs(ctx, userID, neighborIDs)
-		if err != nil {
-			return emptyGraphView(), err
+	rows, err := s.store.ListNodesByIDs(ctx, userID, graphFilter(query), candidateIDs)
+	if err != nil {
+		return emptyGraphView(), err
+	}
+	if !graphRowsContain(rows, center.ID) {
+		return emptyGraphView(), nil
+	}
+	ids := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	among, err := s.store.ListRelationsAmong(ctx, userID, ids, query.IncludeSuggested)
+	if err != nil {
+		return emptyGraphView(), err
+	}
+	return buildGraphView(rows, filterGraphRelations(among, query.IncludeSuggested), center.ID), nil
+}
+
+func graphRowsContain(rows []repository.GraphNodeRow, id uint) bool {
+	for _, row := range rows {
+		if row.ID == id {
+			return true
 		}
-		rows = append(rows, neighbors...)
 	}
-	return buildGraphView(rows, relations, center.ID), nil
+	return false
 }
 
 // filterGraphRelations 兜底裁剪状态：rejected 永不进入图谱，suggested 仅在显式开启时保留。
