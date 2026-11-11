@@ -121,6 +121,17 @@ func TestAiTaskServiceEnqueueSerializesPayload(t *testing.T) {
 	require.Equal(t, "{}", store.enqueued.Payload)
 }
 
+func TestAiTaskServiceEnqueueRelationUsesKnowledgeDedupeKey(t *testing.T) {
+	svc, store, _ := newAiTaskFixture(model.AiTaskTypeRelation)
+	require.NoError(t, svc.EnqueueRelation(context.Background(), 2, 9, 5))
+	require.Equal(t, uint(2), store.enqueued.UserID)
+	require.Equal(t, model.AiTaskTypeRelation, store.enqueued.TaskType)
+	require.Equal(t, uint(9), store.enqueued.TargetID)
+	require.NotNil(t, store.enqueued.DedupeKey)
+	require.Equal(t, "relation:9", *store.enqueued.DedupeKey)
+	require.JSONEq(t, `{"knowledge_id":9,"base_version":5}`, store.enqueued.Payload)
+}
+
 func TestAiTaskServiceProcessNextWithoutProcessors(t *testing.T) {
 	store := &aiTaskFakeStore{}
 	svc := NewAiTaskService(store)

@@ -66,8 +66,9 @@ func main() {
 	knowledgeService.Fetcher = service.NewWebFetcher()
 	vectorService := &service.VectorizeService{
 		Store: vectorStore, Knowledge: repository.NewKnowledgeRepository(database.DB), Chat: chat.Service,
-		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
-		Vectors:  qdrant,
+		Embedder:  &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+		Vectors:   qdrant,
+		Relations: aiTasks,
 	}
 	vectorCleanup := &service.VectorCleanupService{
 		Store: &repository.VectorCleanupRepository{DB: database.DB}, Vectors: qdrant,
@@ -75,7 +76,8 @@ func main() {
 	router.RegisterKnowledgeRouter(r, knowledgeService)
 	tagService := service.NewTagService(repository.NewTagRepository(database.DB))
 	router.RegisterTagRouter(r, &handler.TagHandler{Service: tagService})
-	relationService := service.NewRelationService(repository.NewRelationRepository(database.DB), knowledgeService)
+	relationRepo := repository.NewRelationRepository(database.DB)
+	relationService := service.NewRelationService(relationRepo, knowledgeService, aiTasks)
 	router.RegisterRelationRouter(r, &handler.RelationHandler{Service: relationService})
 	// 采纳 AI 整理结果时需要追加标签：只增不删，不覆盖用户手工标签。
 	knowledgeService.Tags = tagService
@@ -83,6 +85,13 @@ func main() {
 	aiTasks.Register(&service.OrganizeProcessor{
 		Chat: chat.Service, Knowledge: knowledgeService, Tags: tagService,
 		Client: &service.OrganizeClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+	})
+	// 关联建议工作流：向量化就绪后入队，候选由向量召回，模型只负责关系判定。
+	aiTasks.Register(&service.RelationProcessor{
+		Chat: chat.Service, Knowledge: knowledgeService, Relations: relationRepo,
+		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+		Vectors:  qdrant,
+		Client:   &service.RelateClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 	})
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})

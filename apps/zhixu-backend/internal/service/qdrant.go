@@ -25,8 +25,9 @@ type QdrantClient struct {
 }
 
 type VectorMatch struct {
-	ChunkID uint
-	Score   float64
+	ChunkID     uint
+	KnowledgeID uint
+	Score       float64
 }
 
 func (q *QdrantClient) request(ctx context.Context, method, path string, body any) ([]byte, int, error) {
@@ -218,8 +219,9 @@ func (q *QdrantClient) Search(ctx context.Context, collection string, user uint,
 			ID      uint    `json:"id"`
 			Score   float64 `json:"score"`
 			Payload struct {
-				UserID  uint `json:"user_id"`
-				ChunkID uint `json:"chunk_id"`
+				UserID      uint `json:"user_id"`
+				ChunkID     uint `json:"chunk_id"`
+				KnowledgeID uint `json:"knowledge_id"`
 			} `json:"payload"`
 		} `json:"result"`
 	}
@@ -228,10 +230,10 @@ func (q *QdrantClient) Search(ctx context.Context, collection string, user uint,
 	}
 	matches := make([]VectorMatch, 0, len(result.Result))
 	for _, point := range result.Result {
-		if point.Payload.UserID != user || point.Payload.ChunkID == 0 {
+		if point.Payload.UserID != user || point.Payload.ChunkID == 0 || point.Payload.KnowledgeID == 0 {
 			continue
 		}
-		matches = append(matches, VectorMatch{ChunkID: point.Payload.ChunkID, Score: point.Score})
+		matches = append(matches, VectorMatch{ChunkID: point.Payload.ChunkID, KnowledgeID: point.Payload.KnowledgeID, Score: point.Score})
 	}
 	return matches, nil
 }

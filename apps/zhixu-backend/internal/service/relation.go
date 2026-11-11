@@ -30,13 +30,20 @@ type RelationKnowledgeStore interface {
 	Get(context.Context, uint, uint) (*model.KnowledgeItem, error)
 }
 
+// RelationTaskSource 提供最近一次关联任务，用于建议区展示失败原因与重试次数
+// （*AiTaskService 满足）。
+type RelationTaskSource interface {
+	Latest(context.Context, uint, string, uint) (*model.AiTask, error)
+}
+
 type RelationService struct {
 	store     RelationStore
 	knowledge RelationKnowledgeStore
+	tasks     RelationTaskSource
 }
 
-func NewRelationService(store RelationStore, knowledge RelationKnowledgeStore) *RelationService {
-	return &RelationService{store: store, knowledge: knowledge}
+func NewRelationService(store RelationStore, knowledge RelationKnowledgeStore, tasks RelationTaskSource) *RelationService {
+	return &RelationService{store: store, knowledge: knowledge, tasks: tasks}
 }
 
 // RelationCreateInput 是手动建立关系的请求体。
@@ -60,13 +67,16 @@ type RelationView struct {
 	CreatedAt        time.Time            `json:"created_at"`
 }
 
-// RelationTaskView 为后续 AI 建议任务预留；本单不下发任务，恒为 nil。
+// RelationTaskView 是最近一次关联任务的状态，建议区用它提示失败原因与重试次数。
 type RelationTaskView struct {
-	ID     uint               `json:"id"`
-	Status model.AiTaskStatus `json:"status"`
+	ID           uint               `json:"id"`
+	Status       model.AiTaskStatus `json:"status"`
+	ErrorMessage string             `json:"error_message"`
+	RetryCount   int                `json:"retry_count"`
+	UpdatedAt    time.Time          `json:"updated_at"`
 }
 
-// RelationList 按已确认/待确认分区返回；本单建议区恒为空。
+// RelationList 按已确认/待确认分区返回，并附带最近一次关联任务。
 type RelationList struct {
 	Confirmed []RelationView    `json:"confirmed"`
 	Suggested []RelationView    `json:"suggested"`
@@ -119,7 +129,7 @@ func (s *RelationService) Create(ctx context.Context, userID, knowledgeID uint, 
 	return &view, nil
 }
 
-// List 返回某知识的已确认关系；建议区与任务状态留给后续批次。
+// List 返回某知识的已确认关系、待确认建议与最近一次关联任务状态。
 func (s *RelationService) List(ctx context.Context, userID, knowledgeID uint) (*RelationList, error) {
 	if _, err := s.knowledge.Get(ctx, userID, knowledgeID); err != nil {
 		return nil, knowledgeError(err)
@@ -128,12 +138,29 @@ func (s *RelationService) List(ctx context.Context, userID, knowledgeID uint) (*
 	if err != nil {
 		return nil, err
 	}
-	list := &RelationList{Confirmed: make([]RelationView, 0, len(rows)), Suggested: []RelationView{}}
+	list := &RelationList{
+		Confirmed: make([]RelationView, 0, len(rows)),
+		Suggested: make([]RelationView, 0, len(rows)),
+	}
 	for _, row := range rows {
-		if row.Status != model.RelationConfirmed {
-			continue
+		switch row.Status {
+		case model.RelationConfirmed:
+			list.Confirmed = append(list.Confirmed, relationViewFromRecord(row))
+		case model.RelationSuggested:
+			list.Suggested = append(list.Suggested, relationViewFromRecord(row))
 		}
-		list.Confirmed = append(list.Confirmed, relationViewFromRecord(row))
+	}
+	if s.tasks != nil {
+		task, err := s.tasks.Latest(ctx, userID, model.AiTaskTypeRelation, knowledgeID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		if err == nil && task != nil {
+			list.Task = &RelationTaskView{
+				ID: task.ID, Status: task.Status, ErrorMessage: task.ErrorMessage,
+				RetryCount: task.RetryCount, UpdatedAt: task.UpdatedAt,
+			}
+		}
 	}
 	return list, nil
 }

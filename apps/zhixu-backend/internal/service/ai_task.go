@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"zhixu-backend/internal/log"
@@ -75,6 +76,21 @@ func (s *AiTaskService) Enqueue(ctx context.Context, userID uint, taskType strin
 	return s.Store.Enqueue(ctx, model.AiTask{
 		UserID: userID, TaskType: taskType, TargetID: targetID, Payload: body,
 	})
+}
+
+// EnqueueRelation 按知识维度入队关联任务：dedupe_key 为 relation:<knowledgeID>，
+// 同一知识在活跃期只保留一个任务；成功后再次触发会重新判定并与既有建议合并。
+func (s *AiTaskService) EnqueueRelation(ctx context.Context, userID, knowledgeID, baseVersion uint) error {
+	payload, err := json.Marshal(RelationEnqueuePayload{KnowledgeID: knowledgeID, BaseVersion: baseVersion})
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("relation:%d", knowledgeID)
+	_, err = s.Store.Enqueue(ctx, model.AiTask{
+		UserID: userID, TaskType: model.AiTaskTypeRelation, TargetID: knowledgeID,
+		Payload: string(payload), DedupeKey: &key,
+	})
+	return err
 }
 
 // Latest 返回目标最近一次任务。
