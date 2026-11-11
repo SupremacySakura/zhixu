@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-11-09
+last_reviewed: 2026-11-11
 ---
 
 # 功能实现计划（MVP 差距 → 完整功能）
@@ -19,14 +19,14 @@ last_reviewed: 2026-11-09
 
 | 模块 | 已实现 | 部分实现 | 未实现 |
 |---|---|---|---|
-| 知识管理 FR-KM-01~09 | FR-KM-02 文件导入、FR-KM-05 详情、FR-KM-08 分块预览 | FR-KM-04 列表、FR-KM-08（缺引用高亮） | FR-KM-01 创建/编辑、FR-KM-03 网页导入、FR-KM-06 标签、FR-KM-07 收藏归档、FR-KM-09 编辑历史 |
+| 知识管理 FR-KM-01~09 | FR-KM-01 创建/编辑、FR-KM-02 文件导入、FR-KM-03 网页导入、FR-KM-04 列表筛选、FR-KM-05 详情、FR-KM-06 标签、FR-KM-07 收藏归档、FR-KM-08 分块预览、FR-KM-09 编辑历史 | — | — |
 | AI 整理 FR-ORG-01~06 | — | — | **全部 6 条** |
-| 检索问答 FR-QA-01~07 | FR-QA-02 语义检索、FR-QA-05 引用溯源、FR-QA-07 会话历史 | FR-QA-04（grounding 双模式未硬化）、FR-QA-06（已变更：未命中声明+通用回答，见 phase-2 变更记录） | FR-QA-01 关键词检索、FR-QA-03 混合检索 |
+| 检索问答 FR-QA-01~07 | FR-QA-01 关键词检索、FR-QA-02 语义检索、FR-QA-03 混合检索、FR-QA-04 双模式回答、FR-QA-05 引用溯源、FR-QA-06 未命中声明、FR-QA-07 会话历史 | — | — |
 | 知识关联 FR-REL-01~03 | — | — | **全部 3 条** |
 | 知识演化 FR-EVO-01~05 | — | — | **全部 5 条** |
 | 系统支撑 FR-SYS-01~06 | FR-SYS-01 登录、FR-SYS-02 隔离、FR-SYS-04 任务、FR-SYS-05 重试 | FR-SYS-03（缺测试连接）、FR-SYS-06（缺统计展示） | — |
 
-**验收对照**：AC-01✅、AC-08✅；AC-03/06/09 部分；AC-02/04/05/07/10/11/12/13 未达成。
+**验收对照**：AC-01/02/03/05/06/08/09 ✅；AC-04/07/10/11/12/13 未达成（P3/P4）。
 
 ## 阶段总览
 
@@ -42,6 +42,8 @@ last_reviewed: 2026-11-09
 
 **关键路径**：P1（标签/版本表）→ P3（整理/关联）→ P4（演化）→ P5（实验）。P2 独立于数据表依赖，可并行启动。
 
+**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3~P5 未开始。
+
 ## 数据库变更总表
 
 新增表（GORM AutoMigrate，全部带 `user_id` 或经知识条目归属隔离）：
@@ -51,6 +53,7 @@ last_reviewed: 2026-11-09
 | `tags` | 用户标签（user_id+name 唯一，不区分大小写） | P1-W1.4 |
 | `knowledge_tags` | 知识-标签关联（含 source: manual/ai） | P1-W1.4 |
 | `knowledge_versions` | 编辑前自动快照（version_number/title/content/change_source） | P1-W1.2 |
+| `retrieval_logs` | 检索日志（mode/hits JSON/hit_count/latency_ms，实验数据源） | P2-W2.6 |
 | `ai_tasks` | 统一 AI 任务状态机（task_type: organize/relation/evolve；ingest 沿用现有导入任务表） | P3-W3.1 |
 | `knowledge_relations` | 知识关系（source/target/type/confidence/evidence/status，唯一约束防重复） | P3-W3.4 |
 | `evolution_alerts` | 演化提醒（alert_type/payload/status pending/resolved/dismissed） | P4-W4.2 |
@@ -61,6 +64,7 @@ last_reviewed: 2026-11-09
 |---|---|---|
 | `knowledge_items` | +`source_type`(manual/markdown/pdf/web)、+`source_url`、+`summary`、+`keywords`(JSON)、+`is_favorite`、+`version`(乐观锁) | P1（source_type/favorite/version）、P3（summary/keywords） |
 | `knowledge_chunks` | `content` 建 MySQL ngram 全文索引（`WITH PARSER ngram`） | P2-W2.1 |
+| `vectorize_tasks` | +`stale_chunk_ids`(TEXT)、+`cleanup_collection`（编辑后旧向量按点清理） | P1-W1.2 |
 
 已有基础（无需重建）：users、knowledge_items、knowledge_chunks（含向量状态）、模型配置三表、chat 会话（Mastra Memory）+ ChatTurnSource/ChatTurnUsage、导入/向量化任务表。
 
@@ -83,11 +87,11 @@ last_reviewed: 2026-11-09
 | 页面 | 状态 | 缺口 |
 |---|---|---|
 | 首页 Dashboard | ⚠️ 有基础统计 | 缺最近知识、待处理任务、演化提醒聚合（P4-W4.5、P5-W5.2） |
-| 知识列表 | ✅ 有 | 缺来源类型/标签/排序/收藏归档筛选（P1-W1.6） |
-| 知识详情 | ⚠️ 只读 | 缺编辑模式、标签编辑、AI 整理面板、相关知识区（P1/P3） |
-| 分块预览 | ✅ 有 | 缺引用跳转高亮定位（P2-W2.5） |
-| 导入页面 | ⚠️ 并入文件管理 | 缺"网页链接"入口与独立导入页（P1-W1.5） |
-| AI 问答 | ✅ 有 | 缺 grounding 双模式硬化、引用高亮（P2） |
+| 知识列表 | ✅ 有 | 已支持来源类型/标签/收藏归档筛选与排序（P1-W1.6） |
+| 知识详情 | ✅ 有 | 已支持编辑、版本历史、标签；缺 AI 整理面板与相关知识区（P3） |
+| 分块预览 | ✅ 有 | 已支持引用跳转与高亮定位（P2-W2.5） |
+| 导入页面 | ✅ 有 | 已支持“网页链接”入口（P1-W1.5）；仍并入文件管理 |
+| AI 问答 | ✅ 有 | grounding 双模式与引用高亮已就绪（P2） |
 | 知识图谱 | ❌ 无 | P4-W4.1（ECharts） |
 | 演化中心 | ❌ 无 | P4-W4.5 |
 | 系统设置 | ✅ 有 | 缺"测试连接"按钮（P5-W5.1） |

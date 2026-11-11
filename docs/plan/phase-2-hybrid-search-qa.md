@@ -1,7 +1,7 @@
 ---
-last_reviewed: 2026-11-10
+last_reviewed: 2026-11-11
 phase: P2
-status: pending
+status: done
 ---
 
 # P2 混合检索与问答补全
@@ -66,3 +66,17 @@ status: pending
 2. AC-06：双模式生效——命中基于知识库且引用可回填；未命中先声明再通用回答且无伪造引用；引用可跳转。
 3. AC-09：引用跳转定位高亮分块。
 4. 检索日志落库，三模式对比实验数据可直接导出。
+
+## 完成情况（2026-11-11）
+
+| 工作项 | 提交 | 说明 |
+|---|---|---|
+| W2.1 关键词检索 | `2913235` | ngram 全文索引 `ft_knowledge_chunks_content`；`SearchChunksKeyword`（就绪/归档隔离，相关度排序） |
+| W2.2 混合检索 | `5f1e0a5` | `mode: hybrid/semantic/keyword`；RRF k=60 融合；单路失败降级；`source: both/keyword/semantic` |
+| W2.4 grounding 双模式 | `af2a14b` | 命中/未命中/检索不可用三种回答方式；提问 ≤2000、历史 ≤8000；删除 starter agent 与占位工具 |
+| W2.5 引用高亮定位 | `4969c37` | `RagSource` 增加 `chunk_id/seq` 并全链路透传；引用链接 `?chunk=<seq>` 定位并高亮分块 |
+| W2.6 检索日志 | `120ff2d` | `retrieval_logs` 表；`RagSearcher` 统一埋点（模式/命中/耗时），写入失败不影响检索 |
+
+**真实数据验证**：知识库中 5 条"手机"类知识在纯语义模式下最高相似度 0.4827，低于 `minScore=0.5` 阈值而被全部过滤；混合模式（关键词腿命中 8 个分块）返回完整来源，验证了"双路互补"的必要性。
+
+**验收**：AC-05、AC-06、AC-09 已具备；三模式检索日志可直接导出用于 Recall@K / MRR 实验。
