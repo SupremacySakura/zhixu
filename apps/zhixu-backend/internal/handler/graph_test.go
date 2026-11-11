@@ -181,10 +181,19 @@ func TestGraphHandlerPassesTagAndSourceFilter(t *testing.T) {
 	require.False(t, reader.query.IncludeSuggested)
 }
 
-// source_type 不在 handler 拒绝：非 manual/web 交由服务返回空集 200（避免把筛选无匹配当成客户端错误）。
+// source_type 不在 handler 拒绝：未知值交由服务返回空集 200（避免把筛选无匹配当成客户端错误）。
 func TestGraphHandlerPassesUnknownSourceTypeThrough(t *testing.T) {
 	reader := &graphHandlerReader{view: service.GraphView{Nodes: []service.GraphNode{}, Edges: []service.GraphEdge{}}}
-	recorder := serveGraph(t, 2, "/knowledge/graph?tag_id=7&source_type=pdf", reader)
+	recorder := serveGraph(t, 2, "/knowledge/graph?tag_id=7&source_type=bogus", reader)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, 1, reader.calls)
+	require.Equal(t, "bogus", reader.query.SourceType)
+}
+
+// 文件导入格式是合法来源，handler 不做白名单，原样交给服务筛选。
+func TestGraphHandlerPassesFileSourceTypeThrough(t *testing.T) {
+	reader := &graphHandlerReader{view: service.GraphView{Nodes: []service.GraphNode{}, Edges: []service.GraphEdge{}}}
+	recorder := serveGraph(t, 2, "/knowledge/graph?source_type=pdf", reader)
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, 1, reader.calls)
 	require.Equal(t, "pdf", reader.query.SourceType)

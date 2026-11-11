@@ -12,7 +12,7 @@ import {
   type RelationStatus,
 } from '../services/apis/knowledge'
 import { listTags, type Tag } from '../services/apis/tag'
-import { knowledgeError, knowledgeSourceLabel } from '../utils/knowledge'
+import { KNOWLEDGE_FORMATS, knowledgeError, knowledgeSourceLabel } from '../utils/knowledge'
 import { relationTypeLabel } from '../utils/relation'
 import { springSnappy } from '../utils/motion'
 
@@ -37,6 +37,14 @@ const showSuggested = ref(false)
 const nodeFiltersActive = computed(() => tagId.value > 0 || sourceType.value !== '')
 /** 建议边开关不裁剪节点，但也算筛选状态，用于显示“清空筛选”。 */
 const filtersActive = computed(() => nodeFiltersActive.value || showSuggested.value)
+
+/** 来源选项与知识列表共用能力表，文件导入格式（markdown/pdf 等）同样可筛选。 */
+const sourceOptions = [
+  { key: '', label: '全部来源' },
+  { key: 'manual', label: '手动创建' },
+  { key: 'web', label: '网页导入' },
+  ...KNOWLEDGE_FORMATS.map(format => ({ key: format.type, label: format.label })),
+]
 
 const STATUS_LABELS: Record<RelationStatus, string> = {
   suggested: '建议',
@@ -298,9 +306,9 @@ onBeforeUnmount(() => {
             data-test="source-filter"
             class="knowledge-input w-auto py-1 text-caption"
           >
-            <option value="">全部来源</option>
-            <option value="manual">手动创建</option>
-            <option value="web">网页导入</option>
+            <option v-for="option in sourceOptions" :key="option.key" :value="option.key">
+              {{ option.label }}
+            </option>
           </select>
         </label>
         <label class="flex items-center gap-2 text-caption text-label-secondary">

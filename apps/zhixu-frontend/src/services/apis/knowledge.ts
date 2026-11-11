@@ -476,7 +476,7 @@ export interface KnowledgeGraphQuery {
   includeSuggested?: boolean
   /** 只看命中该标签的知识；0 或省略表示全部标签。 */
   tagId?: number
-  /** 只看该来源类型的知识：manual/web；空字符串表示全部来源。 */
+  /** 只看该来源类型的知识：manual/web 或文件导入格式（markdown/pdf 等）；空字符串表示全部来源。 */
   sourceType?: string
 }
 

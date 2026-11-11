@@ -333,15 +333,34 @@ func TestGraphFilterTrimsNeighborsAndEdges(t *testing.T) {
 	require.NotContains(t, graphNodeIDs(view), uint(7))
 }
 
-// source_type 只接受 manual/web；其他值返回空集 200，且不查询存储。
-func TestGraphInvalidSourceTypeReturnsEmpty(t *testing.T) {
+// 未知 source_type 返回空集 200，且不查询存储。
+func TestGraphUnknownSourceTypeReturnsEmpty(t *testing.T) {
 	store := &graphFakeStore{}
-	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{SourceType: "pdf"})
+	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{SourceType: "bogus"})
 	require.NoError(t, err)
 	require.Empty(t, view.Nodes)
 	require.Empty(t, view.Edges)
 	require.False(t, view.Truncated)
 	require.Zero(t, store.recentLimit)
+}
+
+// 文件导入格式与 manual/web 一样是合法来源，筛选必须透传到仓储而不是被当成未知值清空。
+func TestGraphAcceptsFileSourceTypes(t *testing.T) {
+	for _, sourceType := range []string{"markdown", "text", "pdf", "docx", "csv", "xlsx"} {
+		t.Run(sourceType, func(t *testing.T) {
+			store := &graphFakeStore{
+				recent: []repository.GraphNodeRow{
+					graphRow(1, "文件知识", sourceType, graphBaseTime),
+				},
+			}
+			view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{SourceType: sourceType})
+			require.NoError(t, err)
+			require.Equal(t, repository.GraphNodeFilter{SourceType: sourceType}, store.recentFilter)
+			require.Equal(t, 50, store.recentLimit)
+			require.Len(t, view.Nodes, 1)
+			require.Equal(t, sourceType, view.Nodes[0].SourceType)
+		})
+	}
 }
 
 // 筛选后的节点集同样受 100 上限约束，中心不被裁掉且度数按筛后边重算。

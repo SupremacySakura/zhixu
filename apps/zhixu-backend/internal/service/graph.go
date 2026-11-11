@@ -70,7 +70,7 @@ func NewGraphService(store GraphStore) *GraphService { return &GraphService{stor
 // 关系只保留两端都在候选节点内的行，节点超过 100 时按连接度截断。
 func (s *GraphService) Graph(ctx context.Context, userID uint, query GraphQuery) (GraphView, error) {
 	if !validGraphSourceType(query.SourceType) {
-		// source_type 只接受 manual/web；其他值按「无匹配节点」处理，返回空图而不是 4xx/5xx。
+		// source_type 接受与知识列表一致的已知来源；未知值按「无匹配节点」处理，返回空图而不是 4xx/5xx。
 		return emptyGraphView(), nil
 	}
 	if query.CenterID == 0 {
@@ -79,13 +79,14 @@ func (s *GraphService) Graph(ctx context.Context, userID uint, query GraphQuery)
 	return s.centerGraph(ctx, userID, query)
 }
 
+// validGraphSourceType 与列表筛选共用 knowledgeSourceTypes，文件导入的 markdown/pdf 等
+// 格式同样可以作为图谱来源条件；空串表示不筛选。
 func validGraphSourceType(sourceType string) bool {
-	switch sourceType {
-	case "", model.KnowledgeSourceTypeManual, model.KnowledgeSourceTypeWeb:
+	if sourceType == "" {
 		return true
-	default:
-		return false
 	}
+	_, ok := knowledgeSourceTypes[sourceType]
+	return ok
 }
 
 func graphFilter(query GraphQuery) repository.GraphNodeFilter {

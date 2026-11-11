@@ -162,6 +162,37 @@ describe('KnowledgeGraph 页面', () => {
     expect(chart.text()).toContain('相邻知识')
   })
 
+  it('来源筛选项覆盖文件导入格式并能提交 pdf', async () => {
+    vi.mocked(getKnowledgeGraph).mockImplementation(async (options = {}) =>
+      options.sourceType === 'pdf'
+        ? { nodes: [graph.nodes[1]], edges: [], truncated: false }
+        : { ...graph },
+    )
+    const { wrapper } = await render()
+    const sourceSelect = wrapper.find('[data-test="source-filter"]')
+    const optionValues = sourceSelect.findAll('option').map(option => option.attributes('value'))
+    expect(optionValues).toEqual([
+      '',
+      'manual',
+      'web',
+      'markdown',
+      'text',
+      'pdf',
+      'docx',
+      'csv',
+      'xlsx',
+    ])
+    await sourceSelect.setValue('pdf')
+    await flushPromises()
+    expect(getKnowledgeGraph).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sourceType: 'pdf' }),
+      expect.any(AbortSignal),
+    )
+    const chart = wrapper.find('[data-test="chart"]')
+    expect(chart.attributes('data-node-count')).toBe('1')
+    expect(chart.text()).toContain('相邻知识')
+  })
+
   it('打开建议边开关后请求 include_suggested 并给图表补上建议边', async () => {
     vi.mocked(getKnowledgeGraph).mockImplementation(async (options = {}) =>
       options.includeSuggested
