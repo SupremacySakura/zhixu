@@ -12,6 +12,10 @@ import (
 
 type ragSearchRequest struct {
 	Query string `json:"query"`
+	// Mode selects the retrieval legs: hybrid (default), semantic or keyword.
+	// It is part of the internal contract so the three-mode experiment can run
+	// through the same gateway the chat tool uses.
+	Mode string `json:"mode"`
 	// TopK is accepted for AI-service contract compatibility but ignored:
 	// retrieval breadth and the similarity threshold come from the user's settings.
 	TopK int `json:"topK"`
@@ -32,9 +36,14 @@ func (h *ChatHandler) RagSearch(c *gin.Context) {
 		c.Status(400)
 		return
 	}
+	if !service.ValidRagMode(input.Mode) {
+		c.JSON(400, gin.H{"error": "检索模式无效"})
+		return
+	}
 	result, err := h.Rag.Search(cap.Context, service.RagQuery{
 		UserID: cap.RagQuery.UserID,
 		Query:  strings.TrimSpace(input.Query),
+		Mode:   input.Mode,
 	})
 	if err != nil {
 		// Never echo embedding, database, or Qdrant failures back to the AI service.

@@ -28,6 +28,25 @@ func TestRagSearchRequiresCapability(t *testing.T) {
 	}
 }
 
+func TestRagSearchRejectsUnknownMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &service.ChatService{}
+	token, revoke, err := s.Register(&service.ChatCapability{
+		Context: context.Background(), RagQuery: &service.RagQuery{UserID: 7},
+	})
+	require.NoError(t, err)
+	defer revoke()
+	r := gin.New()
+	h := &ChatHandler{Service: s}
+	r.POST("/internal/tools/v1/search", h.RagSearch)
+	req := httptest.NewRequest("POST", "/internal/tools/v1/search", strings.NewReader(`{"query":"回滚","mode":"magic"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, 400, w.Code)
+	require.Contains(t, w.Body.String(), "检索模式无效")
+}
+
 func TestRagSearchClaimsCapabilityAcrossTurn(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &service.ChatService{}

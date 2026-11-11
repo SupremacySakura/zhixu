@@ -193,8 +193,63 @@ func TestRagSearchRejectsInvalidInput(t *testing.T) {
 func TestRagSearchPropagatesVectorFailure(t *testing.T) {
 	searcher, vectors := newRagFixture(nil)
 	vectors.err = errors.New("qdrant down")
-	_, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "回滚"})
+	_, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "回滚", Mode: RagModeSemantic})
 	require.Error(t, err)
+}
+
+func TestRagHybridFallsBackToKeywordWhenSemanticUnavailable(t *testing.T) {
+	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
+		{ID: 11, KnowledgeID: 9, State: "ready", Content: "关键词命中"},
+	})
+	searcher.Chunks.(*ragChunkStoreFake).keyword = []model.KnowledgeChunk{
+		{ID: 11, KnowledgeID: 9, State: "ready", Section: "部署", Content: "关键词命中"},
+	}
+	vectors.err = errors.New("qdrant down")
+	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "手机"})
+	require.NoError(t, err)
+	require.True(t, result.Available)
+	require.Len(t, result.Sources, 1)
+	require.Equal(t, RagModeKeyword, result.Sources[0].Source)
+	require.Zero(t, result.Sources[0].Score)
+	require.Len(t, result.Sources, 1)
+}
+
+func TestRagKeywordModeSkipsEmbedding(t *testing.T) {
+	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
+		{ID: 12, KnowledgeID: 9, State: "ready", Content: "手机清单"},
+	})
+	searcher.Chunks.(*ragChunkStoreFake).keyword = []model.KnowledgeChunk{
+		{ID: 12, KnowledgeID: 9, State: "ready", Section: "清单", Content: "手机清单"},
+	}
+	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "有哪些手机", Mode: RagModeKeyword})
+	require.NoError(t, err)
+	require.Equal(t, 0, vectors.calls)
+	require.Empty(t, searcher.Embedder.(*vectorEmbedderFake).texts)
+	require.Len(t, result.Sources, 1)
+	require.Equal(t, RagModeKeyword, result.Sources[0].Source)
+	require.Equal(t, "手机清单", result.Sources[0].Content)
+}
+
+func TestRagHybridFusesKeywordAndSemantic(t *testing.T) {
+	searcher, vectors := newRagFixture([]model.KnowledgeChunk{
+		{ID: 11, KnowledgeID: 9, State: "ready", Section: "双路", Content: "双路命中"},
+		{ID: 12, KnowledgeID: 9, State: "ready", Section: "关键词", Content: "仅关键词命中"},
+	})
+	searcher.Chunks.(*ragChunkStoreFake).keyword = []model.KnowledgeChunk{
+		{ID: 12, KnowledgeID: 9, State: "ready", Section: "关键词", Content: "仅关键词命中"},
+		{ID: 11, KnowledgeID: 9, State: "ready", Section: "双路", Content: "双路命中"},
+	}
+	vectors.matches = []VectorMatch{{ChunkID: 11, Score: 0.9}}
+	result, err := searcher.Search(context.Background(), RagQuery{UserID: 7, Query: "有哪些手机"})
+	require.NoError(t, err)
+	require.Len(t, result.Sources, 2)
+	// 11 appears in both legs and therefore outranks the keyword-only 12.
+	require.Equal(t, "双路", result.Sources[0].Section)
+	require.Equal(t, RagSourceBoth, result.Sources[0].Source)
+	require.InDelta(t, 0.9, result.Sources[0].Score, 1e-9)
+	require.Equal(t, "关键词", result.Sources[1].Section)
+	require.Equal(t, RagModeKeyword, result.Sources[1].Source)
+	require.Zero(t, result.Sources[1].Score)
 }
 
 func TestRagSearchEmptyResultIsAvailable(t *testing.T) {
