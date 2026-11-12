@@ -55,7 +55,9 @@ status: pending
   2. **语义近重复**：新知识向量在 Qdrant 找 Top5 近邻，相似度 >0.9（阈值入配置）→ 入 candidate → 走 `POST /v1/evolve/check` 由 LLM 复核（防误报）→ 回调 `POST /internal/ai/files/{fileId}/evolution-alerts`。
 - **依赖**：W3.1（ai_tasks，task_type=evolve）。**验收**：AC-11——导入与已有知识语义近重复的文档，演化中心出现提醒。
 
-**完成情况（2026-11-12，第一部分 / GitHub #9）**：提醒骨架与精确重复已落地——`evolution_alerts` 表（含 `dedupe_key` 唯一索引且终态不清空）、`knowledge_items` 的 `content_hash`（规范化后 sha256，历史数据每批 500 条回填）、`evolve` 任务（幂等键 `evolve:<id>`，向量化就绪入队，载荷带 `base_version` 做版本栅栏）、精确重复判定（正文指纹相同即产提醒，不调模型）、列表/摘要/裁决接口（六动作 + defer，按类型裁剪）。语义近重复（向量召回 + `POST /evolve` 模型复核）在 GitHub #10 接同一处理器。
+**完成情况（2026-11-12，第一部分 / GitHub #9）**：提醒骨架与精确重复已落地——`evolution_alerts` 表（含 `dedupe_key` 唯一索引且终态不清空）、`knowledge_items` 的 `content_hash`（规范化后 sha256，历史数据每批 500 条回填）、`evolve` 任务（幂等键 `evolve:<id>`，向量化就绪入队，载荷带 `base_version` 做版本栅栏）、精确重复判定（正文指纹相同即产提醒，不调模型）、列表/摘要/裁决接口（六动作 + defer，按类型裁剪）。
+
+**完成情况（2026-11-12，第二部分 / GitHub #10）**：语义近重复与演化判定契约已落地——AI 服务新增 `POST /evolve`（与 `/relate` 同构：鉴权、结构校验、模型地址校验、120s 超时、504/422/403/502 错误码）；Go 侧 `EvolveClient` 同步调用，候选合并「updates 关系指向的目标」（强，只接受过时结论）与「向量相似度 ≥ 0.80 近邻」（弱），按相似度降序取前 8 送模型；一次调用同时产出重复/过时/冲突三类结论，Go 按相似度分派（≥0.90 只收 duplicate、0.75~0.90 只收 conflict、强候选只收 outdated），本阶段只消费 duplicate，过时与冲突的落库在 #11/#12 接同一处理器；证据引文按知识正文子串校验，定位不到即剔除、全剔除则整条不落库，部分缺失降级为 `review`。
 
 ### W4.3 过时识别（FR-EVO-02）
 

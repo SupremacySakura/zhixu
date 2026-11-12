@@ -12,6 +12,7 @@ import { chatRoute } from "./chat";
 import { vectorizeRoute } from "./vectorize";
 import { organizeRoute } from "./organize";
 import { relateRoute } from "./relate";
+import { evolveRoute } from "./evolve";
 import { conversationRoutes } from "./conversations";
 import { healthRoute } from "./health";
 import { installEgressGuard } from "../lib/egress-guard";
@@ -29,6 +30,7 @@ export const mastra = new Mastra({
       vectorizeRoute,
       organizeRoute,
       relateRoute,
+      evolveRoute,
       healthRoute,
       ...conversationRoutes,
     ],

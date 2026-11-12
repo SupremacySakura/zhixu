@@ -42,7 +42,7 @@ last_reviewed: 2026-11-11
 
 **关键路径**：P1（标签/版本表）→ P3（整理/关联）→ P4（演化）→ P5（实验）。P2 独立于数据表依赖，可并行启动。
 
-**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 已完成（2026-11-11，W3.1~W3.5，AC-04 与 AC-07 闭环）；P4-W4.1 局部知识图谱已完成（2026-11-11，AC-10 待真机验收）；P4-W4.2 的提醒骨架与精确重复检测已完成（2026-11-12，GitHub #9：建表、content_hash 回填、evolve 任务、列表/摘要/裁决接口）；W4.2 的语义近重复与 W4.3/W4.4/W4.5 未开始（#10~#13）；P5 未开始。
+**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 已完成（2026-11-11，W3.1~W3.5，AC-04 与 AC-07 闭环）；P4-W4.1 局部知识图谱已完成（2026-11-11，AC-10 待真机验收）；P4-W4.2 已完成（2026-11-12：GitHub #9 建表/content_hash 回填/evolve 任务/列表摘要裁决接口，#10 语义近重复与 `POST /evolve` 判定契约）；W4.3/W4.4/W4.5 未开始（#11~#13）；P5 未开始。
 
 ## 数据库变更总表
 
@@ -77,7 +77,7 @@ last_reviewed: 2026-11-11
 | ~~`GET /internal/files/keyword-search`~~ | 已取消（2026-11-10 变更：RRF 融合放 Go 侧，见 phase-2） | — |
 | ✅ `POST {CHAT_AI_URL}/organize`（Go→AI 同步返回草稿） | 整理工作流 | P3-W3.2（2026-11-11 简化：取消 metadata 回调，见 phase-3） |
 | `POST {CHAT_AI_URL}/relate`（Go→AI 同步返回关系建议） | 关联推荐 | P3-W3.4（2026-11-11 简化：取消 relations 回调，见 phase-3） |
-| `POST /v1/evolve/check`（Go→AI）、`POST /internal/ai/files/{fileId}/evolution-alerts`（AI→Go） | 演化检测 | P4-W4.4 |
+| ✅ `POST {CHAT_AI_URL}/evolve`（Go→AI 同步返回判定数组） | 演化检测 | P4-W4.2（2026-11-12 简化：取消 AI→Go 回调，见 phase-4 方案调整记录） |
 | ~~`POST /internal/ai/tasks/{taskId}/status` 扩展 task_type~~ | 已取消（2026-11-11：organize 改同步返回，任务状态只由 Go 侧 worker 维护） | — |
 
 契约硬约束（架构文档）：**持久化回调必须先于任务状态回调**；AI 服务不直接对外、不鉴权 JWT（Go 侧 `X-Internal-Token` 已就绪）。
