@@ -50,11 +50,10 @@ export function useEvolutionAlerts() {
   /**
    * 处理记录页签的状态参数：只选单一状态时按单值查，否则一次查「已处理 + 已忽略」。
    *
-   * 依赖后端支持 `status` 传逗号分隔多值，并在多状态下按 `resolved_at DESC, id DESC`
-   * 排序后返回合并的 total（见 apps/zhixu-backend internal/service/evolution.go 的 List）。
-   * 该能力由并行分支落地；在它进入集成分支之前，记录页签的多状态请求会退化为只认首个
-   * 状态。前端只发一次请求、按服务端 total 分页，不再本地合并两路结果——本地合并会把
-   * 「每页各取 20 条再拼接」变成错位集合，第 2 页起的条数与排序都不对。
+   * 后端支持 `status` 传逗号分隔多值，并在多状态下按 `resolved_at DESC, id DESC` 排序后
+   * 返回合并的 total（见 apps/zhixu-backend internal/service/evolution.go 的 List）。
+   * 前端只发一次请求、按服务端 total 分页，不本地合并两路结果——本地合并会把「每页各取
+   * 20 条再拼接」变成错位集合，第 2 页起的条数与排序都不对。
    */
   const recordsStatus = (): EvolutionAlertStatusFilter =>
     status.value === 'resolved' || status.value === 'dismissed'
