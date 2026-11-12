@@ -40,14 +40,11 @@ const UploadTaskPanel = defineAsyncComponent(
 const FileActionMenu = defineAsyncComponent(
   () => import('../components/file-management/FileActionMenu.vue'),
 )
-const ToastNotice = defineAsyncComponent(
-  () => import('../components/file-management/ToastNotice.vue'),
-)
 
 const userStore = useUserStore()
 const headerRef = ref<InstanceType<typeof FileManagerHeader> | null>(null)
 
-const { toastMessage, toastType, showToast, displayToast } = useToast()
+const { displayToast } = useToast()
 const route = useRoute()
 const router = useRouter()
 const {
@@ -536,13 +533,6 @@ onMounted(() => {
           @delete="deleteMenuTarget"
           @knowledge="handleKnowledge"
           @close="closeFileMenu"
-        />
-
-        <ToastNotice
-          v-if="showToast"
-          :visible="showToast"
-          :message="toastMessage"
-          :type="toastType"
         />
       </main>
     </template>

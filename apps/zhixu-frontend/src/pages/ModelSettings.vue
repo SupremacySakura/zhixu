@@ -6,7 +6,6 @@ import SettingsModal from '../components/ui/SettingsModal.vue'
 import ProviderEditor from '../components/ui/ProviderEditor.vue'
 import ServiceStatusPanel from '../components/ui/ServiceStatusPanel.vue'
 import { useServiceStatus } from '../composables/useServiceStatus'
-import ToastNotice from '../components/file-management/ToastNotice.vue'
 import { useAISettings } from '../composables/useAISettings'
 import { useToast } from '../composables/useToast'
 import type {
@@ -29,7 +28,7 @@ const {
   removeProvider,
   saveDefaults,
 } = useAISettings()
-const { displayToast, showToast, toastMessage, toastType } = useToast()
+const { displayToast } = useToast()
 const tab = ref<'models' | 'services'>('models')
 const {
   report: serviceReport,
@@ -531,6 +530,5 @@ function reloadConfirmation() {
         </button>
       </div>
     </SettingsModal>
-    <ToastNotice :visible="showToast" :message="toastMessage" :type="toastType" />
   </main>
 </template>

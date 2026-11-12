@@ -6,6 +6,7 @@ import { springBouncy, springSnappy, fadeTransition } from '../utils/motion'
 import { useRoute, useRouter } from 'vue-router'
 import SideBar, { type NavItem } from '../components/bussiness/SideBar.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
+import ToastNotice from '../components/file-management/ToastNotice.vue'
 import { getProfile } from '../services/apis/auth'
 import { useUserStore } from '../stores/user'
 
@@ -182,6 +183,11 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
         </Motion>
       </Motion>
     </AnimatePresence>
+    <!--
+      全仓唯一的消息提示宿主：任何地方调 toast() 都在这里渲染。
+      挂在外壳而不是各页面，是「界面上只有一个提示」的结构性保证。
+    -->
+    <ToastNotice />
     <ConfirmDialog
       :model-value="logoutConfirmOpen"
       title="退出登录"

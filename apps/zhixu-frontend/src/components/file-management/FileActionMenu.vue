@@ -122,7 +122,10 @@ const itemClass =
           aria-label="移动文件"
           @click="emit('move')"
         >
-          <AppIcon class="text-[18px] text-label-secondary" icon="material-symbols:drive-file-move" />
+          <AppIcon
+            class="text-[18px] text-label-secondary"
+            icon="material-symbols:drive-file-move"
+          />
           移动到
         </button>
         <div v-if="target?.type === 'file'" class="border-t border-hairline px-3 py-2">

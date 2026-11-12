@@ -11,6 +11,8 @@ import {
   type KnowledgeItem,
 } from '../../services/apis/knowledge'
 import KnowledgeActionMenu from '../../components/knowledge/KnowledgeActionMenu.vue'
+import ToastNotice from '../../components/file-management/ToastNotice.vue'
+import { defineComponent } from 'vue'
 vi.mock('../../services/apis/knowledge', () => ({
   listKnowledge: vi.fn(),
   addKnowledge: vi.fn(),
@@ -29,6 +31,13 @@ vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span 
 afterEach(() => {
   vi.clearAllMocks()
 })
+// 页面在生产里永远活在带 toast 宿主的外壳里；测试如实照搬这个结构，
+// 而不是让页面自己渲染提示——那样测的是旧架构，不是用户看到的东西。
+const Harness = defineComponent({
+  components: { Page: KnowledgeLibrary, ToastNotice },
+  template: '<div><Page /><ToastNotice /></div>',
+})
+
 async function render() {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -36,7 +45,7 @@ async function render() {
   })
   await router.push('/')
   await router.isReady()
-  const wrapper = mount(KnowledgeLibrary, { global: { plugins: [router] } })
+  const wrapper = mount(Harness, { global: { plugins: [router] } })
   await flushPromises()
   return wrapper
 }
