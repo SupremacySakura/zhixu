@@ -2,6 +2,8 @@
  * 图谱颜色全部从 style.css 的 @theme CSS 变量读取，组件不写死色值。
  * ECharts 画布无法解析 var()，因此在这里把令牌解析为具体颜色再交给图表。
  */
+import type { RelationType } from '../services/apis/knowledge'
+
 export interface GraphPalette {
   source: Record<string, string>
   edgeAI: string
@@ -59,7 +61,11 @@ export function resolveGraphPalette(element?: HTMLElement | null): GraphPalette 
  * 关系线色：矛盾关系单独用矛盾色（类型比来源更需要一眼可辨），
  * 其余类型按来源区分——AI 建议与手动建立使用不同线色。
  */
-export const graphEdgeColor = (palette: GraphPalette, source: string, relationType?: string) => {
+export const graphEdgeColor = (
+  palette: GraphPalette,
+  source: string,
+  relationType?: RelationType,
+) => {
   if (relationType === 'contradicts') return palette.edgeContradicts
   return source === 'manual' ? palette.edgeManual : palette.edgeAI
 }

@@ -1,5 +1,6 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import {
+  evolutionStatusesParam,
   getEvolutionSummary,
   listEvolutionAlerts,
   resolveEvolutionAlert,
@@ -8,6 +9,7 @@ import type {
   EvolutionAction,
   EvolutionAlert,
   EvolutionAlertStatus,
+  EvolutionAlertStatusFilter,
   EvolutionAlertType,
   EvolutionSummary,
 } from '../services/apis/evolution'
@@ -22,8 +24,8 @@ export type EvolutionTab = 'pending' | 'records'
 /**
  * 演化中心的列表、筛选与裁决状态。
  *
- * 两个页签的语义不同：待办视野是后端的一个查询（open=true），处理记录要合并
- * 「已处理」与「已忽略」两个状态各查一次再按裁决时间倒序拼接，所以分页总数取两路之和。
+ * 两个页签的语义不同：待办视野是后端的一个查询（open=true）；处理记录横跨「已处理」与
+ * 「已忽略」，用 `status=resolved,dismissed` 一次查询取回，排序与 total 都由服务端给。
  */
 export function useEvolutionAlerts() {
   const tab = ref<EvolutionTab>('pending')
@@ -45,25 +47,30 @@ export function useEvolutionAlerts() {
   let summaryController: AbortController | null = null
   let resolveController: AbortController | null = null
 
-  const sortByResolvedAt = (left: EvolutionAlert, right: EvolutionAlert) =>
-    (right.resolved_at ? Date.parse(right.resolved_at) : 0) -
-    (left.resolved_at ? Date.parse(left.resolved_at) : 0)
+  /**
+   * 处理记录页签的状态参数：只选单一状态时按单值查，否则一次查「已处理 + 已忽略」。
+   *
+   * 依赖后端支持 `status` 传逗号分隔多值，并在多状态下按 `resolved_at DESC, id DESC`
+   * 排序后返回合并的 total（见 apps/zhixu-backend internal/service/evolution.go 的 List）。
+   * 该能力由并行分支落地；在它进入集成分支之前，记录页签的多状态请求会退化为只认首个
+   * 状态。前端只发一次请求、按服务端 total 分页，不再本地合并两路结果——本地合并会把
+   * 「每页各取 20 条再拼接」变成错位集合，第 2 页起的条数与排序都不对。
+   */
+  const recordsStatus = (): EvolutionAlertStatusFilter =>
+    status.value === 'resolved' || status.value === 'dismissed'
+      ? status.value
+      : evolutionStatusesParam('resolved', 'dismissed')
 
-  const loadRecords = async (signal: AbortSignal) => {
-    const query = { page: page.value, pageSize: EVOLUTION_PAGE_SIZE, type: type.value }
-    // 记录页签横跨「已处理」与「已忽略」两个状态，指定状态时只查其中一路。
-    const wanted: EvolutionAlertStatus[] =
-      status.value === 'resolved' || status.value === 'dismissed'
-        ? [status.value]
-        : ['resolved', 'dismissed']
-    const pages = await Promise.all(
-      wanted.map(state => listEvolutionAlerts({ ...query, status: state }, signal)),
+  const loadRecords = async (signal: AbortSignal) =>
+    listEvolutionAlerts(
+      {
+        page: page.value,
+        pageSize: EVOLUTION_PAGE_SIZE,
+        ...(type.value ? { type: type.value } : {}),
+        status: recordsStatus(),
+      },
+      signal,
     )
-    return {
-      items: pages.flatMap(result => result.items).sort(sortByResolvedAt),
-      total: pages.reduce((sum, result) => sum + result.total, 0),
-    }
-  }
 
   const load = async () => {
     const current = new AbortController()

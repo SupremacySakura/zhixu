@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import request from '../request'
-import { getEvolutionSummary, listEvolutionAlerts, resolveEvolutionAlert } from './evolution'
+import {
+  evolutionStatusesParam,
+  getEvolutionSummary,
+  listEvolutionAlerts,
+  pendingTotal,
+  resolveEvolutionAlert,
+} from './evolution'
 import type { EvolutionAlert, EvolutionAlertPage, EvolutionSummary } from './evolution'
 
 vi.mock('../request', () => ({
@@ -64,6 +70,32 @@ describe('evolution api', () => {
       params: { page: 1, page_size: 50, status: 'dismissed' },
       signal: undefined,
     })
+  })
+
+  it('多状态查询把两个状态拼成逗号分隔的一次请求', async () => {
+    mockedRequest.get.mockResolvedValueOnce({ data: { code: 0, msg: 'ok', data: page } })
+    await listEvolutionAlerts({ status: 'resolved,dismissed' })
+    expect(mockedRequest.get).toHaveBeenCalledWith('/api/evolution/alerts', {
+      params: { page: 1, page_size: 20, status: 'resolved,dismissed' },
+      signal: undefined,
+    })
+  })
+
+  it('待办视野总数把 pending 与 deferred 相加', () => {
+    expect(pendingTotal(summary)).toBe(4)
+    expect(pendingTotal(null)).toBe(0)
+    expect(
+      pendingTotal({
+        pending: 2,
+        deferred: 0,
+        by_type: { duplicate: 0, outdated: 0, conflict: 0 },
+      }),
+    ).toBe(2)
+  })
+
+  it('状态参数在单状态时保持单值', () => {
+    expect(evolutionStatusesParam('resolved')).toBe('resolved')
+    expect(evolutionStatusesParam('resolved', 'dismissed')).toBe('resolved,dismissed')
   })
 
   it('摘要接口只取一个对象', async () => {

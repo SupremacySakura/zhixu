@@ -1,3 +1,4 @@
+import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick } from 'vue'
 import {
@@ -12,11 +13,17 @@ import type {
 } from '../../services/apis/evolution'
 import { EVOLUTION_PAGE_SIZE, useEvolutionAlerts } from '../useEvolutionAlerts'
 
-vi.mock('../../services/apis/evolution', () => ({
-  listEvolutionAlerts: vi.fn(),
-  getEvolutionSummary: vi.fn(),
-  resolveEvolutionAlert: vi.fn(),
-}))
+vi.mock('../../services/apis/evolution', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../services/apis/evolution')>()
+  return {
+    // 纯计算的参数拼装保留真实实现，只打桩三个接口。
+    evolutionStatusesParam: actual.evolutionStatusesParam,
+    pendingTotal: actual.pendingTotal,
+    listEvolutionAlerts: vi.fn(),
+    getEvolutionSummary: vi.fn(),
+    resolveEvolutionAlert: vi.fn(),
+  }
+})
 
 const listMock = vi.mocked(listEvolutionAlerts)
 const summaryMock = vi.mocked(getEvolutionSummary)
@@ -90,33 +97,66 @@ describe('useEvolutionAlerts', () => {
     scope.stop()
   })
 
-  it('处理记录页签合并已处理与已忽略两路，按裁决时间倒序', async () => {
-    listMock.mockImplementation(async (query = {}) => {
-      if (query.status === 'resolved')
-        return pageOf([
-          makeAlert(1, { status: 'resolved', resolved_at: '2026-11-12T10:00:00+08:00' }),
+  it('处理记录页签一次请求两个状态，用服务端 total 分页', async () => {
+    // 服务端已按 resolved_at DESC, id DESC 排好序，前端不再本地合并与排序。
+    listMock.mockResolvedValue(
+      pageOf(
+        [
           makeAlert(2, { status: 'resolved', resolved_at: '2026-11-12T12:00:00+08:00' }),
-        ])
-      return pageOf([
-        makeAlert(3, { status: 'dismissed', resolved_at: '2026-11-12T11:00:00+08:00' }),
-      ])
-    })
-    const { scope, tab, items, total, load } = runComposable()
+          makeAlert(3, { status: 'dismissed', resolved_at: '2026-11-12T11:00:00+08:00' }),
+        ],
+        41,
+      ),
+    )
+    const { scope, tab, items, total, totalPages, changePage } = runComposable()
 
     tab.value = 'records'
     await nextTick()
-    await load()
+    await flushPromises()
 
+    // 只发一次请求：多状态由服务端合并，避免「两路各取 20 条再拼」造成的错位分页。
+    expect(listMock).toHaveBeenCalledTimes(1)
     expect(listMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'resolved' }),
+      { page: 1, pageSize: EVOLUTION_PAGE_SIZE, status: 'resolved,dismissed' },
       expect.any(AbortSignal),
     )
-    expect(listMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'dismissed' }),
+    expect(items.value.map(item => item.id)).toEqual([2, 3])
+    // total 取服务端合并后的总数，而不是两路之和。
+    expect(total.value).toBe(41)
+    expect(totalPages.value).toBe(3)
+
+    changePage(2)
+    await flushPromises()
+
+    expect(listMock).toHaveBeenCalledTimes(2)
+    expect(listMock).toHaveBeenLastCalledWith(
+      { page: 2, pageSize: EVOLUTION_PAGE_SIZE, status: 'resolved,dismissed' },
       expect.any(AbortSignal),
     )
-    expect(items.value.map(item => item.id)).toEqual([2, 3, 1])
-    expect(total.value).toBe(3)
+    scope.stop()
+  })
+
+  it('处理记录页签只选单一状态时按单值查', async () => {
+    const { scope, tab, status, load } = runComposable()
+
+    tab.value = 'records'
+    await nextTick()
+    await flushPromises()
+
+    status.value = 'dismissed'
+    await nextTick()
+    await flushPromises()
+
+    expect(listMock).toHaveBeenLastCalledWith(
+      { page: 1, pageSize: EVOLUTION_PAGE_SIZE, status: 'dismissed' },
+      expect.any(AbortSignal),
+    )
+
+    await load()
+    expect(listMock).toHaveBeenLastCalledWith(
+      { page: 1, pageSize: EVOLUTION_PAGE_SIZE, status: 'dismissed' },
+      expect.any(AbortSignal),
+    )
     scope.stop()
   })
 

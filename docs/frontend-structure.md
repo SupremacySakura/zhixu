@@ -56,9 +56,17 @@
 
 - 知识详情页右栏最上方为「相关知识」面板 `components/knowledge/KnowledgeRelationsPanel.vue`：已确认关系（中文类型、来源 ai/manual、可改类型/删除）与待确认建议（置信度、可展开 AI 理由、确认/忽略）；「查找相关知识」在任务运行中禁用并 3 秒轮询，卸载时清理定时器与 AbortController；底部「在图谱中查看」跳转 `/home/knowledge/graph?center=<id>`。
 - 图谱页 `pages/KnowledgeGraph.vue`（路由 `/home/knowledge/graph`，懒加载）+ `components/knowledge/KnowledgeGraphChart.vue`：ECharts 按需引入（core + GraphChart + Tooltip + Canvas + LabelLayout），力导向布局；节点大小按度数、颜色按来源类型从 `src/style.css` 的 `@theme` 令牌解析；边区分 AI/手动来源，建议关系虚线并显示中文关系类型标签。
-- 页面交互与副作用（三个请求的取消、250ms 搜索防抖、路由 center 同步、筛选与建议边开关状态）集中在 `composables/useKnowledgeGraph.ts`；页面只保留展示与事件编排。工具栏含标签下拉（`GET /api/tags`）、来源类型下拉（manual/web 与文件格式）、「显示建议边」开关与图例；点击节点打开右侧抽屉（摘要、一跳关系、跳详情、以此为中心），空图按"无知识 / 无关系 / 筛选无结果"分别引导。
+- 页面交互与副作用（三个请求的取消、250ms 搜索防抖、路由 center 同步、筛选与建议边开关状态）集中在 `composables/useKnowledgeGraph.ts`；页面只保留展示与事件编排。工具栏含标签下拉（`GET /api/tags`）、来源类型下拉（manual/web 与文件格式）、关系类型下拉（全部 + 六种类型）、「显示建议边」开关与图例；点击节点打开右侧抽屉（摘要、一跳关系、跳详情、以此为中心），空图按"无知识 / 无关系 / 筛选无结果"分别引导。
+- 关系类型筛选只在客户端按 `edge.relation_type` 裁剪边（`visibleEdges`），不发新请求、不裁节点——图例说明的是线型，筛选若交给后端会连节点一起裁掉。选项文案复用 `utils/relation.ts` 的 `RELATION_TYPE_OPTIONS`，与图例、详情页关系面板同源；它计入 `filtersActive`，因此「清空筛选」能一并复位，选中类型没有边时给 `data-test="relation-filter-empty"` 提示而不是退化成空图引导。
 - 前端 API 契约集中在 `services/apis/knowledge.ts`（`getKnowledgeRelations`、`createKnowledgeRelation`、`updateRelation`、`deleteRelation`、`confirmRelation`、`rejectRelation`、`regenerateKnowledgeRelations`、`getKnowledgeGraph`）。
 - 依赖：新增 `echarts ^5.6.0`，图谱页构建为独立懒加载 chunk（约 460 kB，gzip 约 150 kB），不进首屏；颜色解析在挂载时读取一次 CSS 令牌，主题切换后需重新进入页面。
+
+## 演化中心
+
+- `/home/evolution` 为演化中心（懒加载 `pages/EvolutionCenter.vue`），侧边栏「演化中心」入口；首页 `pages/DashboardPage.vue` 的「待处理提醒」卡片只调 `GET /api/evolution/alerts/summary` 取计数并链到该页，不拉列表、不引图表库。
+- 单页两页签：「待处理」走 `open=true` 由后端一次取回 pending + deferred；「处理记录」用 `status=resolved,dismissed` 一次请求取回两个状态，排序（`resolved_at DESC, id DESC`）与 `total` 都由服务端给，前端只按服务端 total 分页——不要改回「两个状态各查一次再本地合并」，那样第 2 页起会拿到错位集合。
+- 列表、筛选、分页与裁决状态收在 `composables/useEvolutionAlerts.ts`（AbortController 管理取消，scope 销毁时中断在途请求；换页签时复位不再适用的状态筛选），页面只做渲染编排。点列表项从右侧滑出详情抽屉，左右并排两侧证据引文并用 `utils/evolution.ts` 的 `longestCommonPhrase`/`highlightQuote` 高亮共有片段。
+- API 契约集中在 `services/apis/evolution.ts`（`listEvolutionAlerts`、`getEvolutionSummary`、`resolveEvolutionAlert`）；该模块同时导出两个纯计算：`pendingTotal(summary)` 是待办视野总数（pending + deferred，演化中心页头用），`evolutionStatusesParam` 拼多状态查询参数。**首页卡片的「待处理」按规格只取 `summary.pending`，暂不处理不计入**，两者语义不同不可混用。
 
 ## 对话页
 

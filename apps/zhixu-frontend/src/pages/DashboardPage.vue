@@ -25,9 +25,8 @@ type FileStatCard = {
 
 // 演化提醒只取计数（summary 接口），首页不拉提醒列表，也不引图表库
 const evolutionSummary = ref<EvolutionSummary | null>(null)
-const evolutionPendingTotal = computed(
-  () => (evolutionSummary.value?.pending ?? 0) + (evolutionSummary.value?.deferred ?? 0),
-)
+// 规格 #8：暂不处理不计入首页待处理数量，首页只取 pending；含 deferred 的总数在演化中心页头。
+const evolutionPendingCount = computed(() => evolutionSummary.value?.pending ?? 0)
 const evolutionTypeStats = computed(() => [
   { key: 'duplicate', label: '重复', count: evolutionSummary.value?.by_type.duplicate ?? 0 },
   { key: 'outdated', label: '过时', count: evolutionSummary.value?.by_type.outdated ?? 0 },
@@ -214,13 +213,15 @@ watch(
           <span class="text-subhead font-medium text-primary">前往演化中心 →</span>
         </div>
 
-        <p v-if="evolutionPendingTotal === 0" class="mt-4 text-subhead text-label-secondary">
+        <p v-if="evolutionPendingCount === 0" class="mt-4 text-subhead text-label-secondary">
           暂无待处理提醒
         </p>
         <div v-else class="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
           <div>
             <p class="text-caption text-label-secondary">待处理</p>
-            <p class="text-title-1 mt-0.5">{{ evolutionPendingTotal }}</p>
+            <p class="text-title-1 mt-0.5" data-test="evolution-pending-total">
+              {{ evolutionPendingCount }}
+            </p>
           </div>
           <div
             v-for="stat in evolutionTypeStats"
