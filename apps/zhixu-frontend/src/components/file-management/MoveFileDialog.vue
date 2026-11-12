@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref, useId, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../../utils/motion'
 import type { FileListItem } from '../../services/types/file'
@@ -101,7 +101,7 @@ watch(
                   <span v-else class="whitespace-nowrap font-semibold text-label">
                     {{ breadcrumb.name }}
                   </span>
-                  <Icon
+                  <AppIcon
                     v-if="!isLastBreadcrumb(index)"
                     icon="material-symbols:chevron-right"
                     class="text-[14px]"
@@ -137,11 +137,11 @@ watch(
                         <span
                           class="flex h-8 w-8 flex-none items-center justify-center rounded-sm bg-warning-tint text-warning"
                         >
-                          <Icon class="text-[16px]" icon="material-symbols:folder" />
+                          <AppIcon class="text-[16px]" icon="material-symbols:folder" />
                         </span>
                         <span class="truncate text-sm text-label">{{ folder.name }}</span>
                       </span>
-                      <Icon
+                      <AppIcon
                         class="text-[16px] text-label-tertiary"
                         icon="material-symbols:chevron-right"
                       />
@@ -178,7 +178,7 @@ watch(
                 :disabled="moving"
                 @click="emit('confirm')"
               >
-                <Icon
+                <AppIcon
                   v-if="moving"
                   icon="material-symbols:progress-activity"
                   class="animate-spin"

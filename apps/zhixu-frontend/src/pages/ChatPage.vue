@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import { AnimatePresence, Motion, animate, type PanInfo } from 'motion-v'
 import { springBouncy, springSnappy, fadeTransition } from '../utils/motion'
 import FilterMenu from '../components/ui/FilterMenu.vue'
@@ -169,7 +169,7 @@ onMounted(() => {
             class="flex h-10 w-10 items-center justify-center rounded-sm border border-hairline bg-surface text-label transition-[transform,background-color] duration-150 hover:bg-surface-secondary active:scale-[0.92] lg:hidden"
             @click="historyOpen = true"
           >
-            <Icon icon="material-symbols:history-rounded" class="text-[20px]" />
+            <AppIcon icon="material-symbols:history-rounded" class="text-[20px]" />
           </button>
           <div>
             <p class="mb-1 hidden text-caption text-label-secondary lg:block">工作空间 / 对话</p>
@@ -427,7 +427,7 @@ onMounted(() => {
                 class="flex h-10 w-10 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-secondary hover:text-label"
                 @click="historyOpen = false"
               >
-                <Icon icon="material-symbols:close-rounded" class="text-[20px]" />
+                <AppIcon icon="material-symbols:close-rounded" class="text-[20px]" />
               </button>
             </div>
             <div class="min-h-0 flex-1">

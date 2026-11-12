@@ -6,7 +6,7 @@ import KnowledgeTaskPanel from '../components/knowledge/KnowledgeTaskPanel.vue'
 import { useKnowledgeImport } from '../composables/useKnowledgeImport'
 import type { KnowledgeItem } from '../services/apis/knowledge'
 import type { FileDisplayItem } from '../types/file'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import LoginRequiredPlaceholder from '../components/bussiness/LoginRequiredPlaceholder.vue'
 import FileListView from '../components/file-management/FileListView.vue'
@@ -481,7 +481,7 @@ onMounted(() => {
             </p>
           </div>
           <template #confirm-icon>
-            <Icon
+            <AppIcon
               v-if="deletingMenuTargetId"
               icon="material-symbols:progress-activity"
               class="animate-spin"

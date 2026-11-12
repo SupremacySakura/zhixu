@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AnimatePresence, Motion } from 'motion-v'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import type { KnowledgeItem } from '../../services/apis/knowledge'
 import { springSnappy } from '../../utils/motion'
 import KnowledgeBadge from './KnowledgeBadge.vue'
@@ -27,7 +27,7 @@ const emit = defineEmits<{ close: []; retry: []; refresh: [] }>()
               aria-label="关闭处理面板"
               @click="emit('close')"
             >
-              <Icon icon="material-symbols:close-rounded" />
+              <AppIcon icon="material-symbols:close-rounded" />
             </button>
           </div>
           <p class="mb-3 break-all text-subhead">{{ item.source_file_name }}</p>

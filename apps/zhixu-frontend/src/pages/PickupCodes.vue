@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../utils/motion'
 import { getPickupCodeList, getPickupCodeCount, deletePickupCode } from '../services/apis/file'
@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
               aria-label="去取件页面"
               @click="goToFilePickup"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:download-rounded"
                 class="text-[18px]"
                 aria-hidden="true"
@@ -282,7 +282,7 @@ onBeforeUnmount(() => {
               aria-label="创建新取件码"
               @click="openCreateModal"
             >
-              <Icon icon="material-symbols:add-rounded" class="text-[18px]" aria-hidden="true" />
+              <AppIcon icon="material-symbols:add-rounded" class="text-[18px]" aria-hidden="true" />
               <span>创建新取件码</span>
             </button>
           </div>
@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
               <span
                 class="flex h-8 w-8 items-center justify-center rounded-sm bg-primary-tint text-primary"
               >
-                <Icon icon="material-symbols:lock-open-outline-rounded" class="text-[18px]" />
+                <AppIcon icon="material-symbols:lock-open-outline-rounded" class="text-[18px]" />
               </span>
             </div>
             <div class="flex items-baseline gap-2">
@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
               <span
                 class="flex h-8 w-8 items-center justify-center rounded-sm bg-info-tint text-info"
               >
-                <Icon icon="material-symbols:download-rounded" class="text-[18px]" />
+                <AppIcon icon="material-symbols:download-rounded" class="text-[18px]" />
               </span>
             </div>
             <div class="flex items-baseline gap-2">
@@ -341,7 +341,7 @@ onBeforeUnmount(() => {
               <span
                 class="flex h-8 w-8 items-center justify-center rounded-sm bg-warning-tint text-warning"
               >
-                <Icon icon="material-symbols:timer-outline-rounded" class="text-[18px]" />
+                <AppIcon icon="material-symbols:timer-outline-rounded" class="text-[18px]" />
               </span>
             </div>
             <div class="flex items-baseline gap-2">
@@ -366,7 +366,7 @@ onBeforeUnmount(() => {
                 type="button"
                 aria-label="筛选"
               >
-                <Icon
+                <AppIcon
                   icon="material-symbols:filter-list-rounded"
                   class="text-[20px]"
                   aria-hidden="true"
@@ -377,7 +377,11 @@ onBeforeUnmount(() => {
                 type="button"
                 aria-label="排序"
               >
-                <Icon icon="material-symbols:sort-rounded" class="text-[20px]" aria-hidden="true" />
+                <AppIcon
+                  icon="material-symbols:sort-rounded"
+                  class="text-[20px]"
+                  aria-hidden="true"
+                />
               </button>
             </div>
           </div>
@@ -435,7 +439,7 @@ onBeforeUnmount(() => {
                 <tr v-if="loading">
                   <td colspan="7" class="px-6 py-10">
                     <div class="flex flex-col items-center justify-center gap-2.5">
-                      <Icon
+                      <AppIcon
                         icon="material-symbols:progress-activity"
                         class="animate-spin text-[24px] text-primary"
                       />
@@ -471,7 +475,7 @@ onBeforeUnmount(() => {
                             : 'bg-warning-tint text-warning'
                         "
                       >
-                        <Icon :icon="typeIcon(item.type)" class="text-[16px]" />
+                        <AppIcon :icon="typeIcon(item.type)" class="text-[16px]" />
                       </span>
                       <div class="min-w-0">
                         <p class="max-w-[180px] truncate text-[15px] font-semibold text-label">
@@ -522,7 +526,7 @@ onBeforeUnmount(() => {
                       aria-label="取件码操作菜单"
                       @click="e => openPickupMenu(item, e)"
                     >
-                      <Icon icon="material-symbols:more-vert" aria-hidden="true" />
+                      <AppIcon icon="material-symbols:more-vert" aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -549,7 +553,11 @@ onBeforeUnmount(() => {
                 :disabled="currentPage <= 1 || loading"
                 @click="handlePageChange(currentPage - 1)"
               >
-                <Icon class="text-[16px]" icon="material-symbols:chevron-left" aria-hidden="true" />
+                <AppIcon
+                  class="text-[16px]"
+                  icon="material-symbols:chevron-left"
+                  aria-hidden="true"
+                />
               </button>
               <button
                 v-for="p in pageNumbers"
@@ -576,7 +584,7 @@ onBeforeUnmount(() => {
                 :disabled="currentPage >= totalPages || loading"
                 @click="handlePageChange(currentPage + 1)"
               >
-                <Icon
+                <AppIcon
                   class="text-[16px]"
                   icon="material-symbols:chevron-right"
                   aria-hidden="true"
@@ -645,7 +653,7 @@ onBeforeUnmount(() => {
                 aria-label="关闭详情"
                 @click="handleCloseDetail"
               >
-                <Icon
+                <AppIcon
                   icon="material-symbols:close-rounded"
                   class="text-[20px]"
                   aria-hidden="true"
@@ -719,7 +727,11 @@ onBeforeUnmount(() => {
                 aria-label="复制取件码"
                 @click="handleCopyCode(selectedItem.code)"
               >
-                <Icon class="text-[16px]" icon="material-symbols:content-copy" aria-hidden="true" />
+                <AppIcon
+                  class="text-[16px]"
+                  icon="material-symbols:content-copy"
+                  aria-hidden="true"
+                />
                 复制取件码
               </button>
             </div>
@@ -740,7 +752,7 @@ onBeforeUnmount(() => {
       @confirm="confirmDeletePickupCode"
     >
       <template #confirm-icon>
-        <Icon
+        <AppIcon
           v-if="deletingCodeId !== null"
           icon="material-symbols:progress-activity"
           class="animate-spin"
@@ -759,17 +771,17 @@ onBeforeUnmount(() => {
         :transition="springSnappy"
         class="fixed left-1/2 top-4 z-[60] flex h-10 -translate-x-1/2 items-center gap-2 rounded-full bg-material-thick px-4 shadow-floating backdrop-blur-[20px] backdrop-saturate-[180%]"
       >
-        <Icon
+        <AppIcon
           v-if="toastType === 'success'"
           icon="material-symbols:check-circle"
           class="text-[18px] text-primary"
         />
-        <Icon
+        <AppIcon
           v-else-if="toastType === 'error'"
           icon="material-symbols:error"
           class="text-[18px] text-danger"
         />
-        <Icon v-else icon="material-symbols:info" class="text-[18px] text-info" />
+        <AppIcon v-else icon="material-symbols:info" class="text-[18px] text-info" />
         <span class="text-sm font-medium text-label">{{ toastMessage }}</span>
       </Motion>
     </AnimatePresence>
@@ -794,7 +806,7 @@ onBeforeUnmount(() => {
             aria-label="复制取件码"
             @click="handleCopyCode(menuTargetItem?.code || '')"
           >
-            <Icon
+            <AppIcon
               class="text-[18px] text-label-secondary"
               icon="material-symbols:content-copy"
               aria-hidden="true"
@@ -807,7 +819,7 @@ onBeforeUnmount(() => {
             aria-label="查看取件码详情"
             @click="handleViewDetailFromMenu"
           >
-            <Icon
+            <AppIcon
               class="text-[18px] text-label-secondary"
               icon="material-symbols:visibility"
               aria-hidden="true"
@@ -822,7 +834,7 @@ onBeforeUnmount(() => {
             :disabled="deletingCodeId !== null"
             @click="handleDeleteFromMenu"
           >
-            <Icon
+            <AppIcon
               class="text-[18px]"
               :icon="
                 deletingCodeId !== null

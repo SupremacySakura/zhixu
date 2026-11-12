@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './styles/atoms.css';
 
 /* ============================================================
    设计令牌 — 世界：索引卡盒 Card Cabinet

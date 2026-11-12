@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { AnimatePresence, Motion } from 'motion-v'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import {
   getKnowledgeVersion,
   listKnowledgeVersions,
@@ -121,7 +121,7 @@ onBeforeUnmount(() => {
                 aria-label="关闭弹窗"
                 @click="close"
               >
-                <Icon icon="material-symbols:close-rounded" />
+                <AppIcon icon="material-symbols:close-rounded" />
               </button>
             </div>
             <p
@@ -206,7 +206,7 @@ onBeforeUnmount(() => {
                 :disabled="busy || loading || !selectedVersion || selectedVersion.current"
                 @click="restore"
               >
-                <Icon
+                <AppIcon
                   v-if="busy"
                   class="animate-spin"
                   icon="material-symbols:progress-activity"

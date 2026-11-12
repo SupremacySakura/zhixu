@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -17,7 +17,7 @@ const goToLogin = () => {
     <div
       class="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-primary-tint text-primary"
     >
-      <Icon icon="material-symbols:lock-outline" class="h-10 w-10" />
+      <AppIcon icon="material-symbols:lock-outline" class="h-10 w-10" />
     </div>
     <h2 class="text-title-3 mb-2">登录后可用</h2>
     <p class="text-body mb-6 text-label-secondary">

@@ -3,7 +3,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import SideBar from '../SideBar.vue'
 
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 
 async function render(props: Record<string, unknown> = {}) {
   const router = createRouter({

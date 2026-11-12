@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import type { FileDisplayItem, FileItemKey } from '../../types/file'
 import { formatBytes } from '../../utils/file'
 import { ownerInitials } from '../../utils/file-management'
@@ -70,7 +70,7 @@ const cardClass = (key: FileItemKey) =>
           <span
             class="flex h-11 w-11 flex-none items-center justify-center rounded-sm bg-warning-tint text-warning"
           >
-            <Icon class="text-[22px]" icon="material-symbols:folder" />
+            <AppIcon class="text-[22px]" icon="material-symbols:folder" />
           </span>
           <div class="min-w-0">
             <p class="truncate text-[15px] font-semibold leading-5 text-label">..</p>
@@ -93,7 +93,7 @@ const cardClass = (key: FileItemKey) =>
             class="flex h-11 w-11 flex-none items-center justify-center rounded-sm"
             :class="`${file.iconBg} ${file.iconFg}`"
           >
-            <Icon class="text-[22px]" :icon="file.icon" />
+            <AppIcon class="text-[22px]" :icon="file.icon" />
           </span>
           <div class="min-w-0 flex-1">
             <p class="line-clamp-2 text-[15px] font-semibold leading-5 text-label">
@@ -159,14 +159,14 @@ const cardClass = (key: FileItemKey) =>
             :aria-label="`${file.name} 操作菜单`"
             @click.stop="handleOpenMenu(file, $event)"
           >
-            <Icon class="text-[18px]" icon="material-symbols:more-vert" />
+            <AppIcon class="text-[18px]" icon="material-symbols:more-vert" />
           </button>
         </div>
       </div>
 
       <div v-if="loading" class="col-span-full py-20">
         <div class="flex flex-col items-center justify-center text-center">
-          <Icon
+          <AppIcon
             icon="material-symbols:progress-activity"
             class="mb-3 animate-spin text-[28px] text-primary"
           />

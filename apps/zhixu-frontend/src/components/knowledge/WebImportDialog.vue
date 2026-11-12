@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { AnimatePresence, Motion } from 'motion-v'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { importKnowledgeFromWeb, type KnowledgeItem } from '../../services/apis/knowledge'
 import { knowledgeError } from '../../utils/knowledge'
 import { fadeTransition, springSnappy } from '../../utils/motion'
@@ -72,7 +72,7 @@ async function submit() {
                     aria-label="关闭弹窗"
                     @click="close"
                   >
-                    <Icon icon="material-symbols:close-rounded" />
+                    <AppIcon icon="material-symbols:close-rounded" />
                   </button>
                 </div>
                 <label :for="`${id}-url`" class="mb-2 block text-subhead font-semibold"
@@ -114,7 +114,7 @@ async function submit() {
                   class="knowledge-button-primary"
                   :disabled="busy || !url.trim()"
                 >
-                  <Icon
+                  <AppIcon
                     v-if="busy"
                     class="animate-spin"
                     icon="material-symbols:progress-activity"

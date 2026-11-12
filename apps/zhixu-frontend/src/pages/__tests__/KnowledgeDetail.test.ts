@@ -20,7 +20,7 @@ vi.mock('../../services/apis/knowledge', () => ({
   regenerateKnowledgeOrganize: vi.fn(),
   regenerateKnowledgeEvolve: vi.fn(),
 }))
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 
 const baseItem = {
   id: 10,

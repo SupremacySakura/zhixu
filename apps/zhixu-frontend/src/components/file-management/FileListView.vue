@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import type { FileDisplayItem, FileItemKey } from '../../types/file'
 import { formatBytes } from '../../utils/file'
 import { ownerInitials } from '../../utils/file-management'
@@ -121,7 +121,7 @@ const rowGridClass =
         <span
           class="flex h-10 w-10 items-center justify-center rounded-sm bg-warning-tint text-warning"
         >
-          <Icon class="text-[20px]" icon="material-symbols:folder" />
+          <AppIcon class="text-[20px]" icon="material-symbols:folder" />
         </span>
         <span class="truncate">
           <span class="text-[15px] font-semibold text-label">..</span>
@@ -183,7 +183,7 @@ const rowGridClass =
             class="flex h-10 w-10 items-center justify-center rounded-sm"
             :class="`${file.iconBg} ${file.iconFg}`"
           >
-            <Icon class="text-[20px]" :icon="file.icon" />
+            <AppIcon class="text-[20px]" :icon="file.icon" />
           </span>
           <div class="min-w-0 py-2">
             <p class="truncate text-[15px] font-semibold text-label">{{ file.name }}</p>
@@ -214,7 +214,7 @@ const rowGridClass =
             :aria-label="`${file.name} 操作菜单`"
             @click.stop="handleOpenMenu(file, $event)"
           >
-            <Icon icon="material-symbols:more-vert" aria-hidden="true" />
+            <AppIcon icon="material-symbols:more-vert" aria-hidden="true" />
           </button>
         </div>
         <div v-if="index < files.length - 1" class="ml-[108px] h-px bg-hairline" />
@@ -222,7 +222,7 @@ const rowGridClass =
 
       <!-- 加载中 -->
       <div v-if="loading" class="flex flex-col items-center justify-center gap-2.5 py-11">
-        <Icon
+        <AppIcon
           icon="material-symbols:progress-activity"
           class="animate-spin text-[28px] text-primary"
         />

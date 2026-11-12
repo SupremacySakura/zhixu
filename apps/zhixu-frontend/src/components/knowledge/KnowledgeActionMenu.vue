@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import type { KnowledgeItem } from '../../services/apis/knowledge'
 import { fadeTransition } from '../../utils/motion'
@@ -164,7 +164,7 @@ onBeforeUnmount(removeListeners)
       @click="toggle"
       @keydown="onTriggerKeydown"
     >
-      <Icon icon="material-symbols:more-horiz" class="text-2xl" aria-hidden="true" />
+      <AppIcon icon="material-symbols:more-horiz" class="text-2xl" aria-hidden="true" />
     </button>
     <Teleport to="body">
       <AnimatePresence>
@@ -191,7 +191,7 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="close(true)"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:menu-book-outline"
                 class="text-lg"
                 aria-hidden="true"
@@ -205,7 +205,7 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="track"
             >
-              <Icon icon="material-symbols:info-outline" class="text-lg" aria-hidden="true" />{{
+              <AppIcon icon="material-symbols:info-outline" class="text-lg" aria-hidden="true" />{{
                 item.status === 'failed' ? '查看失败原因' : '查看进度'
               }}
             </button>
@@ -217,7 +217,7 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="close(true)"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:layers-outline"
                 class="text-lg"
                 aria-hidden="true"
@@ -232,7 +232,7 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="retryVector"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:refresh-rounded"
                 class="text-lg"
                 aria-hidden="true"
@@ -247,7 +247,7 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="unarchive"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:unarchive-outline-rounded"
                 class="text-lg"
                 aria-hidden="true"
@@ -262,7 +262,7 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="archive"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:archive-outline-rounded"
                 class="text-lg"
                 aria-hidden="true"
@@ -277,7 +277,7 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item knowledge-menu-danger text-danger']"
               @click="selectDelete"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:delete-outline"
                 class="text-lg"
                 aria-hidden="true"

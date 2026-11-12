@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../../utils/motion'
 import type { FileDisplayItem, PreviewKind } from '../../types/file'
@@ -93,7 +93,7 @@ watch(
                 class="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm"
                 :class="[fileIconBg, fileIconFg]"
               >
-                <Icon class="text-[22px]" :icon="fileIcon" />
+                <AppIcon class="text-[22px]" :icon="fileIcon" />
               </div>
               <div class="min-w-0">
                 <h2
@@ -112,7 +112,7 @@ watch(
               aria-label="关闭预览"
               @click="handleClose"
             >
-              <Icon icon="material-symbols:close" />
+              <AppIcon icon="material-symbols:close" />
             </button>
           </div>
 
@@ -124,7 +124,7 @@ watch(
                   v-if="loading"
                   class="flex min-h-full flex-col items-center justify-center gap-3 text-label-secondary"
                 >
-                  <Icon
+                  <AppIcon
                     icon="material-symbols:progress-activity"
                     class="animate-spin text-3xl text-primary"
                   />
@@ -135,7 +135,7 @@ watch(
                   v-else-if="error"
                   class="flex min-h-full flex-col items-center justify-center px-6 text-center text-danger"
                 >
-                  <Icon icon="material-symbols:error" class="mb-2 text-4xl" />
+                  <AppIcon icon="material-symbols:error" class="mb-2 text-4xl" />
                   <p class="text-[15px] font-semibold">{{ error }}</p>
                 </div>
 
@@ -182,7 +182,7 @@ watch(
                   class="flex min-h-full flex-col items-center justify-center px-6 text-center text-label-secondary"
                 >
                   <slot name="unsupported" :file="file">
-                    <Icon icon="material-symbols:description" class="mb-2 text-4xl" />
+                    <AppIcon icon="material-symbols:description" class="mb-2 text-4xl" />
                     <p class="text-[15px] font-semibold">当前文件类型暂不支持在线预览</p>
                     <p class="mt-1 text-caption">你可以使用下方按钮下载后查看</p>
                   </slot>
@@ -200,7 +200,7 @@ watch(
                   :disabled="!canDownload"
                   @click="emit('download')"
                 >
-                  <Icon class="text-[18px]" icon="material-symbols:download" />
+                  <AppIcon class="text-[18px]" icon="material-symbols:download" />
                   下载
                 </button>
               </div>
@@ -250,7 +250,7 @@ watch(
                         aria-label="复制分享链接"
                         @click="emit('copy-share')"
                       >
-                        <Icon class="text-[16px]" icon="material-symbols:content-copy-outline" />
+                        <AppIcon class="text-[16px]" icon="material-symbols:content-copy-outline" />
                         复制
                       </button>
                       <button
@@ -260,7 +260,7 @@ watch(
                         :disabled="deletingShareLink"
                         @click="emit('delete-share')"
                       >
-                        <Icon
+                        <AppIcon
                           class="text-[16px]"
                           :icon="
                             deletingShareLink
@@ -281,7 +281,7 @@ watch(
                     :disabled="creatingShareLink || !file"
                     @click="emit('create-share')"
                   >
-                    <Icon
+                    <AppIcon
                       class="text-[18px]"
                       :icon="
                         creatingShareLink

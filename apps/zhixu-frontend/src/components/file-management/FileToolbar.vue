@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { springSnappy } from '../../utils/motion'
 import type { FileFilterKey, FileSortKey, FileViewMode, SortDirection } from '../../types/file'
@@ -89,7 +89,7 @@ const segButtonClass =
     <div class="flex w-full flex-wrap items-center gap-2.5 lg:w-auto">
       <!-- 胶囊搜索 -->
       <div class="relative w-full sm:w-[232px]">
-        <Icon
+        <AppIcon
           class="pointer-events-none absolute left-[11px] top-1/2 -translate-y-1/2 text-[16px] text-label-tertiary"
           icon="material-symbols:search"
         />
@@ -108,7 +108,7 @@ const segButtonClass =
           aria-label="清空搜索"
           @click="clearSearch"
         >
-          <Icon class="text-[13px]" icon="material-symbols:close" />
+          <AppIcon class="text-[13px]" icon="material-symbols:close" />
         </button>
       </div>
 
@@ -129,7 +129,7 @@ const segButtonClass =
           type="button"
           @click="selectViewMode('list')"
         >
-          <Icon class="text-[17px]" icon="material-symbols:list" aria-hidden="true" />
+          <AppIcon class="text-[17px]" icon="material-symbols:list" aria-hidden="true" />
         </button>
         <button
           :class="[
@@ -140,7 +140,7 @@ const segButtonClass =
           type="button"
           @click="selectViewMode('grid')"
         >
-          <Icon class="text-[17px]" icon="material-symbols:grid-view" aria-hidden="true" />
+          <AppIcon class="text-[17px]" icon="material-symbols:grid-view" aria-hidden="true" />
         </button>
       </div>
 
@@ -188,7 +188,7 @@ const segButtonClass =
           @click="toggleSortMenu"
         >
           {{ sortLabel }}
-          <Icon class="text-[14px]" icon="material-symbols:expand-more" />
+          <AppIcon class="text-[14px]" icon="material-symbols:expand-more" />
         </button>
       </div>
 
@@ -204,7 +204,7 @@ const segButtonClass =
         >
           <button :class="menuItemClass" type="button" @click="selectSort('name')">
             <span>名称</span>
-            <Icon
+            <AppIcon
               v-if="sortKey === 'name'"
               icon="material-symbols:check-rounded"
               class="text-[15px] text-primary"
@@ -212,7 +212,7 @@ const segButtonClass =
           </button>
           <button :class="menuItemClass" type="button" @click="selectSort('modified')">
             <span>最近修改</span>
-            <Icon
+            <AppIcon
               v-if="sortKey === 'modified'"
               icon="material-symbols:check-rounded"
               class="text-[15px] text-primary"
@@ -220,7 +220,7 @@ const segButtonClass =
           </button>
           <button :class="menuItemClass" type="button" @click="selectSort('size')">
             <span>大小</span>
-            <Icon
+            <AppIcon
               v-if="sortKey === 'size'"
               icon="material-symbols:check-rounded"
               class="text-[15px] text-primary"

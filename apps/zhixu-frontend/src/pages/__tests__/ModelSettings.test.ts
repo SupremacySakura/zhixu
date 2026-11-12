@@ -20,7 +20,7 @@ vi.mock('../../services/apis/aiSettings', () => ({
   saveAIDefaults: vi.fn(),
   deleteAIProvider: vi.fn(),
 }))
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 const fixture = (): AIConfiguration => ({
   providers: [
     {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import SettingsModal from '../components/ui/SettingsModal.vue'
 import ProviderEditor from '../components/ui/ProviderEditor.vue'
@@ -436,7 +436,7 @@ function reloadConfirmation() {
             </button>
           </div>
           <p class="mt-6 flex gap-3 text-caption leading-6 text-label-secondary">
-            <Icon
+            <AppIcon
               icon="material-symbols:shield-lock-outline"
               class="mt-1 shrink-0 text-primary"
             /><span

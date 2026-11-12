@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import FilterMenu from '../ui/FilterMenu.vue'
 import {
   confirmKnowledgeRelation,
@@ -332,7 +332,7 @@ onScopeDispose(() => {
         <span
           class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary"
         >
-          <Icon icon="material-symbols:auto-awesome" class="text-[14px]" />
+          <AppIcon icon="material-symbols:auto-awesome" class="text-[14px]" />
         </span>
         <p class="min-w-0 flex-1 text-caption font-semibold text-label">让 AI 找相关知识</p>
       </div>
@@ -345,7 +345,7 @@ onScopeDispose(() => {
         :disabled="running || busy === 'regenerate'"
         @click="regenerate"
       >
-        <Icon
+        <AppIcon
           :icon="
             running
               ? 'material-symbols:progress-activity'
@@ -433,7 +433,7 @@ onScopeDispose(() => {
                 class="knowledge-text-action min-h-8 text-caption"
                 @click="toggleEvidence(relation.id)"
               >
-                <Icon
+                <AppIcon
                   :icon="
                     expandedId === relation.id
                       ? 'material-symbols:expand-less'
@@ -524,7 +524,7 @@ onScopeDispose(() => {
                 :aria-label="`删除与${relation.counterpart_title}的关系`"
                 @click="pendingDelete = relation.id"
               >
-                <Icon icon="material-symbols:delete-outline" class="text-[16px]" />
+                <AppIcon icon="material-symbols:delete-outline" class="text-[16px]" />
               </button>
             </div>
             <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -569,7 +569,7 @@ onScopeDispose(() => {
         <h3 class="text-caption font-semibold text-label">手动添加</h3>
         <div class="mt-2 flex gap-2">
           <div class="relative min-w-0 flex-1">
-            <Icon
+            <AppIcon
               class="pointer-events-none absolute left-2.5 top-3 text-label-tertiary"
               icon="material-symbols:search"
             />
@@ -618,7 +618,7 @@ onScopeDispose(() => {
             aria-label="清除已选知识"
             @click="resetForm"
           >
-            <Icon icon="material-symbols:close" class="text-[14px]" />
+            <AppIcon icon="material-symbols:close" class="text-[14px]" />
           </button>
         </div>
         <FilterMenu

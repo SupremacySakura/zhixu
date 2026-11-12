@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import {
   archiveKnowledge,
   favoriteKnowledge,
@@ -162,7 +162,7 @@ function onOrganized(updated: KnowledgeItem) {
               :aria-pressed="item.is_favorite"
               @click="toggleFavorite"
             >
-              <Icon
+              <AppIcon
                 :icon="
                   item.is_favorite
                     ? 'material-symbols:star-rounded'
@@ -173,7 +173,7 @@ function onOrganized(updated: KnowledgeItem) {
               />{{ item.is_favorite ? '已收藏' : '收藏' }}
             </button>
             <button type="button" class="knowledge-button-secondary" @click="toggleArchive">
-              <Icon
+              <AppIcon
                 :icon="
                   item.archived_at
                     ? 'material-symbols:unarchive-outline-rounded'
@@ -213,7 +213,7 @@ function onOrganized(updated: KnowledgeItem) {
               :disabled="evolveBusy"
               @click="recheckEvolution"
             >
-              <Icon
+              <AppIcon
                 :icon="
                   evolveBusy
                     ? 'material-symbols:progress-activity'
@@ -239,7 +239,7 @@ function onOrganized(updated: KnowledgeItem) {
           role="status"
         >
           <p class="flex items-center gap-2 font-semibold">
-            <Icon icon="material-symbols:history-rounded" class="text-lg" aria-hidden="true" />
+            <AppIcon icon="material-symbols:history-rounded" class="text-lg" aria-hidden="true" />
             这条知识可能已过时
           </p>
           <p class="mt-2 leading-6">

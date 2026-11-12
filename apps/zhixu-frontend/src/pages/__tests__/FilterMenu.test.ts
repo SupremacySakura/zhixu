@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import FilterMenu from '../../components/ui/FilterMenu.vue'
 
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span data-icon />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span data-icon />' } }))
 
 describe('shared filter menu', () => {
   it('supports keyboard selection and Escape without a native select', async () => {

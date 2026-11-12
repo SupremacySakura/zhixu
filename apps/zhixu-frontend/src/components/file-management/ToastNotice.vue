@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { springSnappy } from '../../utils/motion'
 import type { ToastType } from '../../types/file'
@@ -42,7 +42,7 @@ const iconClass = computed(() => {
         :role="type === 'error' ? 'alert' : 'status'"
         aria-live="polite"
       >
-        <Icon :icon="icon" class="text-lg" :class="iconClass" />
+        <AppIcon :icon="icon" class="text-lg" :class="iconClass" />
         <span class="text-sm font-medium text-label">{{ message }}</span>
       </Motion>
     </AnimatePresence>

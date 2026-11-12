@@ -10,7 +10,7 @@ vi.mock('../../services/apis/knowledge', () => ({
   listKnowledge: vi.fn(),
 }))
 vi.mock('../../services/apis/tag', () => ({ listTags: vi.fn() }))
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 
 const chartStub = {
   name: 'KnowledgeGraphChart',

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import {
   AnimatePresence,
   Motion,
@@ -108,12 +108,12 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
           @pointerdown="dragControls.start($event)"
         >
           <div class="flex items-center gap-2">
-            <Icon
+            <AppIcon
               v-if="isUploading"
               icon="material-symbols:progress-activity"
               class="animate-spin text-[18px] text-primary"
             />
-            <Icon v-else icon="material-symbols:check-circle" class="text-[18px] text-primary" />
+            <AppIcon v-else icon="material-symbols:check-circle" class="text-[18px] text-primary" />
             <span class="text-[15px] font-semibold text-label">
               上传任务 ({{ completedCount }}/{{ tasks.length }})
             </span>
@@ -127,7 +127,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
               @pointerdown.stop
               @click="isCollapsed = !isCollapsed"
             >
-              <Icon
+              <AppIcon
                 class="text-[18px] transition-transform duration-200"
                 :class="isCollapsed ? '-rotate-180' : ''"
                 icon="material-symbols:expand-more"
@@ -142,7 +142,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
               @pointerdown.stop
               @click="emit('clear-completed')"
             >
-              <Icon class="text-[18px]" icon="material-symbols:cleaning-services" />
+              <AppIcon class="text-[18px]" icon="material-symbols:cleaning-services" />
             </button>
             <button
               :class="iconButtonClass"
@@ -152,7 +152,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
               @pointerdown.stop
               @click="closePanel"
             >
-              <Icon class="text-[18px]" icon="material-symbols:close" />
+              <AppIcon class="text-[18px]" icon="material-symbols:close" />
             </button>
           </div>
         </div>
@@ -187,7 +187,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
                 class="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm"
                 :class="`${row.icon.bg} ${row.icon.fg}`"
               >
-                <Icon :icon="row.icon.icon" class="text-[16px]" />
+                <AppIcon :icon="row.icon.icon" class="text-[16px]" />
               </div>
 
               <div class="min-w-0 flex-1">
@@ -217,7 +217,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
                   aria-label="重试上传"
                   @click="emit('retry', row.task)"
                 >
-                  <Icon class="text-[16px]" icon="material-symbols:replay" />
+                  <AppIcon class="text-[16px]" icon="material-symbols:replay" />
                 </button>
                 <button
                   v-if="row.meta.active"
@@ -226,7 +226,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
                   aria-label="取消上传"
                   @click="emit('cancel', row.task)"
                 >
-                  <Icon class="text-[16px]" icon="material-symbols:close" />
+                  <AppIcon class="text-[16px]" icon="material-symbols:close" />
                 </button>
                 <button
                   v-if="row.removable"
@@ -235,7 +235,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
                   aria-label="移除任务"
                   @click="emit('remove', row.task.id)"
                 >
-                  <Icon class="text-[16px]" icon="material-symbols:delete" />
+                  <AppIcon class="text-[16px]" icon="material-symbols:delete" />
                 </button>
               </div>
             </div>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -33,7 +33,7 @@ const description = computed(() =>
         <div
           class="flex h-20 w-20 items-center justify-center rounded-full bg-primary/20 text-primary"
         >
-          <Icon class="text-[34px]" :icon="illustrationIcon" />
+          <AppIcon class="text-[34px]" :icon="illustrationIcon" />
         </div>
       </div>
       <div class="absolute right-2 top-1.5 h-3 w-3 rounded-full bg-primary/20"></div>
@@ -47,7 +47,7 @@ const description = computed(() =>
       type="button"
       @click="emit('upload')"
     >
-      <Icon class="text-[16px]" icon="material-symbols:upload" />
+      <AppIcon class="text-[16px]" icon="material-symbols:upload" />
       上传文件
     </button>
   </div>

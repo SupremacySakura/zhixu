@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, useId } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from './AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { springSnappy } from '../../utils/motion'
 const props = withDefaults(
@@ -92,10 +92,10 @@ onBeforeUnmount(() => document.removeEventListener('click', outside))
       ]"
       @click="toggle"
     >
-      <Icon v-if="icon && !field" icon="material-symbols:filter-list" /><span
+      <AppIcon v-if="icon && !field" icon="material-symbols:filter-list" /><span
         class="min-w-0 break-all"
         >{{ selectedLabel }}</span
-      ><Icon icon="material-symbols:expand-more" class="shrink-0" />
+      ><AppIcon icon="material-symbols:expand-more" class="shrink-0" />
     </button>
     <AnimatePresence>
       <Motion
@@ -120,7 +120,7 @@ onBeforeUnmount(() => document.removeEventListener('click', outside))
           @click="select(option.key)"
         >
           {{ option.label
-          }}<Icon
+          }}<AppIcon
             v-if="modelValue === option.key"
             icon="material-symbols:check-rounded"
             class="text-primary"

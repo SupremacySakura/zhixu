@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import { Motion } from 'motion-v'
 import KnowledgeGraphChart from '../components/knowledge/KnowledgeGraphChart.vue'
 import FilterMenu from '../components/ui/FilterMenu.vue'
@@ -113,7 +113,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
             @input="scheduleSearch"
             @focus="searchOpen = true"
           />
-          <Icon
+          <AppIcon
             class="pointer-events-none absolute left-3 top-3.5 text-label-secondary"
             icon="material-symbols:search"
           />
