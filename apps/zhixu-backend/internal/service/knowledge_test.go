@@ -715,6 +715,18 @@ func TestKnowledgeAcceptRevision(t *testing.T) {
 		_, err := s.AcceptRevision(context.Background(), 2, 7, "标题", "正文")
 		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
 	})
+
+	// 归档是终态：规格 #8 规定涉及知识已归档时只允许忽略与标记已核实，
+	// 采纳修订必须拒绝，否则绕过前端直接调接口就能把已归档的知识改活。
+	t.Run("archived knowledge conflicts", func(t *testing.T) {
+		f, spy, s := newFixture()
+		now := time.Now()
+		f.item.ArchivedAt = &now
+		_, err := s.AcceptRevision(context.Background(), 2, 7, "标题", "正文")
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+		require.Empty(t, f.snapshots, "拒绝时不该写快照")
+		require.Empty(t, spy.entries, "拒绝时不该写操作日志")
+	})
 }
 
 func TestKnowledgeVersions(t *testing.T) {

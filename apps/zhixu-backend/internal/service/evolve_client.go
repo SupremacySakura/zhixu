@@ -239,10 +239,11 @@ func sanitizeEvolveJudgements(triggerID uint, candidates []EvolveCandidate, raw 
 			severity = model.EvolutionSeverityReview
 		}
 		// 修订稿只保留完整的一份：超长就整份丢弃而不是截断，半份修订稿比没有更糟，
-		// 前端在修订稿缺失时会把「采纳修订」置灰。
+		// 前端在修订稿缺失时会把「采纳修订」置灰。门槛与处理器共用 evolveRevisionUsable，
+		// 两边各写一遍容易一边改了另一边没跟上。
 		title := truncateRunes(strings.TrimSpace(entry.RevisedTitle), 200)
 		content := strings.TrimSpace(entry.RevisedContent)
-		if title == "" || content == "" || utf8.RuneCountInString(content) > EvolveRevisedContentMaxRunes {
+		if !evolveRevisionUsable(title, content) {
 			title, content = "", ""
 		}
 		out = append(out, EvolveJudgement{
@@ -261,12 +262,24 @@ func sanitizeEvolveJudgements(triggerID uint, candidates []EvolveCandidate, raw 
 	return out
 }
 
+// evolveRevisionUsable 判断一份修订稿是否完整可用：标题正文都得在，正文不能超过上限。
+// 半份修订稿比没有更糟——用户会以为采纳的是完整修订，因此超长整份丢弃而不是截断。
+// 客户端清洗与任务处理器共用这一条门槛，避免两处各写一遍后口径漂移。
+func evolveRevisionUsable(title, content string) bool {
+	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
+		return false
+	}
+	return utf8.RuneCountInString(content) <= EvolveRevisedContentMaxRunes
+}
+
 // evolutionAllowedTypes 按候选来源与相似度分派允许的结论类型。
 //
 // updates 关系是用户显式声明过的「谁更新谁」，这类候选只接受过时结论——把它判成重复
-// 会给出「归档其一」这种明显错误的选择。向量近邻只能按相似度分派：越像越可能重复，
-// 中等相似才可能是对同一事实的不同说法（冲突），再低就没有依据；过时看的是「谁更晚更全」，
-// 与相似度高低无关，因此从过时阈值往上都允许，同一对出现多种结论时由优先级收敛。
+// 会给出「归档其一」这种明显错误的选择。向量近邻只能按相似度分派，且重复与冲突两段
+// **互斥**（规格 #8 检测流程第 3 步）：越像越可能重复，只接受重复；落到冲突阈值与重复
+// 阈值之间才是对同一事实的不同说法，只接受冲突；两个都放行会让同一条候选同时具备
+// 「归档其一」与「采纳修订」两种互相矛盾的处置。过时看的是「谁更晚更全」，与相似度
+// 高低无关，因此从过时阈值往上都允许，同一对出现多种结论时由优先级收敛。
 func evolutionAllowedTypes(origin string, score float64) map[model.EvolutionAlertType]bool {
 	if origin == EvolveOriginUpdateRelation {
 		return map[model.EvolutionAlertType]bool{model.EvolutionAlertTypeOutdated: true}
@@ -274,11 +287,11 @@ func evolutionAllowedTypes(origin string, score float64) map[model.EvolutionAler
 	if math.IsNaN(score) {
 		return nil
 	}
-	allowed := make(map[model.EvolutionAlertType]bool, 3)
-	if score >= EvolveDuplicateMinScore {
+	allowed := make(map[model.EvolutionAlertType]bool, 2)
+	switch {
+	case score >= EvolveDuplicateMinScore:
 		allowed[model.EvolutionAlertTypeDuplicate] = true
-	}
-	if score >= EvolveConflictMinScore {
+	case score >= EvolveConflictMinScore:
 		allowed[model.EvolutionAlertTypeConflict] = true
 	}
 	if score >= EvolveOutdatedMinScore {

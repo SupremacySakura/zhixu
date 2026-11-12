@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ func (f *evolutionStoreFake) List(_ context.Context, userID uint, filter reposit
 		if filter.Open && !alert.Status.Open() {
 			continue
 		}
-		if !filter.Open && filter.Status != "" && alert.Status != filter.Status {
+		if !filter.Open && len(filter.Statuses) > 0 && !slices.Contains(filter.Statuses, alert.Status) {
 			continue
 		}
 		out = append(out, alert)
@@ -282,7 +283,7 @@ func TestEvolutionListDecoratesSubjects(t *testing.T) {
 	f.addAlert(1, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertPending, []uint{10, 11})
 	f.addAlert(2, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertPending, []uint{10, 999})
 
-	views, total, err := f.service.List(context.Background(), 2, 1, 20, "", "", true)
+	views, total, err := f.service.List(context.Background(), 2, 1, 20, "", nil, true)
 
 	require.NoError(t, err)
 	require.Equal(t, int64(2), total)
@@ -301,24 +302,59 @@ func TestEvolutionListDecoratesSubjects(t *testing.T) {
 func TestEvolutionListRejectsInvalidFilter(t *testing.T) {
 	f := newEvolutionFixture()
 	for _, tc := range []struct {
-		name  string
-		page  int
-		size  int
-		kind  model.EvolutionAlertType
-		state model.EvolutionAlertStatus
+		name   string
+		page   int
+		size   int
+		kind   model.EvolutionAlertType
+		states []model.EvolutionAlertStatus
 	}{
-		{"page zero", 0, 20, "", ""},
-		{"page too large", 1000001, 20, "", ""},
-		{"size zero", 1, 0, "", ""},
-		{"size too large", 1, 101, "", ""},
-		{"unknown type", 1, 20, model.EvolutionAlertType("dupe"), ""},
-		{"unknown status", 1, 20, "", model.EvolutionAlertStatus("done")},
+		{"page zero", 0, 20, "", nil},
+		{"page too large", 1000001, 20, "", nil},
+		{"size zero", 1, 0, "", nil},
+		{"size too large", 1, 101, "", nil},
+		{"unknown type", 1, 20, model.EvolutionAlertType("dupe"), nil},
+		{"unknown status", 1, 20, "", []model.EvolutionAlertStatus{model.EvolutionAlertStatus("done")}},
+		// 多值里混进一个非法值同样整体拒绝：悄悄丢掉非法值会让前端以为筛选生效了。
+		{"one unknown status among valid ones", 1, 20, "",
+			[]model.EvolutionAlertStatus{model.EvolutionAlertResolved, model.EvolutionAlertStatus("done")}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := f.service.List(context.Background(), 2, tc.page, tc.size, tc.kind, tc.state, false)
+			_, _, err := f.service.List(context.Background(), 2, tc.page, tc.size, tc.kind, tc.states, false)
 			require.ErrorIs(t, err, ErrEvolutionInvalid)
 		})
 	}
+}
+
+// 多状态筛选：「处理记录」页签一次取已处理与已忽略，两个状态都要出现，待处理不出现。
+func TestEvolutionListFiltersByMultipleStatuses(t *testing.T) {
+	f := newEvolutionFixture()
+	f.addAlert(1, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertResolved, []uint{10, 11})
+	f.addAlert(2, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertDismissed, []uint{10, 11})
+	f.addAlert(3, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertPending, []uint{10, 11})
+
+	views, total, err := f.service.List(context.Background(), 2, 1, 20, "",
+		[]model.EvolutionAlertStatus{model.EvolutionAlertResolved, model.EvolutionAlertDismissed}, false)
+
+	require.NoError(t, err)
+	require.Equal(t, int64(2), total)
+	require.Len(t, views, 2)
+	require.Equal(t, []model.EvolutionAlertStatus{model.EvolutionAlertResolved, model.EvolutionAlertDismissed},
+		f.store.filter.Statuses)
+}
+
+// 单值筛选与多值一样走 Statuses，行为与改造前的等值匹配一致。
+func TestEvolutionListFiltersBySingleStatus(t *testing.T) {
+	f := newEvolutionFixture()
+	f.addAlert(1, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertResolved, []uint{10, 11})
+	f.addAlert(2, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertDismissed, []uint{10, 11})
+
+	views, total, err := f.service.List(context.Background(), 2, 1, 20, "",
+		[]model.EvolutionAlertStatus{model.EvolutionAlertDismissed}, false)
+
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, views, 1)
+	require.Equal(t, model.EvolutionAlertDismissed, views[0].Status)
 }
 
 // 摘要：待处理与暂不处理分开计数，已处理/已忽略不进首页卡片。

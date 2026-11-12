@@ -238,18 +238,21 @@ type EvolutionResolveInput struct {
 }
 
 // List 分页查询提醒，并把涉及知识补成可展示的标题与状态。
-func (s *EvolutionService) List(ctx context.Context, userID uint, page, size int, alertType model.EvolutionAlertType, status model.EvolutionAlertStatus, open bool) ([]EvolutionAlertView, int64, error) {
+// statuses 支持多值：「处理记录」页签要同时取已处理与已忽略，一次查询才能正确分页。
+func (s *EvolutionService) List(ctx context.Context, userID uint, page, size int, alertType model.EvolutionAlertType, statuses []model.EvolutionAlertStatus, open bool) ([]EvolutionAlertView, int64, error) {
 	if page < 1 || page > 1000000 || size < 1 || size > 100 {
 		return nil, 0, ErrEvolutionInvalid
 	}
 	if alertType != "" && !alertType.Valid() {
 		return nil, 0, ErrEvolutionInvalid
 	}
-	if status != "" && !status.Valid() {
-		return nil, 0, ErrEvolutionInvalid
+	for _, status := range statuses {
+		if !status.Valid() {
+			return nil, 0, ErrEvolutionInvalid
+		}
 	}
 	alerts, total, err := s.Alerts.List(ctx, userID, repository.EvolutionAlertFilter{
-		Page: page, Size: size, Type: alertType, Status: status, Open: open,
+		Page: page, Size: size, Type: alertType, Statuses: statuses, Open: open,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -328,9 +331,9 @@ func (s *EvolutionService) effectFor(ctx context.Context, action model.Evolution
 			return nil, fmt.Errorf("%w: 知识归档能力未配置", ErrEvolutionUnsupported)
 		}
 		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
-			ids := alert.SubjectIDList()
-			if len(ids) < 2 {
-				return fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+			ids, err := subjectPair(alert)
+			if err != nil {
+				return err
 			}
 			// 归档后创建的那一条，保留先入库的原件：原件通常已整理、已建关系，
 			// 而副本是刚导入的。按 ID 大小判定与触发方向无关，重复检查从任一侧发起结果一致。
@@ -381,9 +384,9 @@ func (s *EvolutionService) effectFor(ctx context.Context, action model.Evolution
 			return nil, fmt.Errorf("%w: 修订采纳能力未配置", ErrEvolutionUnsupported)
 		}
 		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
-			ids := alert.SubjectIDList()
-			if len(ids) < 2 {
-				return fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+			ids, err := subjectPair(alert)
+			if err != nil {
+				return err
 			}
 			payload := ParseEvolutionPayload(alert.Payload)
 			// 修订稿只在证据全部校验通过时才留在载荷里；没有修订稿就没有可采纳的内容，
@@ -402,13 +405,13 @@ func (s *EvolutionService) effectFor(ctx context.Context, action model.Evolution
 			return nil, fmt.Errorf("%w: 关系写入能力未配置", ErrEvolutionUnsupported)
 		}
 		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
-			ids := alert.SubjectIDList()
-			if len(ids) < 2 {
-				return fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+			ids, err := subjectPair(alert)
+			if err != nil {
+				return err
 			}
 			// 冲突提醒的「建立矛盾关系」固定写 contradicts（对称，仓储按 min/max 归一），
 			// 来源为 manual、状态为已确认；同对已存在时仓储复用既有行，不会重复写入。
-			_, err := s.Relations.Create(ctx, alert.UserID, ids[0], RelationCreateInput{
+			_, err = s.Relations.Create(ctx, alert.UserID, ids[0], RelationCreateInput{
 				TargetID: ids[1], RelationType: model.RelationTypeContradicts,
 			})
 			if err != nil {
@@ -434,12 +437,22 @@ func evolutionEffectError(err error) error {
 	return err
 }
 
+// subjectPair 取提醒涉及的两条知识：subject_ids[0] 是本次触发检查的知识，[1] 是被比对的。
+// 裁决的副作用都建立在这一对上，缺一条就没法落地，因此统一按「动作不可用」拒绝（400）。
+func subjectPair(alert *model.EvolutionAlert) ([]uint, error) {
+	ids := alert.SubjectIDList()
+	if len(ids) < 2 {
+		return nil, fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+	}
+	return ids, nil
+}
+
 // outdatedSubject 取过时提醒里被判定过时的那条知识：subject_ids[1] 是被比对的知识，
 // 本次触发的知识（[0]）是新的一方。过时只做跨条目判定，因此这里必须落在 [1] 上。
 func outdatedSubject(alert *model.EvolutionAlert) (uint, error) {
-	ids := alert.SubjectIDList()
-	if len(ids) < 2 {
-		return 0, fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+	ids, err := subjectPair(alert)
+	if err != nil {
+		return 0, err
 	}
 	return ids[1], nil
 }

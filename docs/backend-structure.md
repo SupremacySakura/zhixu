@@ -48,6 +48,7 @@
 ## Markdown 知识模块
 
 - `internal/model/knowledge.go` 定义独立知识与导入任务表；启动迁移自动补建。
+- 变更来源列 `knowledge_items.change_source`：记录**当前正文**的产生来源，取值 `manual`（用户编辑）或 `ai`（采纳演化中心的 AI 修订稿）。`knowledge_versions` 里的快照行记录的是**被替换掉的旧正文**的来源，因此采纳修订时当前行的 `change_source` 变为 `ai`，同一事务里写下的快照行仍是旧正文的 `manual`；恢复历史版本同理，快照记的是被覆盖的那一版。
 - `internal/repository/knowledge_repo.go` 管理用户隔离、事务、唯一约束与任务租约。
 - `internal/service/knowledge.go` 处理 Markdown 读取校验与后台队列，`cmd/server/main.go` 接入启动和退出生命周期。
 - 接口由 `internal/router/knowledge.go` 注册 JWT 鉴权。数据库字段、接口及边界见 [Markdown 知识后端](./markdown-knowledge-backend.md)。

@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"zhixu-backend/internal/log"
 	"zhixu-backend/internal/model"
@@ -383,15 +381,6 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 		return model.EvolutionAlert{}, false
 	}
 	return alert, true
-}
-
-// evolveRevisionUsable 判断一份修订稿是否完整可用：标题正文都得在，正文不能超过上限。
-// 半份修订稿比没有更糟——用户会以为采纳的是完整修订。
-func evolveRevisionUsable(title, content string) bool {
-	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
-		return false
-	}
-	return utf8.RuneCountInString(content) <= EvolveRevisedContentMaxRunes
 }
 
 // evolveSuggestedAction 给出一条默认建议动作，供前端预选按钮。
