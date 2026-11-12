@@ -20,7 +20,7 @@ import {
   knowledgeError,
   knowledgeSourceLabel,
 } from '../utils/knowledge'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import { useRouter } from 'vue-router'
 import { useKnowledgeLibrary } from '../composables/useKnowledgeLibrary'
 import { useKnowledgeImport } from '../composables/useKnowledgeImport'
@@ -232,19 +232,19 @@ onMounted(() => {
         </div>
         <div class="flex flex-wrap gap-3">
           <RouterLink to="/home/knowledge/new" class="knowledge-button-primary"
-            ><Icon icon="material-symbols:edit-square-outline" />新建知识</RouterLink
+            ><AppIcon icon="material-symbols:edit-square-outline" />新建知识</RouterLink
           >
           <RouterLink to="/home/files" class="knowledge-button-secondary"
-            ><Icon icon="material-symbols:note-add-outline" />从文件加入</RouterLink
+            ><AppIcon icon="material-symbols:note-add-outline" />从文件加入</RouterLink
           >
           <button type="button" class="knowledge-button-secondary" @click="showWebImport = true">
-            <Icon icon="material-symbols:language" />从网页导入
+            <AppIcon icon="material-symbols:language" />从网页导入
           </button>
         </div>
       </header>
       <div class="mb-5 flex flex-wrap gap-3">
         <div class="relative min-w-48 flex-1">
-          <Icon
+          <AppIcon
             class="absolute left-3 top-3.5 text-label-secondary"
             icon="material-symbols:search"
           /><input
@@ -374,7 +374,7 @@ onMounted(() => {
               :aria-pressed="entry.is_favorite"
               @click="toggleFavorite(entry)"
             >
-              <Icon
+              <AppIcon
                 :icon="
                   entry.is_favorite
                     ? 'material-symbols:star-rounded'

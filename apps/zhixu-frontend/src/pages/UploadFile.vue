@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import { computed, reactive, ref } from 'vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../utils/motion'
@@ -236,7 +236,7 @@ const badgeClass = (item: QueueItem) => {
               aria-label="选择上传目录"
               @click="openFolderPicker"
             >
-              <Icon icon="material-symbols:folder-open-outline" />
+              <AppIcon icon="material-symbols:folder-open-outline" />
               选择目录
             </button>
           </section>
@@ -262,7 +262,7 @@ const badgeClass = (item: QueueItem) => {
               class="mb-4 flex size-16 items-center justify-center rounded-full bg-surface text-primary shadow-card transition-transform duration-200 ease-out group-hover:scale-110"
               :class="isDragging ? 'scale-110' : ''"
             >
-              <Icon class="text-[28px]" icon="material-symbols:upload-file" />
+              <AppIcon class="text-[28px]" icon="material-symbols:upload-file" />
             </div>
             <h3 class="text-title-3 mb-1.5">拖拽文件到此处上传</h3>
             <p class="text-subhead mb-5 max-w-sm text-label-secondary">
@@ -325,7 +325,7 @@ const badgeClass = (item: QueueItem) => {
                         <span v-else class="whitespace-nowrap font-semibold text-label">
                           {{ bc.name }}
                         </span>
-                        <Icon
+                        <AppIcon
                           v-if="idx < folderPickerBreadcrumbs.length - 1"
                           icon="material-symbols:chevron-right"
                           class="text-[14px] text-label-tertiary"
@@ -365,14 +365,14 @@ const badgeClass = (item: QueueItem) => {
                             :aria-label="`打开文件夹 ${folder.name}`"
                             @click="goToFolderPickerFolder(folder)"
                           >
-                            <Icon
+                            <AppIcon
                               icon="material-symbols:folder"
                               class="flex-none text-[18px] text-primary"
                             />
                             <span class="min-w-0 flex-1 truncate text-subhead text-label">
                               {{ folder.name }}
                             </span>
-                            <Icon
+                            <AppIcon
                               icon="material-symbols:chevron-right"
                               class="flex-none text-[16px] text-label-tertiary"
                             />
@@ -451,7 +451,7 @@ const badgeClass = (item: QueueItem) => {
                   class="flex h-10 w-10 flex-none items-center justify-center rounded-sm"
                   :class="`${iconForFile(item.file).bg} ${iconForFile(item.file).fg}`"
                 >
-                  <Icon class="text-[20px]" :icon="iconForFile(item.file).icon" />
+                  <AppIcon class="text-[20px]" :icon="iconForFile(item.file).icon" />
                 </span>
 
                 <div class="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -500,7 +500,7 @@ const badgeClass = (item: QueueItem) => {
                     aria-label="重试上传"
                     @click="retryItem(item)"
                   >
-                    <Icon class="text-[16px]" icon="material-symbols:replay" />
+                    <AppIcon class="text-[16px]" icon="material-symbols:replay" />
                     重试
                   </button>
 
@@ -509,7 +509,7 @@ const badgeClass = (item: QueueItem) => {
                     class="p-1.5 text-primary"
                     aria-label="上传成功"
                   >
-                    <Icon class="text-[22px]" icon="material-symbols:check-circle" />
+                    <AppIcon class="text-[22px]" icon="material-symbols:check-circle" />
                   </div>
 
                   <button
@@ -523,7 +523,7 @@ const badgeClass = (item: QueueItem) => {
                     aria-label="取消上传"
                     @click="cancelItem(item)"
                   >
-                    <Icon class="text-[20px]" icon="material-symbols:close" />
+                    <AppIcon class="text-[20px]" icon="material-symbols:close" />
                   </button>
 
                   <button
@@ -533,7 +533,7 @@ const badgeClass = (item: QueueItem) => {
                     aria-label="移除任务"
                     @click="removeItem(item.id)"
                   >
-                    <Icon class="text-[20px]" icon="material-symbols:close" />
+                    <AppIcon class="text-[20px]" icon="material-symbols:close" />
                   </button>
                 </div>
               </div>

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { downloadByPickupCode } from '../services/apis/file'
 import { formatBytes, iconForListItem } from '../utils/file'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 
 const codeDigits = ref<string[]>(Array.from({ length: 6 }, () => ''))
 const inputRefs = ref<(HTMLInputElement | null)[]>(Array.from({ length: 6 }, () => null))
@@ -188,14 +188,14 @@ const handleRetrieve = async () => {
               :disabled="!canSubmit"
               @click="handleRetrieve"
             >
-              <span class="material-symbols-outlined">key</span>
+              <AppIcon icon="material-symbols:key" />
               {{ isLoading ? '提取中...' : '提取文件' }}
             </button>
           </div>
           <div
             class="mt-6 flex items-center justify-center gap-1.5 border-t border-hairline pt-4 text-caption text-label-tertiary"
           >
-            <span class="material-symbols-outlined text-[14px]">lock_clock</span>
+            <AppIcon icon="material-symbols:lock-clock" class="text-[14px]" />
             仅限有效期内提取
           </div>
         </div>
@@ -203,7 +203,7 @@ const handleRetrieve = async () => {
         <!-- Success State Section -->
         <div v-if="successState" class="space-y-4">
           <div class="flex items-center gap-2 px-2 text-primary">
-            <span class="material-symbols-outlined text-[18px]">check_circle</span>
+            <AppIcon icon="material-symbols:check-circle" class="text-[18px]" />
             <h3 class="text-headline">已提取文件</h3>
           </div>
           <div
@@ -214,7 +214,7 @@ const handleRetrieve = async () => {
               :class="[downloadedFile.iconBg, downloadedFile.iconFg]"
             >
               <div class="absolute inset-0 bg-current opacity-5"></div>
-              <Icon :icon="downloadedFile.typeIcon" class="text-4xl" />
+              <AppIcon :icon="downloadedFile.typeIcon" class="text-4xl" />
               <div
                 class="absolute bottom-1 right-1 rounded bg-current px-1 text-[8px] font-bold text-white"
                 :class="downloadedFile.iconFg.replace('text-', 'bg-')"
@@ -235,7 +235,7 @@ const handleRetrieve = async () => {
               class="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-label px-6 text-headline text-white transition-[background-color,scale] duration-150 hover:bg-label/85 active:scale-[0.97] sm:w-auto"
               @click="handleRetrieve"
             >
-              <span class="material-symbols-outlined text-xl">download</span>
+              <AppIcon icon="material-symbols:download" class="text-xl" />
               重新下载
             </button>
           </div>

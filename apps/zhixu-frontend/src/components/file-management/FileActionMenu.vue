@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { springSnappy } from '../../utils/motion'
 import type { FileDisplayItem } from '../../types/file'
@@ -91,7 +91,7 @@ const itemClass =
           :disabled="previewDisabled"
           @click="emit('preview')"
         >
-          <Icon class="text-[18px] text-label-secondary" icon="material-symbols:visibility" />
+          <AppIcon class="text-[18px] text-label-secondary" icon="material-symbols:visibility" />
           预览
         </button>
         <button
@@ -102,7 +102,7 @@ const itemClass =
           :disabled="downloading"
           @click="emit('download')"
         >
-          <Icon class="text-[18px] text-label-secondary" icon="material-symbols:download" />
+          <AppIcon class="text-[18px] text-label-secondary" icon="material-symbols:download" />
           下载
         </button>
         <button
@@ -112,7 +112,7 @@ const itemClass =
           aria-label="重命名文件"
           @click="emit('rename')"
         >
-          <Icon class="text-[18px] text-label-secondary" icon="material-symbols:edit" />
+          <AppIcon class="text-[18px] text-label-secondary" icon="material-symbols:edit" />
           重命名
         </button>
         <button
@@ -122,7 +122,7 @@ const itemClass =
           aria-label="移动文件"
           @click="emit('move')"
         >
-          <Icon class="text-[18px] text-label-secondary" icon="material-symbols:drive-file-move" />
+          <AppIcon class="text-[18px] text-label-secondary" icon="material-symbols:drive-file-move" />
           移动到
         </button>
         <div v-if="target?.type === 'file'" class="border-t border-hairline px-3 py-2">
@@ -140,7 +140,7 @@ const itemClass =
           :disabled="deleting"
           @click="emit('delete')"
         >
-          <Icon icon="material-symbols:delete" />
+          <AppIcon icon="material-symbols:delete" />
           删除
         </button>
       </Motion>

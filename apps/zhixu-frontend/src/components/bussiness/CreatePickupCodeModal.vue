@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { createPickupCode, getListByFolderIDAndUserID } from '../../services/apis/file'
 import type { PickupCodeType } from '../../services/types/file'
 import type { FileListItem } from '../../services/types/file'
@@ -164,7 +164,7 @@ onMounted(() => {
         aria-label="关闭"
         @click="emit('close')"
       >
-        <Icon icon="material-symbols:close-rounded" class="text-xl" />
+        <AppIcon icon="material-symbols:close-rounded" class="text-xl" />
       </button>
     </div>
 
@@ -179,7 +179,7 @@ onMounted(() => {
             : 'bg-danger-tint text-danger'
         "
       >
-        <Icon
+        <AppIcon
           :icon="
             toast.type === 'success' ? 'material-symbols:check-circle' : 'material-symbols:error'
           "
@@ -199,7 +199,7 @@ onMounted(() => {
             class="inline-flex items-center gap-0.5 whitespace-nowrap rounded-sm px-1.5 py-1 text-[13px] text-label-secondary transition-colors duration-150 hover:bg-primary-tint hover:text-primary"
             @click="handleNavigatePath(index)"
           >
-            <Icon
+            <AppIcon
               v-if="index !== 0"
               icon="material-symbols:chevron-right-rounded"
               class="text-sm"
@@ -209,7 +209,7 @@ onMounted(() => {
         </nav>
         <div class="max-h-54 overflow-y-auto rounded-md border border-hairline">
           <div v-if="loading" class="flex items-center justify-center gap-3 px-4 py-[22px]">
-            <Icon
+            <AppIcon
               icon="material-symbols:progress-activity"
               class="animate-spin text-[18px] text-primary"
             />
@@ -244,7 +244,7 @@ onMounted(() => {
                         : 'bg-teal-tint text-info'
                   "
                 >
-                  <Icon
+                  <AppIcon
                     :icon="
                       item.id === -1
                         ? 'material-symbols:drive-folder-upload-rounded'
@@ -270,7 +270,7 @@ onMounted(() => {
                     {{ item.id === -1 ? '返回上一级' : item.type === 'folder' ? '文件夹' : '文件' }}
                   </span>
                 </span>
-                <Icon
+                <AppIcon
                   v-if="selectedItemId === item.id && item.id !== -1"
                   icon="material-symbols:check-circle"
                   class="flex-none text-[18px] text-primary"
@@ -336,7 +336,7 @@ onMounted(() => {
         :disabled="!canSubmit || submitting"
         @click="handleSubmit"
       >
-        <Icon v-if="submitting" icon="material-symbols:progress-activity" class="animate-spin" />
+        <AppIcon v-if="submitting" icon="material-symbols:progress-activity" class="animate-spin" />
         {{ submitting ? '创建中...' : '生成取件码' }}
       </button>
     </div>

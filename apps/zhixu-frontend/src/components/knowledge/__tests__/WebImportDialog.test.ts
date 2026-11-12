@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WebImportDialog from '../WebImportDialog.vue'
 import { importKnowledgeFromWeb } from '../../../services/apis/knowledge'
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 vi.mock('../../../services/apis/knowledge', async importOriginal => {
   const actual = await importOriginal<typeof import('../../../services/apis/knowledge')>()
   return { ...actual, importKnowledgeFromWeb: vi.fn() }

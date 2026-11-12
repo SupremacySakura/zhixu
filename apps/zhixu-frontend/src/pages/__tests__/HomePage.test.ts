@@ -11,7 +11,7 @@ vi.mock('../../services/apis/auth', () => ({
   getProfile: vi.fn(),
   checkLogin: vi.fn(),
 }))
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 
 const profile = {
   id: 1,

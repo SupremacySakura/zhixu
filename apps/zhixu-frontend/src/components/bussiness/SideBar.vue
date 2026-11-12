@@ -1,5 +1,5 @@
 <script setup lang="tsx">
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
@@ -131,7 +131,7 @@ const linkClass = (to: string) => {
         role="link"
         :aria-current="isActive(item.to) ? 'page' : undefined"
       >
-        <Icon :icon="item.icon" class="flex-none text-[20px]" />
+        <AppIcon :icon="item.icon" class="flex-none text-[20px]" />
         <span class="whitespace-nowrap">{{ item.label }}</span>
       </RouterLink>
     </nav>
@@ -194,7 +194,7 @@ const linkClass = (to: string) => {
           class="flex h-9 w-9 flex-none items-center justify-center rounded-sm text-label-secondary transition-[background-color,color,transform] duration-150 hover:bg-surface-secondary hover:text-label focus-visible:outline-2 focus-visible:outline-primary active:scale-[0.95]"
           @click="emit('logout')"
         >
-          <Icon icon="material-symbols:logout-rounded" class="text-[18px]" aria-hidden="true" />
+          <AppIcon icon="material-symbols:logout-rounded" class="text-[18px]" aria-hidden="true" />
         </button>
       </div>
     </div>

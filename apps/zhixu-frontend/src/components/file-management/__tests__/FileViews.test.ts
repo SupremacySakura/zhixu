@@ -4,8 +4,8 @@ import type { FileDisplayItem, FileItemKey } from '../../../types/file'
 import FileListView from '../FileListView.vue'
 import FilePagination from '../FilePagination.vue'
 
-vi.mock('@iconify/vue', () => ({
-  Icon: { template: '<span aria-hidden="true" />' },
+vi.mock('../../ui/AppIcon.vue', () => ({
+  default: { template: '<span aria-hidden="true" />' },
 }))
 
 const entry = (overrides: Partial<FileDisplayItem>): FileDisplayItem => ({
@@ -36,7 +36,7 @@ describe('file management views', () => {
         selectedIds: new Set<FileItemKey>(['folder:1']),
         allSelected: false,
       },
-      global: { stubs: { Icon: true } },
+      global: { stubs: { AppIcon: true } },
     })
 
     const rowCheckboxes = wrapper.findAll('input[type="checkbox"][aria-label^="选择 "]')
@@ -57,7 +57,7 @@ describe('file management views', () => {
         totalCount: 50,
         loading: false,
       },
-      global: { stubs: { Icon: true } },
+      global: { stubs: { AppIcon: true } },
     })
 
     await wrapper.get('button[aria-label="下一页"]').trigger('click')

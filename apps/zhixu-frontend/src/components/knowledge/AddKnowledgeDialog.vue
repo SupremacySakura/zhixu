@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onBeforeUnmount, ref, useId } from 'vue'
 import { AnimatePresence, Motion } from 'motion-v'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import type { FileDisplayItem } from '../../types/file'
 import { formatBytes } from '../../utils/file'
 import { fadeTransition, springSnappy } from '../../utils/motion'
@@ -53,7 +53,7 @@ function close() {
                     aria-label="关闭弹窗"
                     @click="close"
                   >
-                    <Icon icon="material-symbols:close-rounded" />
+                    <AppIcon icon="material-symbols:close-rounded" />
                   </button>
                 </div>
                 <div class="mb-5 flex items-center gap-3 rounded-lg border border-hairline p-4">
@@ -106,7 +106,7 @@ function close() {
                   class="knowledge-button-primary"
                   :disabled="busy || !title.trim()"
                 >
-                  <Icon
+                  <AppIcon
                     v-if="busy"
                     class="animate-spin"
                     icon="material-symbols:progress-activity"

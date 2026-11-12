@@ -6,7 +6,7 @@ import {
   listKnowledgeVersions,
   restoreKnowledgeVersion,
 } from '../../../services/apis/knowledge'
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 vi.mock('../../../services/apis/knowledge', async importOriginal => {
   const actual = await importOriginal<typeof import('../../../services/apis/knowledge')>()
   return {

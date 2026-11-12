@@ -17,7 +17,7 @@ vi.mock('../../services/apis/chat', () => ({
   renameConversation: vi.fn(),
   deleteConversation: vi.fn(),
 }))
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 vi.mock('motion-v', () => ({
   AnimatePresence: { template: '<slot />' },
   Motion: { template: '<div><slot /></div>' },

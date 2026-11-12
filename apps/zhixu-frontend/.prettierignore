@@ -8,3 +8,8 @@ coverage
 .impeccable/mocks/
 .impeccable/questions/
 .impeccable/review/
+
+# 图标族本地数据：单行紧凑 JSON，内容原样入仓（36 KB / 106 个字形）。
+# 被格式化重排后每行一个字形，会让 diff 与体积都失去意义，也不该手改——
+# 增删图标要跑 scripts/check-icons.mjs 守门。
+src/assets/icons.json

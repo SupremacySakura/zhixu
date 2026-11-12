@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import { AnimatePresence, Motion, animate, type PanInfo } from 'motion-v'
 import { springBouncy, springSnappy, fadeTransition } from '../utils/motion'
 import { useRoute, useRouter } from 'vue-router'
@@ -123,7 +123,7 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
           aria-label="打开导航菜单"
           @click="isMobileMenuOpen = true"
         >
-          <Icon icon="material-symbols:menu-rounded" class="text-[20px]" />
+          <AppIcon icon="material-symbols:menu-rounded" class="text-[20px]" />
         </button>
       </header>
 
@@ -164,7 +164,7 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
               aria-label="关闭导航菜单"
               @click="isMobileMenuOpen = false"
             >
-              <Icon icon="material-symbols:close-rounded" class="text-[20px]" />
+              <AppIcon icon="material-symbols:close-rounded" class="text-[20px]" />
             </button>
           </div>
           <div class="min-h-0 flex-1">

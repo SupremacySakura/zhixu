@@ -14,7 +14,7 @@ vi.mock('../../services/apis/evolution', () => ({
   getEvolutionSummary: vi.fn(),
   listEvolutionAlerts: vi.fn(),
 }))
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 
 const overviewMock = vi.mocked(getDashboardOverview)
 const logsMock = vi.mocked(getOperationLogs)

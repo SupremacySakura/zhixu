@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import { useUserStore } from '../stores/user'
 import { useOperationLogs } from '../composables/useOperationLogs'
 import LoginRequiredPlaceholder from '../components/bussiness/LoginRequiredPlaceholder.vue'
@@ -83,7 +83,7 @@ const fileTypeMeta: Record<string, { title: string; icon: string; colorClass: st
   },
   other: {
     title: '其他',
-    icon: 'material-symbols:insert-drive-file-outline-rounded',
+    icon: 'material-symbols:description-outline-rounded',
     colorClass: 'bg-surface-tertiary text-label-secondary',
   },
 }
@@ -243,7 +243,7 @@ watch(
             <span
               class="flex h-9 w-9 flex-none items-center justify-center rounded-sm text-label-tertiary"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:info-outline-rounded"
                 class="text-[20px]"
                 aria-hidden="true"
@@ -321,7 +321,7 @@ watch(
                 stat.colorClass,
               ]"
             >
-              <Icon :icon="stat.icon" class="text-[20px]" />
+              <AppIcon :icon="stat.icon" class="text-[20px]" />
             </div>
             <div>
               <h4 class="text-subhead text-label-secondary">{{ stat.title }}</h4>
@@ -368,7 +368,7 @@ watch(
                 class="flex h-8 w-8 flex-none items-center justify-center rounded-sm"
                 :class="card.colorClass"
               >
-                <Icon :icon="card.icon" class="text-[16px]" />
+                <AppIcon :icon="card.icon" class="text-[16px]" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-[15px] font-semibold leading-[22px]">

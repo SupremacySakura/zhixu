@@ -25,7 +25,7 @@ vi.mock('../../services/apis/knowledge', () => ({
 vi.mock('../../services/apis/tag', () => ({
   listTags: vi.fn().mockResolvedValue({ items: [] }),
 }))
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 afterEach(() => {
   vi.clearAllMocks()
 })

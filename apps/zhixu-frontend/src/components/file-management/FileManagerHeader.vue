@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import type { BreadcrumbItem } from '../../types/file'
 
 const props = withDefaults(
@@ -82,11 +82,11 @@ const secondaryButtonClass =
           aria-label="返回根目录"
           @click="navigateToBreadcrumb(0)"
         >
-          <Icon class="mr-1 text-[14px]" icon="material-symbols:home" />
+          <AppIcon class="mr-1 text-[14px]" icon="material-symbols:home" />
           root
         </button>
         <template v-for="(breadcrumb, index) in nestedBreadcrumbs" :key="breadcrumb.id">
-          <Icon class="text-[14px]" icon="material-symbols:chevron-right" />
+          <AppIcon class="text-[14px]" icon="material-symbols:chevron-right" />
           <button
             v-if="!isLastBreadcrumb(index)"
             class="rounded-sm transition-colors duration-150 hover:text-primary"
@@ -104,7 +104,7 @@ const secondaryButtonClass =
         v-if="errorMessage"
         class="mt-2 flex items-center gap-1.5 text-[13px] font-medium text-danger"
       >
-        <Icon class="text-[14px]" icon="material-symbols:error-outline-rounded" />
+        <AppIcon class="text-[14px]" icon="material-symbols:error-outline-rounded" />
         {{ errorMessage }}
       </p>
     </div>
@@ -126,7 +126,7 @@ const secondaryButtonClass =
         aria-label="新建文件夹"
         @click="emit('create-folder')"
       >
-        <Icon class="text-[18px]" icon="material-symbols:create-new-folder" />
+        <AppIcon class="text-[18px]" icon="material-symbols:create-new-folder" />
         新建文件夹
       </button>
 
@@ -138,7 +138,7 @@ const secondaryButtonClass =
           aria-label="上传文件"
           @click="openFileDialog"
         >
-          <Icon class="text-[18px]" icon="material-symbols:upload" />
+          <AppIcon class="text-[18px]" icon="material-symbols:upload" />
           上传文件
         </button>
         <button
@@ -147,7 +147,7 @@ const secondaryButtonClass =
           aria-label="上传文件夹"
           @click="openFolderDialog"
         >
-          <Icon class="text-[18px]" icon="material-symbols:folder" />
+          <AppIcon class="text-[18px]" icon="material-symbols:folder" />
           上传文件夹
         </button>
       </div>
@@ -159,7 +159,7 @@ const secondaryButtonClass =
           type="button"
           aria-label="上传文件或文件夹"
         >
-          <Icon class="text-[18px]" icon="material-symbols:upload" />
+          <AppIcon class="text-[18px]" icon="material-symbols:upload" />
           上传
         </button>
         <div
@@ -171,7 +171,7 @@ const secondaryButtonClass =
             aria-label="上传文件"
             @click="openFileDialog"
           >
-            <Icon class="text-[16px] text-label-secondary" icon="material-symbols:description" />
+            <AppIcon class="text-[16px] text-label-secondary" icon="material-symbols:description" />
             上传文件
           </button>
           <button
@@ -180,7 +180,7 @@ const secondaryButtonClass =
             aria-label="上传文件夹"
             @click="openFolderDialog"
           >
-            <Icon class="text-[16px] text-label-secondary" icon="material-symbols:folder" />
+            <AppIcon class="text-[16px] text-label-secondary" icon="material-symbols:folder" />
             上传文件夹
           </button>
         </div>
@@ -194,7 +194,7 @@ const secondaryButtonClass =
         aria-label="查看上传进度"
         @click="emit('toggle-upload-panel')"
       >
-        <Icon
+        <AppIcon
           class="text-[18px]"
           :icon="uploadStatusIcon"
           :class="isUploading ? 'animate-spin text-primary' : 'text-primary'"

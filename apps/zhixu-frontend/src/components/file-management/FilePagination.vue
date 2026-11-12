@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 
 const props = defineProps<{
   page: number
@@ -61,7 +61,7 @@ const pageButtonClass =
         :disabled="page <= 1 || loading"
         @click="requestPage(page - 1)"
       >
-        <Icon class="text-[16px]" icon="material-symbols:chevron-left" />
+        <AppIcon class="text-[16px]" icon="material-symbols:chevron-left" />
       </button>
       <button
         v-for="pageNumber in pageNumbers"
@@ -94,7 +94,7 @@ const pageButtonClass =
         :disabled="page >= safeTotalPages || loading"
         @click="requestPage(page + 1)"
       >
-        <Icon class="text-[16px]" icon="material-symbols:chevron-right" />
+        <AppIcon class="text-[16px]" icon="material-symbols:chevron-right" />
       </button>
       <div v-if="safeTotalPages > 1" class="ml-2.5 flex items-center gap-1.5">
         <span class="text-caption text-label-tertiary">跳至</span>

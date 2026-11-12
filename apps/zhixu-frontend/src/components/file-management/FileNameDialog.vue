@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../../utils/motion'
 
@@ -127,7 +127,7 @@ watch(
               :disabled="isConfirmDisabled"
               @click="handleConfirm"
             >
-              <Icon v-if="loading" icon="material-symbols:progress-activity" class="animate-spin" />
+              <AppIcon v-if="loading" icon="material-symbols:progress-activity" class="animate-spin" />
               {{ loading ? loadingText : confirmText }}
             </button>
           </div>
