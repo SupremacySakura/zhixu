@@ -1,7 +1,7 @@
 ---
 last_reviewed: 2026-11-12
 phase: P4
-status: in-progress
+status: done
 ---
 
 # P4 知识图谱与知识演化
@@ -45,7 +45,7 @@ status: in-progress
   - 空状态引导「先去知识详情页建立关系」。
 - **依赖**：P3-W3.4/W3.5。**验收**：AC-10——图谱展示节点与关系，点击进入详情，局部渲染流畅（百节点级）。
 
-**完成情况（2026-11-11）**：`GET /api/v1/knowledge/graph`（center/depth/include_suggested/tag_id/source_type、节点上限 100 与 truncated、默认排除归档）与 `/home/knowledge/graph` 页面（ECharts 按需引入、力导向、筛选、建议边虚线、点击抽屉、中心搜索、空状态）已实现并合入；验收细节见 [docs/tasks/relations-graph-20261111.md](../tasks/relations-graph-20261111.md)。AC-10 待真机验收。
+**完成情况（2026-11-11）**：`GET /api/v1/knowledge/graph`（center/depth/include_suggested/tag_id/source_type、节点上限 100 与 truncated、默认排除归档）与 `/home/knowledge/graph` 页面（ECharts 按需引入、力导向、筛选、建议边虚线、点击抽屉、中心搜索、空状态）已实现并合入；验收细节见 [docs/tasks/relations-graph-20261111.md](../tasks/relations-graph-20261111.md)。AC-10 已于 2026-11-12 真机验收通过（真实模型 + Qdrant 环境，见文末「验收状态」）。
 
 ### W4.2 重复检测（FR-EVO-01）
 
@@ -88,14 +88,33 @@ status: in-progress
 - **首页聚合**：Dashboard 增加"待处理任务 + 演化提醒"卡片（点击进入演化中心）。
 - **依赖**：W4.2/W4.3/W4.4。**验收**：AC-13 全部——提醒可筛选、证据可见、每种操作正确落库、处理记录可查。
 
-**完成情况（2026-11-12，第五部分 / GitHub #13）**：演化中心与首页待处理卡片已落地——新增 `/home/evolution` 页面（侧边栏「演化中心」入口），单页两页签：「待处理」走 `open=true` 后端一次取回 pending+deferred，「处理记录」用 `status=resolved,dismissed` 一次请求取回两个状态（排序与 `total` 都由服务端给，翻页沿用既有 `FilePagination`）；类型三选（重复/过时/冲突）与状态筛选都用既有 `FilterMenu`，任一筛选变化即复位到第一页重拉，且状态筛选存在时不传 `open`（后端 `open` 优先于 `status`，同传会静默覆盖）。点列表项从右侧滑出详情抽屉（与图谱节点抽屉同一套 `Motion` + `springSnappy` + `bg-scrim` 结构），左右并排两侧证据引文，并把两条引文的最长公共片段用 `<mark>` 高亮，标题可跳对应知识详情。动作按钮按提醒类型裁剪（duplicate 五个、outdated 四个、conflict 六个，含「暂不处理」的状态迁移），无修订稿时「采纳修订」置灰并给出原因，涉及知识已归档时卡片标注「涉及知识已归档」且只留「忽略」与「标记已核实」可点。备注随裁决一并提交，处理记录页签展示动作文案（复用 `evolutionActionLabel`）、备注与裁决时间。首页新增「待处理提醒」卡片，只调 `GET /api/evolution/alerts/summary` 拿总数与三类计数并链到演化中心，不拉列表、不引图表库。列表/筛选/裁决状态收在 `useEvolutionAlerts` 组合式函数里（AbortController 管理取消，scope 销毁时中断在途请求），页面只做渲染编排。前端新增 30 个用例（接口层 5、组合式函数 8、高亮工具 6、页面 8、首页卡片 3）。AC-13 的「每种操作正确落库」需真机验收——`accept_revision` 与 `create_relation` 两个动作已落地，待真机验收。本轮 code-review 修正（首页待处理只算 pending、处理记录改单次多状态请求、图谱补关系类型筛选、类型收紧与重复计算收敛）另加 10 个用例，全量 52 文件 364 用例通过。
+**完成情况（2026-11-12，第五部分 / GitHub #13）**：演化中心与首页待处理卡片已落地——新增 `/home/evolution` 页面（侧边栏「演化中心」入口），单页两页签：「待处理」走 `open=true` 后端一次取回 pending+deferred，「处理记录」用 `status=resolved,dismissed` 一次请求取回两个状态（排序与 `total` 都由服务端给，翻页沿用既有 `FilePagination`）；类型三选（重复/过时/冲突）与状态筛选都用既有 `FilterMenu`，任一筛选变化即复位到第一页重拉，且状态筛选存在时不传 `open`（后端 `open` 优先于 `status`，同传会静默覆盖）。点列表项从右侧滑出详情抽屉（与图谱节点抽屉同一套 `Motion` + `springSnappy` + `bg-scrim` 结构），左右并排两侧证据引文，并把两条引文的最长公共片段用 `<mark>` 高亮，标题可跳对应知识详情。动作按钮按提醒类型裁剪（duplicate 五个、outdated 四个、conflict 六个，含「暂不处理」的状态迁移），无修订稿时「采纳修订」置灰并给出原因，涉及知识已归档时卡片标注「涉及知识已归档」且只留「忽略」与「标记已核实」可点。备注随裁决一并提交，处理记录页签展示动作文案（复用 `evolutionActionLabel`）、备注与裁决时间。首页新增「待处理提醒」卡片，只调 `GET /api/evolution/alerts/summary` 拿总数与三类计数并链到演化中心，不拉列表、不引图表库。列表/筛选/裁决状态收在 `useEvolutionAlerts` 组合式函数里（AbortController 管理取消，scope 销毁时中断在途请求），页面只做渲染编排。前端新增 30 个用例（接口层 5、组合式函数 8、高亮工具 6、页面 8、首页卡片 3）。AC-13 的「每种操作正确落库」已于 2026-11-12 真机验收：`archive_one`、`mark_verified`、`create_relation`、`mark_outdated` 四种动作在真实模型下走通并落库（详见文末「验收状态」）；`accept_revision` 因真实模型未给出可用的修订稿（载荷里没有 `revised_content`，按钮按设计置灰）而未被端到端覆盖，`keep_both`/`dismiss`/`defer` 三种动作由单测覆盖、真机未点。本轮 code-review 修正（首页待处理只算 pending、处理记录改单次多状态请求、图谱补关系类型筛选、类型收紧与重复计算收敛）另加 10 个用例，全量 52 文件 364 用例通过。
 
 ## 里程碑验收（P4 Done）
 
 1. AC-10：图谱页可用，与详情页互跳。
 2. AC-11：重复检测（精确 + 语义）提醒正确到达。
-3. AC-12：版本管理与演化联动（接受修订产生新版本，可回溯）。
-4. AC-13：过时/冲突提醒带证据，人工审核五种操作全部生效。
-5. 采纳/忽略行为落库，为 P5 演化实验（采纳率、误报率）提供数据。
+3. AC-12：版本管理与演化联动（接受修订产生新版本，可回溯）——版本快照/查看/恢复自 P1 起真机可用；演化联动（采纳修订写 `change_source=ai`）代码与单测就绪，真机因模型未产出修订稿未触发（见下）。
+4. AC-13：过时/冲突提醒带证据，人工审核五种操作全部生效——真机已覆盖 `archive_one`/`mark_verified`/`create_relation`/`mark_outdated`，其余三种由单测覆盖（见下）。
+5. 采纳/忽略行为落库，为 P5 演化实验（采纳率、误报率）提供数据——已落库（`evolution_alerts` 的 `resolved_action`/`resolution_note` + `operation_logs` 的 `evolution_resolve`）。
 
-**验收状态（2026-11-12）**：W4.1~W4.5 代码、单测全部完成并合入 PR #16（堆叠在 #14、#15 之上），AC-10~AC-13 均**待真机验收**——需要真实模型与 Qdrant 环境跑通「导入 → 向量化 → 演化检查 → 提醒 → 裁决」全链路。因此本阶段状态标为 in-progress，真机验收通过后改为 done。
+**验收状态（2026-11-12，真机验收通过）**：W4.1~W4.5 代码与单测全部完成，分别经 PR #14（#9）、#15（#10）、#16（#11/#12/#13）合入 main；AC-10~AC-13 已在真实模型（DeepSeek）+ Qdrant 环境下跑通「导入 → 向量化 → 演化检查 → 提醒 → 裁决」全链路，用户确认验收通过，本阶段状态置为 done。
+
+验收留下的库内证据（用户 1，2026-11-12）：
+
+| 提醒 | 类型 | 状态 | 裁决动作 | 涉及知识 |
+|---|---|---|---|---|
+| #2 | duplicate | resolved | `mark_verified` | [38, 29] |
+| #3 | duplicate | pending | — | [38, 29] |
+| #4 | conflict | resolved | `create_relation` | [40, 29] |
+| #5 | outdated | resolved | `mark_outdated` | [40, 38] |
+| #6 | outdated | resolved | `mark_outdated` | [40, 29] |
+
+- AC-10 图谱：`/home/knowledge/graph` 在真实数据（15 条知识、11 条关系）上渲染、点节点开抽屉、中心重绘均正常。
+- AC-11 重复检测：精确重复（正文指纹相同，不调模型）与语义近重复（向量近邻 + LLM 复核）都产生了提醒；#3 是 pending 状态的重复提醒，未被处理。
+- AC-13 过时：`updates` 关系强信号与向量近邻弱信号两条路径都判定成功，#5/#6 裁决后 `knowledge_items` 的 `outdated_at`/`outdated_reason` 正确写入，操作日志同时记 `evolution_resolve`（target_type=`evolution`）与 `knowledge_outdated`（target 指向被标记的知识）。
+- AC-13 冲突：#4 的载荷含双侧引文（「定价 2000 元…」@40 与「定价 1000 元…」@29）与具体理由，`create_relation` 落库为 `knowledge_relations` id16（source 29 → target 40，`contradicts`，confirmed，manual），对称归一方向正确。
+- 级联删除：#1 经 `archive_one` 归档知识 36 后知识被删除，提醒随之级联消失（`evolution_alerts` 现存 2~6，无 #1），与「知识删除级联删提醒」一致。
+- AC-12 版本联动：`accept_revision` 走版本链路写 `change_source=ai` 新版本的代码路径由单测覆盖，真机未触发——真实模型对 #4 没有产出可用的修订稿（载荷无 `revised_content`），按设计「无修订稿时采纳修订置灰、建议动作回退 `create_relation`」，因此该路径的真机表现是**正确降级**而非失败；`keep_both`/`dismiss`/`defer` 三种动作同样只有单测覆盖。
+
+**遗留（转入 P5 演化实验）**：修订稿可用性依赖模型能力，当前只在冲突提醒且证据全部定位时才保留；P5 的演化实验需要按样本统计采纳率与误报率，届时会覆盖 `accept_revision` 与剩余三种动作的真实表现。
