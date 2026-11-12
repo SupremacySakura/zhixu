@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useUserStore } from '../stores/user'
 import { useOperationLogs } from '../composables/useOperationLogs'
 import LoginRequiredPlaceholder from '../components/bussiness/LoginRequiredPlaceholder.vue'
 import { getDashboardOverview } from '../services/apis/file'
+import { getEvolutionSummary } from '../services/apis/evolution'
+import type { EvolutionSummary } from '../services/apis/evolution'
 import type { DashboardFileStatItem } from '../services/types/file'
 import { formatBytes } from '../utils/file'
 import { describeOperationLog } from '../utils/operationLog'
@@ -19,6 +22,17 @@ type FileStatCard = {
   icon: string
   colorClass: string
 }
+
+// 演化提醒只取计数（summary 接口），首页不拉提醒列表，也不引图表库
+const evolutionSummary = ref<EvolutionSummary | null>(null)
+const evolutionPendingTotal = computed(
+  () => (evolutionSummary.value?.pending ?? 0) + (evolutionSummary.value?.deferred ?? 0),
+)
+const evolutionTypeStats = computed(() => [
+  { key: 'duplicate', label: '重复', count: evolutionSummary.value?.by_type.duplicate ?? 0 },
+  { key: 'outdated', label: '过时', count: evolutionSummary.value?.by_type.outdated ?? 0 },
+  { key: 'conflict', label: '冲突', count: evolutionSummary.value?.by_type.conflict ?? 0 },
+])
 
 const storageUsedPercent = ref(0)
 const storageUsedBytes = ref(0)
@@ -115,7 +129,18 @@ const operationLogCards = computed(() =>
   })),
 )
 
+const loadEvolutionSummary = async () => {
+  try {
+    evolutionSummary.value = await getEvolutionSummary()
+  } catch (error) {
+    // 提醒计数是首页的附加信息，取不到就退回空态，不影响存储与日志展示
+    evolutionSummary.value = null
+    console.error('获取演化提醒摘要失败', error)
+  }
+}
+
 const resetDashboardData = () => {
+  evolutionSummary.value = null
   storageUsedPercent.value = 0
   storageUsedBytes.value = 0
   storageTotalBytes.value = 0
@@ -133,6 +158,7 @@ const loadDashboardData = async () => {
     storageTotalBytes.value = data.storage_total
     storageLeftBytes.value = data.storage_left
     fileStats.value = mapFileStats(data.file_stats ?? [])
+    void loadEvolutionSummary()
     void loadOperationLogs()
   } catch (error) {
     resetDashboardData()
@@ -171,6 +197,41 @@ watch(
           <p class="text-subhead text-label-secondary">欢迎回来，这是您的存储情况。</p>
         </div>
       </div>
+
+      <!-- 待处理提醒：只取摘要计数，点击进演化中心逐条处理 -->
+      <RouterLink
+        to="/home/evolution"
+        class="block rounded-md bg-surface p-6 shadow-card transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-popover"
+        data-test="evolution-card"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 class="text-title-3">待处理提醒</h3>
+            <p class="mt-1 text-subhead text-label-secondary">
+              重复、过时与冲突提醒集中在这里，逐条确认后才落地。
+            </p>
+          </div>
+          <span class="text-subhead font-medium text-primary">前往演化中心 →</span>
+        </div>
+
+        <p v-if="evolutionPendingTotal === 0" class="mt-4 text-subhead text-label-secondary">
+          暂无待处理提醒
+        </p>
+        <div v-else class="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
+          <div>
+            <p class="text-caption text-label-secondary">待处理</p>
+            <p class="text-title-1 mt-0.5">{{ evolutionPendingTotal }}</p>
+          </div>
+          <div
+            v-for="stat in evolutionTypeStats"
+            :key="stat.key"
+            class="border-l border-hairline pl-8"
+          >
+            <p class="text-caption text-label-secondary">{{ stat.label }}</p>
+            <p class="mt-0.5 text-title-3">{{ stat.count }}</p>
+          </div>
+        </div>
+      </RouterLink>
 
       <!-- 存储用量 + 类型统计 -->
       <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
