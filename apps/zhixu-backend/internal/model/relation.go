@@ -16,34 +16,44 @@ const (
 	RelationTypeContradicts RelationType = "contradicts"
 )
 
-// Valid 判断是否为支持的关系类型；接口入参校验用。
-func (t RelationType) Valid() bool {
-	switch t {
-	case RelationTypeRelated, RelationTypeDependsOn, RelationTypeSupplements, RelationTypeContrasts, RelationTypeUpdates, RelationTypeContradicts:
-		return true
-	default:
-		return false
-	}
+// relationTypeSpec 是一个关系类型的全部语义标记。
+//
+// 三种查询（是否合法、能否由 AI 推荐、是否对称）共用同一张表：分开写三段级联时，
+// 新增一种类型容易只改到其中一处，静默地让白名单与校验口径漂移。
+// 不在表里的类型取零值，三项皆为 false。
+type relationTypeSpec struct {
+	// valid 表示是支持的类型；接口入参校验用。
+	valid bool
+	// recommendable 表示允许由 AI 关联推荐产出。它必须独立于 valid：
+	// 矛盾是「两说互斥」的判断，只有人（或冲突提醒的裁决）能下定论，
+	// 模型凭向量相似度猜出来的矛盾会把正常的知识关联污染成互相打架的一对。
+	recommendable bool
+	// symmetric 表示入库前按两侧知识 ID 的 min/max 归一，保证同一对知识只有一行，
+	// 无论从哪一侧发起。
+	symmetric bool
 }
+
+var relationTypeSpecs = map[RelationType]relationTypeSpec{
+	RelationTypeRelated:     {valid: true, recommendable: true, symmetric: true},
+	RelationTypeDependsOn:   {valid: true, recommendable: true},
+	RelationTypeSupplements: {valid: true, recommendable: true},
+	RelationTypeContrasts:   {valid: true, recommendable: true, symmetric: true},
+	RelationTypeUpdates:     {valid: true, recommendable: true},
+	// contradicts 只允许人（或冲突提醒的裁决）建立，因此不可推荐。
+	RelationTypeContradicts: {valid: true, symmetric: true},
+}
+
+// spec 查表取该类型的语义标记；未登记的类型返回零值。
+func (t RelationType) spec() relationTypeSpec { return relationTypeSpecs[t] }
+
+// Valid 判断是否为支持的关系类型；接口入参校验用。
+func (t RelationType) Valid() bool { return t.spec().valid }
 
 // Recommendable 报告该类型是否允许由 AI 关联推荐产出。
-//
-// 白名单必须独立于 Valid：矛盾是「两说互斥」的判断，只有人（或冲突提醒的裁决）能下定论，
-// 模型凭向量相似度猜出来的矛盾会把正常的知识关联污染成互相打架的一对。
-func (t RelationType) Recommendable() bool {
-	switch t {
-	case RelationTypeRelated, RelationTypeDependsOn, RelationTypeSupplements, RelationTypeContrasts, RelationTypeUpdates:
-		return true
-	default:
-		return false
-	}
-}
+func (t RelationType) Recommendable() bool { return t.spec().recommendable }
 
-// Symmetric 报告该类型是否对称：对称关系入库前按两侧知识 ID 的 min/max 归一，
-// 保证同一对知识只有一行，无论从哪一侧发起。
-func (t RelationType) Symmetric() bool {
-	return t == RelationTypeRelated || t == RelationTypeContrasts || t == RelationTypeContradicts
-}
+// Symmetric 报告该类型是否对称。
+func (t RelationType) Symmetric() bool { return t.spec().symmetric }
 
 // RelationStatus 关系的确认状态。suggested 是 AI 推荐待确认，rejected 保留行用于抑制重复推荐。
 type RelationStatus string

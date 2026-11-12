@@ -153,6 +153,52 @@ func TestEvolutionListFiltersByType(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+// 多状态筛选走 IN 条件，且按裁决时间倒序：「处理记录」页签要同时看已处理与已忽略。
+func TestEvolutionListFiltersByMultipleStatuses(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	resolved := time.Now()
+	mock.ExpectQuery(`SELECT count\(\*\) FROM `+"`evolution_alerts`"+` WHERE user_id = .*status IN`).
+		WithArgs(uint(2), "resolved", "dismissed").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+	mock.ExpectQuery(`SELECT .* FROM `+"`evolution_alerts`"+` WHERE user_id = .*status IN .*ORDER BY resolved_at DESC, id DESC`).
+		WithArgs(uint(2), "resolved", "dismissed", 20).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "alert_type", "status", "resolved_at"}).
+			AddRow(9, 2, "conflict", "resolved", resolved))
+
+	alerts, total, err := NewEvolutionAlertRepository(db).List(context.Background(), 2, EvolutionAlertFilter{
+		Page: 1, Size: 20,
+		Statuses: []model.EvolutionAlertStatus{model.EvolutionAlertResolved, model.EvolutionAlertDismissed},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(2), total)
+	require.Len(t, alerts, 1)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 单值筛选仍是等值匹配，排序也保持创建时间倒序（与改造前完全一致）。
+func TestEvolutionListFiltersBySingleStatus(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	created := time.Now()
+	mock.ExpectQuery(`SELECT count\(\*\) FROM `+"`evolution_alerts`"+` WHERE user_id = .*status = `).
+		WithArgs(uint(2), "resolved").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`SELECT .* FROM `+"`evolution_alerts`"+` WHERE user_id = .*status = .*ORDER BY created_at DESC, id DESC`).
+		WithArgs(uint(2), "resolved", 20).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "alert_type", "status", "created_at"}).
+			AddRow(9, 2, "conflict", "resolved", created))
+
+	_, total, err := NewEvolutionAlertRepository(db).List(context.Background(), 2, EvolutionAlertFilter{
+		Page: 1, Size: 20, Statuses: []model.EvolutionAlertStatus{model.EvolutionAlertResolved},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 // 裁决在单事务内锁行、执行副作用、写回裁决字段。
 func TestEvolutionResolveWritesVerdict(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)

@@ -24,6 +24,8 @@ type evolutionHandlerStore struct {
 	// alertType 与 payload 覆盖默认的重复提醒，用于冲突提醒的裁决用例。
 	alertType model.EvolutionAlertType
 	payload   string
+	// lastFilter 记录最近一次列表请求的筛选条件，用于断言参数解析。
+	lastFilter repository.EvolutionAlertFilter
 }
 
 // 默认是一条重复提醒；用例需要冲突提醒时显式覆盖 alertType 与 payload。
@@ -40,6 +42,7 @@ func (s *evolutionHandlerStore) defaults() (model.EvolutionAlertType, string) {
 }
 
 func (s *evolutionHandlerStore) List(_ context.Context, _ uint, filter repository.EvolutionAlertFilter) ([]model.EvolutionAlert, int64, error) {
+	s.lastFilter = filter
 	if filter.Type == model.EvolutionAlertType("dupe") {
 		return nil, 0, nil
 	}
@@ -242,6 +245,17 @@ func TestEvolutionHandlerConflictActions(t *testing.T) {
 	})
 }
 
+// 逗号分隔的状态解析：去空、去重后原样交给服务层，服务层只做合法性校验。
+func TestEvolutionHandlerListParsesStatuses(t *testing.T) {
+	store := &evolutionHandlerStore{}
+	w := serveEvolutionWith(t, 2, "GET", "/evolution/alerts?status=resolved,%20dismissed,resolved", "", store, false)
+
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Equal(t, []model.EvolutionAlertStatus{model.EvolutionAlertResolved, model.EvolutionAlertDismissed},
+		store.lastFilter.Statuses)
+	require.False(t, store.lastFilter.Open)
+}
+
 // 期望状态对不上说明另一个标签页已经裁决过：必须回 409 让前端刷新，而不是 500。
 func TestEvolutionHandlerResolveConflict(t *testing.T) {
 	w := serveEvolutionWith(t, 2, "POST", "/evolution/alerts/5/resolve",
@@ -266,6 +280,11 @@ func TestEvolutionHandlerRoutes(t *testing.T) {
 		{"list alerts", "GET", "/evolution/alerts?open=true", "", 2, 200, "副本", false},
 		{"list keeps payload reason", "GET", "/evolution/alerts", "", 2, 200, "正文完全一致", false},
 		{"list rejects bad type", "GET", "/evolution/alerts?type=dupe", "", 2, 400, "", false},
+		{"list accepts multiple statuses", "GET", "/evolution/alerts?status=resolved,dismissed", "", 2, 200, "副本", false},
+		{"list accepts single status", "GET", "/evolution/alerts?status=resolved", "", 2, 200, "副本", false},
+		{"list rejects bad status", "GET", "/evolution/alerts?status=done", "", 2, 400, "", false},
+		{"list rejects partially bad status", "GET", "/evolution/alerts?status=resolved,done", "", 2, 400, "", false},
+		{"list rejects empty status list", "GET", "/evolution/alerts?status=,", "", 2, 400, "", false},
 		{"list rejects bad open", "GET", "/evolution/alerts?open=maybe", "", 2, 400, "", false},
 		{"list rejects bad page", "GET", "/evolution/alerts?page=x", "", 2, 400, "", false},
 		{"summary", "GET", "/evolution/alerts/summary", "", 2, 200, "\"pending\":3", false},

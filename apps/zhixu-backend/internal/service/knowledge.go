@@ -704,7 +704,9 @@ func (s *KnowledgeService) AcceptRevision(ctx context.Context, userID, id uint, 
 	if err != nil {
 		return nil, err
 	}
-	if item.Status != model.KnowledgeReady {
+	// 归档是终态：归档知识不再参与检索与提醒，采纳修订会把它悄悄改活，并绕过用户
+	// 在演化中心对「已归档」的判断。涉及知识已归档时只允许忽略与标记已核实（规格 #8）。
+	if item.Status != model.KnowledgeReady || item.ArchivedAt != nil {
 		return nil, repository.ErrKnowledgeConflict
 	}
 	sum := sha256.Sum256([]byte(content))
