@@ -221,7 +221,7 @@ onMounted(() => {
 </script>
 <template>
   <main class="overflow-y-auto p-4 sm:p-6 lg:p-8">
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto max-w-wide">
       <p class="mb-4 text-subhead text-label-secondary">知识库 / 全部知识</p>
       <header class="mb-7 flex flex-wrap items-center justify-between gap-4">
         <div>
