@@ -52,6 +52,11 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
       },
       {
+        path: '/home/evolution',
+        component: () => import('../pages/EvolutionCenter.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: '/home/pickup-codes',
         component: () => import('../pages/PickupCodes.vue'),
         meta: { requiresAuth: true },

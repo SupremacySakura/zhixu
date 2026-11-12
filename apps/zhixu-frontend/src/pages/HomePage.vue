@@ -18,6 +18,7 @@ const NavItems: NavItem[] = [
     icon: 'material-symbols:account-tree-outline',
     to: '/home/knowledge/graph',
   },
+  { label: '演化中心', icon: 'material-symbols:sync-alt-rounded', to: '/home/evolution' },
   { label: '对话', icon: 'material-symbols:chat-bubble-outline', to: '/home/chat' },
   { label: '取件码', icon: 'material-symbols:key-outline', to: '/home/pickup-codes' },
   { label: '上传', icon: 'material-symbols:cloud-upload', to: '/home/upload' },
