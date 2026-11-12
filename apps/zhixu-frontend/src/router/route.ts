@@ -79,6 +79,12 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    // 一次性垂直切片（prototype 分支，不进 main）
+    path: '/slice',
+    component: () => import('../pages/SlicePage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/login',
     component: () => import('../pages/LoginPage.vue'),
   },
