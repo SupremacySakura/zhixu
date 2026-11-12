@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"zhixu-backend/internal/model"
+	"zhixu-backend/internal/utils"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
@@ -52,6 +53,15 @@ func DeleteKnowledgeRows(tx *gorm.DB, userID uint, query *gorm.DB) (int, error) 
 		Delete(&model.KnowledgeRelation{}).Error; err != nil {
 		return 0, err
 	}
+	// 演化提醒同样没有 knowledge_id 单列：涉及知识在有序数组里，命中任一端即整条提醒失效。
+	// 提醒已不可能再被裁决，留着只会变成指向空条目的死链。
+	ids := make([]uint, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+	if err := deleteEvolutionAlertsByKnowledge(tx, userID, ids); err != nil {
+		return 0, err
+	}
 	if err := query.Delete(&model.KnowledgeItem{}).Error; err != nil {
 		return 0, err
 	}
@@ -91,6 +101,19 @@ func (r *KnowledgeRepository) ByFile(ctx context.Context, userID, fileID uint) (
 func (r *KnowledgeRepository) Get(ctx context.Context, userID, id uint) (*model.KnowledgeItem, error) {
 	var item model.KnowledgeItem
 	err := r.DB.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Take(&item).Error
+	return &item, err
+}
+
+// FindByContentHash 按正文指纹找同用户的精确重复：只取未归档、非自身的条目，命中最小的 ID。
+// 同一段正文在库里有多份时不该产出多条提醒，因此这里天然只返回一条。
+func (r *KnowledgeRepository) FindByContentHash(ctx context.Context, userID uint, hash string, excludeID uint) (*model.KnowledgeItem, error) {
+	var item model.KnowledgeItem
+	if hash == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	err := r.DB.WithContext(ctx).
+		Where("user_id = ? AND content_hash = ? AND archived_at IS NULL AND id <> ?", userID, hash, excludeID).
+		Order("id ASC").Take(&item).Error
 	return &item, err
 }
 
@@ -231,7 +254,8 @@ func (r *KnowledgeRepository) Update(ctx context.Context, userID, id uint, title
 			return err
 		}
 		if err := tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", id, userID).Updates(map[string]any{
-			"title": title, "content": content, "source_hash": sourceHash, "version": item.Version + 1,
+			"title": title, "content": content, "source_hash": sourceHash,
+			"content_hash": utils.KnowledgeContentHash(content), "version": item.Version + 1,
 			"vector_state": "", "chunks_total": 0, "chunks_ready": 0, "chunks_failed": 0,
 			"embedding_model": "", "embedding_version": 0, "vector_error": "",
 		}).Error; err != nil {
@@ -404,7 +428,9 @@ func (r *KnowledgeRepository) Finish(ctx context.Context, task *model.KnowledgeI
 		}
 		values := map[string]any{"status": status, "error_code": code, "error_message": message}
 		if code == "" {
+			// 文件导入的正文到这里才落库，正文指纹必须与正文同一次写入，否则会留下「有正文无指纹」的行。
 			values["content"], values["imported_at"] = content, time.Now()
+			values["content_hash"] = utils.KnowledgeContentHash(content)
 		}
 		if err := tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", task.KnowledgeID, task.UserID).Updates(values).Error; err != nil {
 			return err

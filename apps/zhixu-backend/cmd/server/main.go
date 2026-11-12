@@ -66,9 +66,10 @@ func main() {
 	knowledgeService.Fetcher = service.NewWebFetcher()
 	vectorService := &service.VectorizeService{
 		Store: vectorStore, Knowledge: repository.NewKnowledgeRepository(database.DB), Chat: chat.Service,
-		Embedder:  &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
-		Vectors:   qdrant,
-		Relations: aiTasks,
+		Embedder:   &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+		Vectors:    qdrant,
+		Relations:  aiTasks,
+		Evolutions: aiTasks,
 	}
 	vectorCleanup := &service.VectorCleanupService{
 		Store: &repository.VectorCleanupRepository{DB: database.DB}, Vectors: qdrant,
@@ -81,6 +82,13 @@ func main() {
 	relationRepo := repository.NewRelationRepository(database.DB)
 	relationService := service.NewRelationService(relationRepo, knowledgeService, aiTasks)
 	router.RegisterRelationRouter(r, &handler.RelationHandler{Service: relationService})
+	// 演化提醒：读取/裁决在 EvolutionService，检测在 evolve 任务处理器，两者共用同一张表。
+	evolutionRepo := repository.NewEvolutionAlertRepository(database.DB)
+	evolutionService := &service.EvolutionService{
+		Alerts: evolutionRepo, Knowledge: knowledgeService, Archiver: knowledgeService,
+		Logs: knowledgeService.Logs, Tasks: aiTasks,
+	}
+	router.RegisterEvolutionRouter(r, evolutionService)
 	// 采纳 AI 整理结果时需要追加标签：只增不删，不覆盖用户手工标签。
 	knowledgeService.Tags = tagService
 	// AI 整理工作流：Go worker 直接调用 AI 服务 /organize，草稿只写 ai_tasks.payload，等用户确认后才落正式字段。
@@ -94,6 +102,11 @@ func main() {
 		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 		Vectors:  qdrant,
 		Client:   &service.RelateClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+	})
+	// 演化检测工作流：向量化就绪后入队，精确重复先走正文指纹（不花模型钱），
+	// 语义近重复/过时/冲突在后续迭代接入同一个处理器。
+	aiTasks.Register(&service.EvolveProcessor{
+		Knowledge: knowledgeService, Alerts: evolutionRepo,
 	})
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})

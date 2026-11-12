@@ -178,6 +178,7 @@ func Migrate() error {
 		&model.ChatConversationState{},
 		&model.RetrievalLog{},
 		&model.AiTask{},
+		&model.EvolutionAlert{},
 	); err != nil {
 		return err
 	}
@@ -185,6 +186,13 @@ func Migrate() error {
 		return err
 	}
 	if err := ensureFulltextIndexes(DB); err != nil {
+		return err
+	}
+
+	// content_hash 是演化检测（精确重复）的唯一依据，必须覆盖历史数据。
+	// 规范化规则写在 Go 里（去 BOM / 统一换行 / 去行尾空白 / 整体 trim），
+	// 用 MySQL 的 SHA2(content, 256) 会算出对不上的值，导致历史知识全部漏判。
+	if err := backfillKnowledgeContentHashes(DB); err != nil {
 		return err
 	}
 
@@ -232,4 +240,43 @@ func Migrate() error {
 		return err
 	}
 	return nil
+}
+
+// knowledgeContentHashBatch 每批回填的行数：一次性读出全部正文会让大库启动迁移时内存暴涨。
+const knowledgeContentHashBatch = 500
+
+// backfillKnowledgeContentHashes 为历史知识补齐正文指纹，只处理 content_hash 为空的行。
+// 规范化必须走 Go 侧函数，与新建/编辑/导入时算出的值保持一致，否则同一篇正文会算出两个指纹。
+func backfillKnowledgeContentHashes(db *gorm.DB) error {
+	var lastID uint
+	for {
+		var rows []model.KnowledgeItem
+		if err := db.Select("id", "content").
+			Where("id > ?", lastID).
+			Where("content_hash = ? OR content_hash IS NULL", "").
+			Order("id ASC").
+			Limit(knowledgeContentHashBatch).
+			Find(&rows).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			for _, row := range rows {
+				hash := utils.KnowledgeContentHash(row.Content)
+				if hash == "" {
+					continue
+				}
+				if err := tx.Model(&model.KnowledgeItem{}).Where("id = ?", row.ID).
+					UpdateColumn("content_hash", hash).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		lastID = rows[len(rows)-1].ID
+	}
 }

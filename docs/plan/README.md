@@ -42,7 +42,7 @@ last_reviewed: 2026-11-11
 
 **关键路径**：P1（标签/版本表）→ P3（整理/关联）→ P4（演化）→ P5（实验）。P2 独立于数据表依赖，可并行启动。
 
-**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 已完成（2026-11-11，W3.1~W3.5，AC-04 与 AC-07 闭环）；P4-W4.1 局部知识图谱已完成（2026-11-11，AC-10 待真机验收）；P4 剩余演化工作项（W4.2~W4.5）与 P5 未开始。
+**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 已完成（2026-11-11，W3.1~W3.5，AC-04 与 AC-07 闭环）；P4-W4.1 局部知识图谱已完成（2026-11-11，AC-10 待真机验收）；P4-W4.2 的提醒骨架与精确重复检测已完成（2026-11-12，GitHub #9：建表、content_hash 回填、evolve 任务、列表/摘要/裁决接口）；W4.2 的语义近重复与 W4.3/W4.4/W4.5 未开始（#10~#13）；P5 未开始。
 
 ## 数据库变更总表
 
@@ -56,7 +56,7 @@ last_reviewed: 2026-11-11
 | `retrieval_logs` | 检索日志（mode/hits JSON/hit_count/latency_ms，实验数据源） | P2-W2.6 |
 | `ai_tasks` | 统一 AI 任务状态机（task_type: organize/relation/evolve；ingest 沿用现有导入任务表） | P3-W3.1 |
 | `knowledge_relations` | 知识关系（source/target/type/confidence/evidence/status/source: ai 或 manual；唯一键含 relation_type，对称类型归一侧只存一条） | P3-W3.4 |
-| `evolution_alerts` | 演化提醒（alert_type/payload/status pending/resolved/dismissed） | P4-W4.2 |
+| `evolution_alerts` | 演化提醒（alert_type: duplicate/outdated/conflict、payload、status: pending/resolved/dismissed/deferred、severity: review/strong、subject_ids 有序数组、dedupe_key 唯一索引且终态不清空） | P4-W4.2 |
 
 字段变更：
 

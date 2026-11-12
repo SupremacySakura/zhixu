@@ -32,7 +32,7 @@
 | 术语       | 含义                                                         | 代码标识                                                              |
 | ---------- | ------------------------------------------------------------ | --------------------------------------------------------------------- |
 | 关系       | 两个知识条目之间一条有向的语义联系                           | `knowledge_relations` / `KnowledgeRelation`                           |
-| 关系类型   | 关系的语义种类，共五种：相关、依赖、补充说明、对比、更新替代 | `relation_type`: related、depends_on、supplements、contrasts、updates |
+| 关系类型   | 关系的语义种类，共六种：相关、依赖、补充说明、对比、更新替代、矛盾 | `relation_type`: related、depends_on、supplements、contrasts、updates、contradicts |
 | 源头知识   | 关系的有向起点                                               | `source_id`                                                           |
 | 目标知识   | 关系的有向终点                                               | `target_id`                                                           |
 | 对称类型   | 方向无意义的关系类型：相关、对比；存一条即可                 | related、contrasts                                                    |
@@ -53,9 +53,26 @@
 | 图谱截断 | 节点数超过上限时按连接度裁剪，并在响应中标记   | `truncated`    |
 | 图谱边   | 图谱中的一条关系，默认只画已确认关系           | 关系行渲染而成 |
 
+## 知识演化
+
+| 术语     | 含义                                                             | 代码标识                                                                              |
+| -------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 演化提醒 | AI 对知识之间关系或时效性的审计结论，等待用户裁决                | `evolution_alerts` / `EvolutionAlert`                                                |
+| 提醒类型 | 演化提醒的三种结论：重复、过时、冲突                             | `alert_type`: duplicate、outdated、conflict                                           |
+| 提醒状态 | 待处理 / 已处理 / 已忽略 / 暂不处理                              | `status`: pending、resolved、dismissed、deferred                                      |
+| 提醒严重度 | 提醒的证据强度：建议复核、强烈建议复核                         | `severity`: review、strong                                                            |
+| 证据引文 | AI 判定时引用的知识原文片段，必须能在该知识正文中定位            | `evidence[]`: knowledge_id、quote                                                     |
+| 裁决动作 | 用户处理演化提醒的六种方式                                       | `action`: accept_revision、keep_both、archive_one、create_relation、mark_outdated、mark_verified |
+| 过时标记 | 知识条目被确认可能过时的理由，不影响其可检索性                   | `outdated_at`、`outdated_reason`                                                     |
+| 正文指纹 | 知识正文规范化后的哈希，用于精确重复检测                         | `content_hash`                                                                        |
+| 重新检查 | 对某条知识手动重跑一次演化检查                                   | `POST /knowledge/:id/evolve/regenerate`                                               |
+
 ## 不使用的说法
 
 - 不要用「引用关系」「链接」指代**关系**：关系是知识之间的语义联系，引用是回答中的出处（见检索问答的引用溯源）。
 - 不要用「节点」指代非图谱语境下的**知识条目**；节点只在图谱视图里使用。
 - 不要用「隐藏」「删除」描述**建议抑制**：拒绝不删行，只是不再推荐同一对。
 - 不要用「标签推荐」指代**关联推荐**：前者是 organize 的 suggestedTags，后者是 relation。
+- 不要用「对比」指代**矛盾**：对比（contrasts）是两种可选视角，矛盾（contradicts）是对同一事实的互斥结论。
+- 不要用 `potential_conflict` 指代**冲突提醒**：提醒类型只有 conflict，潜在性是判定的过程而非结果。
+- 不要用「合并」指代**归档其一**：重复提醒的裁决是保留一条、归档另一条，不做正文合并。
