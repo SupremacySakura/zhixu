@@ -78,6 +78,12 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  // 一次性样张：六关系四轴编码对照（prototype 分支，不进 main；见 issue #31）
+  {
+    path: '/graph-encoding',
+    component: () => import('../prototype/GraphEncoding.vue'),
+    meta: { requiresAuth: true },
+  },
   {
     path: '/login',
     component: () => import('../pages/LoginPage.vue'),

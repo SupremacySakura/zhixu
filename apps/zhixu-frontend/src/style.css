@@ -1,125 +1,199 @@
 @import 'tailwindcss';
 
-/* 暗色模式：class 方案（原 tailwind.config.js 的 darkMode: 'class'） */
-@custom-variant dark (&:where(.dark, .dark *));
-
 /* ============================================================
-   设计令牌 — 唯一权威来源：仓库根目录 DESIGN.md §2
-   Tailwind v4 CSS-first @theme；新代码一律使用以下令牌，
-   禁止新增硬编码色值/魔法数字。
+   设计令牌 — 世界：索引卡盒 Card Cabinet
+   权威来源：仓库根 DESIGN.md（v2 由 #22 在第一批 finish review 之后生成）
+   令牌取值冻结于 issue #24「世界参数与令牌表」，经 WCAG 实测与
+   Tailwind v4.2.1 编译验证（51/51 工具类生成）。
+   新代码一律使用下列令牌；禁止硬编码色值、魔法数字与任意值字号。
    ============================================================ */
+
+/* —— 西文/数字字面：Courier Prime 自托管（woff2 子集 38.1 KB，SIL OFL 1.1）
+   中文不另配字面：常用汉字 advance 恒为 1.0em，天然等宽，
+   混排时由下方 size-adjust 补偿西文视觉重量（汉字墨迹 ≈ Courier 大写 × 1.53）。
+   unicode-range 必须与子集化时的 unicodes 参数保持一致。 —— */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  size-adjust: 122%;
+  src: url('./assets/fonts/courier-prime-regular.woff2') format('woff2');
+  unicode-range:
+    U+0020-007E, U+00A0-00FF, U+2010-2027, U+2030-205E, U+2190-2199, U+21D2, U+2200-22FF,
+    U+25A0-25FF;
+}
+
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  size-adjust: 122%;
+  src: url('./assets/fonts/courier-prime-bold.woff2') format('woff2');
+  unicode-range:
+    U+0020-007E, U+00A0-00FF, U+2010-2027, U+2030-205E, U+2190-2199, U+21D2, U+2200-22FF,
+    U+25A0-25FF;
+}
+
 @theme {
-  /* —— 颜色：表面 —— */
-  --color-canvas: #f5f5f7;
-  --color-surface: #ffffff;
-  --color-surface-secondary: #f2f2f7;
-  --color-surface-tertiary: #eaeaef;
-  --color-material: rgb(255 255 255 / 0.72);
-  --color-material-thick: rgb(255 255 255 / 0.85);
-  --color-hairline: rgb(0 0 0 / 0.08);
-  --color-scrim: rgb(0 0 0 / 0.4);
+  /* —— 表面：暖中性四档，温度 = 马尼拉卡纸 ——
+     四者亮度比全部 < 1.2，层级绝不能靠底色差，只能靠规则线 + 硬偏移 + 蓝格线 */
+  --color-canvas: #e9e5db;
+  --color-surface: #f2eee4;
+  --color-surface-secondary: #e2ddd0;
+  --color-surface-tertiary: #fbf8ef;
 
-  /* —— 颜色：文本 —— */
-  --color-label: rgb(60 60 67);
-  --color-label-secondary: rgb(60 60 67 / 0.6);
-  --color-label-tertiary: rgb(60 60 67 / 0.33);
+  /* —— 规则线与遮罩 —— */
+  --color-hairline: rgb(24 24 24 / 0.26); /* 装饰纹理 1.72:1，不可作控件边界 */
+  --color-rule: rgb(24 24 24 / 0.48); /* 控件边界 3.01:1，达 3:1 下限 */
+  --color-grid: rgb(31 78 121 / 0.3); /* 蓝色格线 */
+  --color-scrim: rgb(24 24 24 / 0.55);
 
-  /* —— 颜色：品牌与语义 —— */
-  --color-primary: #10b674;
-  --color-primary-hover: #0da267;
-  --color-primary-pressed: #0b8f5b;
-  --color-primary-tint: rgb(16 182 116 / 0.12);
-  --color-danger: #ff3b30;
-  --color-danger-tint: rgb(255 59 48 / 0.1);
-  --color-warning: #ff9500;
-  --color-warning-tint: rgb(255 149 0 / 0.12);
-  --color-warning-strong: #c93400;
-  --color-info: #007aff;
-  --color-info-tint: rgb(0 122 255 / 0.1);
+  /* —— 墨色三档 —— */
+  --color-label: #181818; /* 13.09 */
+  --color-label-secondary: #605949; /*  5.12 */
+  --color-label-tertiary: #847c6b; /*  3.05，仅非关键文本/占位 */
 
-  /* —— 文件类型图标色（DESIGN.md §5.3 分色 tint 底 + 同色系字形）—— */
-  --color-purple: #5856d6;
-  --color-purple-tint: rgb(88 86 214 / 0.12);
-  --color-pink: #ff3757;
-  --color-pink-tint: rgb(255 55 95 / 0.1);
-  --color-teal: #0a9fce;
-  --color-teal-tint: rgb(90 200 250 / 0.16);
-  /* 向量化分块重叠高亮的字形色（design/VectorKnowledge.css --ov-ink），与 teal-tint 底配对 */
-  --color-teal-strong: #0e7490;
+  /* —— 结构与选中：图书馆蓝（唯一主色）—— */
+  --color-primary: #1f4e79;
+  --color-primary-hover: #17405f;
+  --color-primary-pressed: #123350;
+  --color-primary-tint: rgb(31 78 121 / 0.12);
 
-  /* —— 旧令牌（源自 tailwind.config.js），为兼容存量页面暂时保留 ——
-     新代码禁止使用，逐步替换为上方语义令牌，见 DESIGN.md §7 路线图 */
-  --color-background-light: #f6f8f7;
-  /* deprecated → --color-canvas */
-  --color-background-dark: #10221b;
-  /* deprecated → 暗色令牌后续单独定义 */
-  --font-display:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', system-ui, sans-serif;
-  /* deprecated → --font-sans */
+  /* —— AI 生成内容标记：品牌绿退役为主色，只作语义标记，永不作文字色 —— */
+  --color-ai: #10b674;
+  --color-ai-tint: rgb(16 182 116 / 0.18);
+
+  /* —— 语义色（在该世界底色上的调校）—— */
+  --color-danger: #a8322a; /* 4.91 */
+  --color-danger-tint: rgb(168 50 42 / 0.12);
+  --color-warning: #6f4700; /* 6.01 */
+  --color-warning-tint: rgb(111 71 0 / 0.12);
+  --color-info: #1f4e79; /* 6.39，与结构色同族 */
+  --color-info-tint: rgb(31 78 121 / 0.1);
+  --color-success: #0a5f3c; /* 5.70 */
+  --color-success-tint: rgb(10 95 60 / 0.12);
 
   /* —— 字体 —— */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', system-ui, sans-serif;
+    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    system-ui, sans-serif;
+  --font-type:
+    'Courier Prime', ui-monospace, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', monospace;
 
-  /* —— 字级：字号 + 行高 + 字重 + 字距一体化工具类（DESIGN.md §2.2）——
-     用法示例：<h1 class="text-display">、<p class="text-subhead"> */
-  --text-display: 34px;
-  --text-display--line-height: 40px;
+  /* —— 字级 8 档（消灭现存 17 种字号）—— */
+  --text-display: 26px;
+  --text-display--line-height: 34px;
   --text-display--font-weight: 700;
-  --text-display--letter-spacing: -0.02em;
-  --text-title-1: 28px;
+  --text-title: 19px;
+  --text-title--line-height: 26px;
+  --text-title--font-weight: 700;
+  --text-read: 16px;
+  --text-read--line-height: 28px;
+  --text-read--font-weight: 400;
+  --text-lead: 15px;
+  --text-lead--line-height: 21px;
+  --text-lead--font-weight: 700;
+  --text-body: 13px;
+  --text-body--line-height: 19px;
+  --text-body--font-weight: 400;
+  --text-note: 12px;
+  --text-note--line-height: 17px;
+  --text-note--font-weight: 400;
+  --text-micro: 12px;
+  --text-micro--line-height: 16px;
+  --text-micro--font-weight: 700;
+  --text-micro--letter-spacing: 0.06em;
+
+  /* —— 圆角：全部归零。v4 默认无 --radius-full 键，不显式写就杀不掉 rounded-full —— */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+  --radius-full: 0px;
+
+  /* —— 阴影：默认七档封死，只留三档无模糊硬偏移 —— */
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
+  --shadow-card: 2px 2px 0 rgb(24 24 24 / 0.13), 3px 3px 0 rgb(24 24 24 / 0.05);
+  --shadow-popover: 2px 2px 0 rgb(24 24 24 / 0.16);
+  --shadow-floating: 2px 2px 0 rgb(24 24 24 / 0.26);
+
+  /* —— 动效刻度（语义归 #29；命名空间必须是 --transition-duration-*）—— */
+  --transition-duration-micro: 90ms;
+  --transition-duration-standard: 160ms;
+  --transition-duration-sheet: 220ms;
+  --ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* —— z 序六档（命名空间是 --z-index-*）—— */
+  --z-index-rail: 10;
+  --z-index-toolbar: 20;
+  --z-index-slip: 30;
+  --z-index-menu: 40;
+  --z-index-dialog: 50;
+  --z-index-toast: 60;
+
+  /* —— 行长：正文 40em ≈ 640px，落在中文 36–40 字区间；硬上限 768px —— */
+  --container-measure: 40em;
+}
+
+/* ============================================================
+   迁移期兼容层（deprecated）
+   现有 17 个页面仍在用旧令牌名与旧组件类。这一层把它们映射到上面的
+   冻结取值，使「令牌先落地、页面分批改」期间界面不会整体塌掉。
+   ⚠️ 不构成新规范的一部分：新代码只用上方令牌与 .cabinet-*。
+   随 #28「分批实施与验收口径」的批次推进逐条删除，全部删完即迁移完成。
+   ============================================================ */
+@theme {
+  /* 旧字号名 → 最近的新档位（旧 title-1/2/3、headline、subhead、caption 共 493 处引用）
+     title-1 用于页面 h1（KnowledgeLibrary/KnowledgeDetail/EvolutionCenter/KnowledgeChunks），
+     故映射到 display 而非 title —— 否则页面标题会从 28px 掉到 19px，层级倒退。 */
+  --text-title-1: 26px;
   --text-title-1--line-height: 34px;
   --text-title-1--font-weight: 700;
-  --text-title-1--letter-spacing: -0.02em;
-  --text-title-2: 22px;
-  --text-title-2--line-height: 28px;
+  --text-title-2: 19px;
+  --text-title-2--line-height: 26px;
   --text-title-2--font-weight: 700;
-  --text-title-2--letter-spacing: -0.01em;
-  --text-title-3: 20px;
-  --text-title-3--line-height: 25px;
-  --text-title-3--font-weight: 600;
-  --text-title-3--letter-spacing: -0.01em;
-  --text-headline: 17px;
-  --text-headline--line-height: 24px;
-  --text-headline--font-weight: 600;
-  --text-body: 15px;
-  --text-body--line-height: 22px;
-  --text-body--font-weight: 400;
-  --text-subhead: 14px;
-  --text-subhead--line-height: 20px;
+  /* title-3 用于弹窗/面板 h2/h3（SettingsModal/ServiceStatusPanel/ConfirmDialog） */
+  --text-title-3: 19px;
+  --text-title-3--line-height: 26px;
+  --text-title-3--font-weight: 700;
+  --text-headline: 15px;
+  --text-headline--line-height: 21px;
+  --text-headline--font-weight: 700;
+  --text-subhead: 13px;
+  --text-subhead--line-height: 19px;
   --text-subhead--font-weight: 400;
-  --text-subhead--letter-spacing: 0.01em;
   --text-caption: 12px;
-  --text-caption--line-height: 16px;
+  --text-caption--line-height: 17px;
   --text-caption--font-weight: 400;
-  --text-caption--letter-spacing: 0.02em;
 
-  /* —— 圆角（DESIGN.md §2.3；覆盖 v4 默认尺度，存量 rounded-* 类随之变大）—— */
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
-  --radius-full: 9999px;
+  /* 毛玻璃退役：material 别名直指卡面实色 */
+  --color-material: #f2eee4;
+  --color-material-thick: #f2eee4;
 
-  /* —— 阴影（柔和双层，随表面增大而加深）—— */
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.06);
-  --shadow-popover: 0 2px 8px rgb(0 0 0 / 0.06), 0 12px 32px rgb(0 0 0 / 0.12);
-  --shadow-floating: 0 4px 24px rgb(0 0 0 / 0.1);
+  /* 文件类型分色并入语义四色，不再新增第五个色相 */
+  --color-purple: #1f4e79;
+  --color-purple-tint: rgb(31 78 121 / 0.12);
+  --color-pink: #a8322a;
+  --color-pink-tint: rgb(168 50 42 / 0.12);
+  --color-teal: #0a5f3c;
+  --color-teal-tint: rgb(10 95 60 / 0.12);
+  --color-teal-strong: #0a5f3c;
 
-  /* —— 动效（DESIGN.md §2.4；--ease-* 覆盖 v4 默认曲线）—— */
-  --duration-micro: 140ms;
-  --duration-standard: 240ms;
-  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-
-  /* —— 层级（DESIGN.md §3；供自定义 CSS 引用）—— */
-  --z-sticky: 20;
-  --z-panel: 30;
-  --z-menu: 40;
-  --z-modal: 50;
-  --z-toast: 60;
+  /* warning-strong 仍有 30 处引用，映射到比 warning 更深一档 */
+  --color-warning-strong: #4a2f00;
 }
 
 @layer base {
@@ -137,78 +211,136 @@
 
   ::selection {
     background-color: var(--color-primary-tint);
+    color: var(--color-label);
   }
 
-  /* 键盘导航 focus 环：品牌绿 70% 透明（DESIGN.md §6 可访问性） */
+  /* 焦点环用图书馆蓝（四表面 6.39–8.16，远超 3:1），与选中同语汇 */
   :focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, transparent);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
 }
 
 @layer components {
+  /* —— 新世界组件：只有 #24 冻结的五个骨架。
+     完整 API 与变体留给 #19「组件原子层范围与 API」，此处不越界定案。 —— */
+
+  .cabinet-card {
+    @apply bg-surface text-body;
+    border: 1px solid var(--color-hairline);
+    box-shadow: var(--shadow-card);
+  }
+
+  .cabinet-btn {
+    @apply inline-flex items-center gap-2 bg-surface px-4 text-lead;
+    min-height: 2.25rem;
+    border: 1px solid var(--color-rule);
+    box-shadow: var(--shadow-popover);
+    color: var(--color-label);
+    transition-property: box-shadow, background-color;
+    transition-duration: var(--transition-duration-micro);
+    transition-timing-function: var(--ease-settle);
+  }
+
+  .cabinet-btn-primary {
+    border-color: var(--color-primary-pressed);
+    background-color: var(--color-primary);
+    box-shadow: var(--shadow-floating);
+    color: var(--color-surface-tertiary);
+  }
+
+  /* AI 生成内容标记：绿只做底与条，绝不做字 */
+  .cabinet-ai {
+    @apply bg-ai-tint text-label;
+    border-top: 2px solid var(--color-ai);
+  }
+
+  /* 打字机编号/计数 */
+  .cabinet-num {
+    @apply font-type text-micro tabular-nums;
+  }
+
+  /* —— 过渡版旧组件类：外观已换到新世界，API 保持不变，
+     待 #28 的批次把调用点改为 .cabinet-* 后删除本段。 —— */
+
   .knowledge-button-primary,
   .knowledge-button-secondary,
   .knowledge-button-tint {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-subhead font-semibold transition-colors hover:brightness-95 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 px-4 text-lead disabled:cursor-not-allowed disabled:opacity-50;
+    min-height: 2.25rem;
+    border: 1px solid var(--color-rule);
+    transition-property: box-shadow, background-color;
+    transition-duration: var(--transition-duration-micro);
+    transition-timing-function: var(--ease-settle);
   }
 
   .knowledge-button-primary {
-    @apply bg-primary text-surface hover:bg-primary-hover active:bg-primary-pressed;
+    border-color: var(--color-primary-pressed);
+    background-color: var(--color-primary);
+    box-shadow: var(--shadow-floating);
+    color: var(--color-surface-tertiary);
   }
 
   .knowledge-button-secondary {
-    @apply border border-hairline bg-surface text-label hover:bg-surface-secondary;
+    background-color: var(--color-surface);
+    box-shadow: var(--shadow-popover);
+    color: var(--color-label);
   }
 
   .knowledge-button-tint {
-    @apply bg-primary-tint text-primary-pressed;
+    background-color: var(--color-primary-tint);
+    color: var(--color-primary-pressed);
   }
 
   .knowledge-text-action {
-    @apply inline-flex min-h-11 items-center gap-2 text-subhead font-semibold text-primary-pressed hover:underline disabled:cursor-not-allowed disabled:text-label-secondary disabled:no-underline;
+    @apply inline-flex min-h-9 items-center gap-2 text-lead text-primary-pressed underline disabled:cursor-not-allowed disabled:text-label-secondary disabled:no-underline;
   }
 
   .knowledge-icon-button {
-    @apply inline-flex h-11 w-11 items-center justify-center rounded-sm text-label-secondary hover:bg-surface-secondary disabled:opacity-50;
+    @apply inline-flex h-9 w-9 items-center justify-center text-label-secondary disabled:opacity-50;
+    border: 1px solid var(--color-rule);
   }
 
   .knowledge-input {
-    @apply min-h-11 rounded-sm border border-hairline bg-surface px-3 text-body text-label outline-none focus:border-primary focus:ring-2 focus:ring-primary-tint disabled:opacity-50;
+    @apply min-h-9 bg-surface px-3 text-body text-label outline-none focus:ring-2 focus:ring-primary-tint disabled:opacity-50;
+    border: 1px solid var(--color-rule);
   }
 
   .knowledge-textarea {
-    @apply w-full resize-y rounded-sm border border-hairline bg-surface px-3 py-3 text-body leading-7 text-label outline-none focus:border-primary focus:ring-2 focus:ring-primary-tint;
+    @apply w-full resize-y bg-surface px-3 py-3 text-body text-label outline-none focus:ring-2 focus:ring-primary-tint;
+    border: 1px solid var(--color-rule);
   }
 
+  /* 无圆角、实色遮罩、去掉毛玻璃 */
   .knowledge-dialog {
-    @apply fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-xl border-0 bg-transparent p-0 text-label;
+    @apply fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto border-0 bg-transparent p-0 text-label;
   }
 
   .knowledge-dialog::backdrop {
-    @apply bg-scrim backdrop-blur-sm;
+    background-color: var(--color-scrim);
   }
 
   .knowledge-markdown {
-    @apply break-words text-body leading-8;
+    @apply break-words text-read;
+    max-width: var(--container-measure);
   }
 
   .knowledge-markdown h1 {
-    @apply mb-5 mt-7 text-title-1;
+    @apply mb-5 mt-7 text-display;
   }
 
   .knowledge-markdown h2 {
-    @apply mb-4 mt-7 text-title-2;
+    @apply mb-4 mt-6 text-title;
   }
 
   .knowledge-markdown h3 {
-    @apply mb-3 mt-6 text-headline;
+    @apply mb-3 mt-5 text-lead;
   }
 
   .knowledge-markdown h4,
   .knowledge-markdown h5,
   .knowledge-markdown h6 {
-    @apply mb-3 mt-5 text-body font-semibold;
+    @apply mb-3 mt-4 text-lead;
   }
 
   .knowledge-markdown p {
@@ -224,15 +356,17 @@
   }
 
   .knowledge-markdown blockquote {
-    @apply my-5 border-l-4 border-primary bg-primary-tint px-4 py-3 text-label-secondary;
+    @apply my-6 py-3 text-label-secondary;
+    border-top: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
   }
 
   .knowledge-markdown pre {
-    @apply my-4 overflow-x-auto rounded-sm bg-surface-secondary p-4 text-subhead leading-7;
+    @apply my-4 overflow-x-auto bg-surface-secondary p-4 text-body;
   }
 
   .knowledge-markdown code {
-    @apply rounded-sm bg-surface-secondary px-1 py-0.5 text-subhead;
+    @apply bg-surface-secondary px-1 py-0.5 text-body;
   }
 
   .knowledge-markdown pre code {
@@ -244,16 +378,18 @@
   }
 
   .knowledge-markdown table {
-    @apply my-4 block max-w-full overflow-x-auto border-collapse text-subhead;
+    @apply my-4 block max-w-full overflow-x-auto border-collapse text-body;
   }
 
   .knowledge-markdown td,
   .knowledge-markdown th {
-    @apply border border-hairline px-3 py-2 text-left;
+    @apply px-3 py-2 text-left;
+    border: 1px solid var(--color-hairline);
   }
 
   .knowledge-markdown hr {
-    @apply my-6 border-hairline;
+    @apply my-6;
+    border-color: var(--color-hairline);
   }
 
   .markdown-image-note {
@@ -261,17 +397,20 @@
   }
 }
 
+/* 窄屏：弹窗转为贴底抽屉，直角、无偏移、上边框用控件边界色 */
 @media (max-width: 640px) {
   .knowledge-dialog {
-    @apply bottom-0 top-auto mb-0 w-full max-w-none rounded-b-none;
+    @apply bottom-0 top-auto mb-0 w-full max-w-none;
+    border-top: 1px solid var(--color-rule);
   }
 }
 
 /* ============================================================
-   减弱动态效果（DESIGN.md §6）
-   - JS 弹簧动画由 App.vue 的 <MotionConfig reduced-motion="user"> 全局降级；
-   - 此处兜底所有 CSS transition / keyframes 动画。
+   四个 prefers-* 降级
    ============================================================ */
+
+/* 减弱动态效果：CSS 动画兜底；JS 弹簧由 App.vue 的
+   <MotionConfig reduced-motion="user"> 全局降级。 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -283,21 +422,30 @@
   }
 }
 
-/* 降低透明度：半透明材质转为实心（DESIGN.md §6） */
+/* 降低透明度：本世界已无毛玻璃，保留此块给未来悬浮层；当前等价于无操作。 */
 @media (prefers-reduced-transparency: reduce) {
-  .bg-material,
-  .bg-material-thick {
+  .cabinet-card,
+  .knowledge-dialog {
     background-color: var(--color-surface);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
 }
 
-/* 增强对比度：材质/卡片补明确的 contrasting border（DESIGN.md §6） */
+/* 增强对比度：把两档浅墨色各加深一档，装饰线提到控件边界强度 */
 @media (prefers-contrast: more) {
-  .bg-material,
-  .bg-material-thick,
-  .bg-surface {
-    border: 1px solid var(--color-hairline);
+  :root {
+    --color-label-secondary: #4d4738; /* 6.81 */
+    --color-label-tertiary: #605949; /* 5.12 */
+    --color-hairline: rgb(24 24 24 / 0.48);
+  }
+}
+
+/* 强制色模式：让系统接管配色，避免自定义令牌覆盖用户主题 */
+@media (forced-colors: active) {
+  .cabinet-card,
+  .cabinet-btn,
+  .knowledge-button-primary,
+  .knowledge-button-secondary,
+  .knowledge-button-tint {
+    border: 1px solid CanvasText;
   }
 }
