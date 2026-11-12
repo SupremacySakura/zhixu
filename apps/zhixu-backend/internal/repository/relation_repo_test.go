@@ -27,6 +27,7 @@ func TestNormalizeRelationPair(t *testing.T) {
 		{"related 归一为小 ID 在前", model.RelationTypeRelated, 9, 3, 3, 9},
 		{"related 已有序保持不变", model.RelationTypeRelated, 3, 9, 3, 9},
 		{"contrasts 归一为小 ID 在前", model.RelationTypeContrasts, 8, 2, 2, 8},
+		{"contradicts 归一为小 ID 在前", model.RelationTypeContradicts, 8, 2, 2, 8},
 		{"depends_on 保持方向", model.RelationTypeDependsOn, 9, 3, 9, 3},
 		{"supplements 保持方向", model.RelationTypeSupplements, 9, 3, 9, 3},
 		{"updates 保持方向", model.RelationTypeUpdates, 9, 3, 9, 3},
@@ -58,6 +59,27 @@ func TestCreateRelationNormalizesSymmetricPair(t *testing.T) {
 	require.Equal(t, uint(3), row.SourceID)
 	require.Equal(t, uint(9), row.TargetID)
 	require.Equal(t, uint(5), row.ID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 矛盾关系同样幂等：同一对知识已确认过，再建一次只回读旧行，不插入第二行。
+func TestCreateContradictsRelationReusesExistingRow(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery(relationPairQuery).WillReturnRows(sqlmock.NewRows([]string{
+		"id", "user_id", "source_id", "target_id", "relation_type", "status", "source",
+	}).AddRow(9, 2, 3, 9, "contradicts", "confirmed", "manual"))
+
+	repo := NewRelationRepository(db)
+	row, err := repo.Create(context.Background(), &model.KnowledgeRelation{
+		UserID: 2, SourceID: 9, TargetID: 3, RelationType: model.RelationTypeContradicts,
+		Status: model.RelationConfirmed, Source: model.RelationSourceManual,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, uint(9), row.ID, "复用既有行，不插入第二行")
+	require.Equal(t, uint(3), row.SourceID, "对称关系按 min/max 归一后命中同一行")
+	require.Equal(t, uint(9), row.TargetID)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

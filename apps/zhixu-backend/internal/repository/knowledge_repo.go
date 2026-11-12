@@ -233,7 +233,7 @@ func (r *KnowledgeRepository) SetOutdated(ctx context.Context, userID, id uint, 
 // Update 编辑知识正文：先保存编辑前的版本快照，再更新正文并重新排队分块与向量化。
 // 锁序与向量化 worker 一致（先任务、后知识行）；旧分块的点 ID 记录到新任务，由任务启动时清理，
 // 避免旧向量残留占用检索候选位。
-func (r *KnowledgeRepository) Update(ctx context.Context, userID, id uint, title, content, sourceHash string, baseVersion uint) (*model.KnowledgeItem, error) {
+func (r *KnowledgeRepository) Update(ctx context.Context, userID, id uint, title, content, sourceHash string, changeSource model.KnowledgeChangeSource, baseVersion uint) (*model.KnowledgeItem, error) {
 	var updated model.KnowledgeItem
 	err := r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var task model.VectorizeTask
@@ -257,9 +257,14 @@ func (r *KnowledgeRepository) Update(ctx context.Context, userID, id uint, title
 		if item.Title == title && item.Content == content {
 			return nil
 		}
+		// 快照记录的是「被替换掉的旧正文」由谁产生；新来源写在条目上，供版本列表标注当前版本。
+		previousSource := item.ChangeSource
+		if previousSource == "" {
+			previousSource = model.KnowledgeChangeSourceManual
+		}
 		if err := tx.Create(&model.KnowledgeVersion{
 			UserID: userID, KnowledgeID: id, VersionNumber: item.Version,
-			Title: item.Title, Content: item.Content, ChangeSource: model.KnowledgeChangeSourceManual,
+			Title: item.Title, Content: item.Content, ChangeSource: previousSource,
 		}).Error; err != nil {
 			return err
 		}
@@ -270,7 +275,7 @@ func (r *KnowledgeRepository) Update(ctx context.Context, userID, id uint, title
 		}
 		if err := tx.Model(&model.KnowledgeItem{}).Where("id = ? AND user_id = ?", id, userID).Updates(map[string]any{
 			"title": title, "content": content, "source_hash": sourceHash,
-			"content_hash": utils.KnowledgeContentHash(content), "version": item.Version + 1,
+			"content_hash": utils.KnowledgeContentHash(content), "version": item.Version + 1, "change_source": changeSource,
 			"vector_state": "", "chunks_total": 0, "chunks_ready": 0, "chunks_failed": 0,
 			"embedding_model": "", "embedding_version": 0, "vector_error": "",
 			// 过时判定针对的是被判定时的正文：用户改写正文即视为自行处理，标记一并清除。
@@ -297,6 +302,7 @@ func (r *KnowledgeRepository) Update(ctx context.Context, userID, id uint, title
 			}
 		}
 		updated.Title, updated.Content, updated.SourceHash = title, content, sourceHash
+		updated.ChangeSource = changeSource
 		updated.Version = item.Version + 1
 		updated.VectorState = model.VectorPending
 		updated.ChunksTotal, updated.ChunksReady, updated.ChunksFailed = 0, 0, 0

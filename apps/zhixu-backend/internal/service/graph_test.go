@@ -138,6 +138,30 @@ func TestGraphWithoutCenterBuildsRecentSubgraph(t *testing.T) {
 	require.Equal(t, "知识二摘要", graphNodeByID(t, view, 2).Summary)
 }
 
+// 矛盾关系与其它关系类型走同一条读取路径：图谱原样透出 contradicts，前端据此画矛盾边。
+func TestGraphIncludesContradictsEdges(t *testing.T) {
+	store := &graphFakeStore{
+		recent: []repository.GraphNodeRow{
+			graphRow(1, "知识一", "manual", graphBaseTime.Add(time.Hour)),
+			graphRow(2, "知识二", "web", graphBaseTime),
+		},
+		nodes: map[uint]repository.GraphNodeRow{
+			1: graphRow(1, "知识一", "manual", graphBaseTime.Add(time.Hour)),
+			2: graphRow(2, "知识二", "web", graphBaseTime),
+		},
+		relations: []model.KnowledgeRelation{
+			{ID: 41, UserID: 2, SourceID: 1, TargetID: 2, RelationType: model.RelationTypeContradicts, Status: model.RelationConfirmed, Source: model.RelationSourceManual},
+		},
+	}
+
+	view, err := NewGraphService(store).Graph(context.Background(), 2, GraphQuery{})
+	require.NoError(t, err)
+	require.Len(t, view.Edges, 1)
+	require.Equal(t, model.RelationTypeContradicts, view.Edges[0].RelationType)
+	require.Equal(t, model.RelationSourceManual, view.Edges[0].Source)
+	require.Equal(t, model.RelationConfirmed, view.Edges[0].Status)
+}
+
 // 有中心时返回中心 + 一跳邻居，方向保留 source_id→target_id，归档对端被丢弃。
 func TestGraphWithCenterReturnsOneHopNeighbors(t *testing.T) {
 	center := graphRow(5, "中心知识", "pdf", graphBaseTime)

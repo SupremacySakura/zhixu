@@ -202,7 +202,7 @@ func (p *RelationProcessor) Process(ctx context.Context, task *model.AiTask) (js
 		if len(accepted) == RelationSuggestionMax {
 			break
 		}
-		if !relation.RelationType.Valid() || !selected[relation.TargetID] ||
+		if !relation.RelationType.Recommendable() || !selected[relation.TargetID] ||
 			relation.Confidence < RelationConfidenceMin || relation.Confidence > 1 {
 			continue
 		}

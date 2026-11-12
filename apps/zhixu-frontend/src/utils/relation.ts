@@ -7,6 +7,7 @@ export const RELATION_TYPE_LABELS: Record<RelationType, string> = {
   supplements: '补充说明',
   contrasts: '对比',
   updates: '更新替代',
+  contradicts: '矛盾',
 }
 
 export const RELATION_TYPE_OPTIONS: { value: RelationType; label: string }[] = [
@@ -15,6 +16,7 @@ export const RELATION_TYPE_OPTIONS: { value: RelationType; label: string }[] = [
   { value: 'supplements', label: RELATION_TYPE_LABELS.supplements },
   { value: 'contrasts', label: RELATION_TYPE_LABELS.contrasts },
   { value: 'updates', label: RELATION_TYPE_LABELS.updates },
+  { value: 'contradicts', label: RELATION_TYPE_LABELS.contradicts },
 ]
 
 export const relationTypeLabel = (type: RelationType) => RELATION_TYPE_LABELS[type] ?? type

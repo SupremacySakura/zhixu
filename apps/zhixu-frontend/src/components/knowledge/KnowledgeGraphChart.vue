@@ -79,7 +79,7 @@ function buildOption(): EChartsCoreOption {
     target: String(edge.target_id),
     relation_type: edge.relation_type,
     lineStyle: {
-      color: graphEdgeColor(palette, edge.source),
+      color: graphEdgeColor(palette, edge.source, edge.relation_type),
       width: edge.status === 'suggested' ? 1.5 : 2,
       type: edge.status === 'suggested' ? 'dashed' : 'solid',
       opacity: edge.status === 'suggested' ? 0.65 : 0.9,

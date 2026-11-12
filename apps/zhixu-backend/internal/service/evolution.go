@@ -201,6 +201,17 @@ type EvolutionOutdatedMarker interface {
 	SetOutdated(context.Context, uint, uint, *time.Time, string) error
 }
 
+// EvolutionReviser 是「采纳修订」需要的知识改写能力（*KnowledgeService 满足）。
+// 修订稿走既有版本链路：生成新版本、变更来源记为 ai，历史版本不被覆盖。
+type EvolutionReviser interface {
+	AcceptRevision(context.Context, uint, uint, string, string) (*model.KnowledgeItem, error)
+}
+
+// EvolutionRelationWriter 是「建立矛盾关系」需要的关系写入能力（*RelationService 满足）。
+type EvolutionRelationWriter interface {
+	Create(context.Context, uint, uint, RelationCreateInput) (*RelationView, error)
+}
+
 // EvolutionService 负责提醒的读取、裁决与手动重跑；检测本身在 evolve 任务处理器里。
 type EvolutionService struct {
 	Alerts    EvolutionAlertStore
@@ -209,6 +220,10 @@ type EvolutionService struct {
 	Archiver EvolutionArchiver
 	// Outdated 为可选依赖：为 nil 时「标记过时 / 标记已核实」不可用。
 	Outdated EvolutionOutdatedMarker
+	// Reviser 为可选依赖：为 nil 时「采纳修订」不可用。
+	Reviser EvolutionReviser
+	// Relations 为可选依赖：为 nil 时「建立矛盾关系」不可用。
+	Relations EvolutionRelationWriter
 	// Logs 为可选依赖：为 nil 时跳过操作日志。
 	Logs OperationLogWriter
 	// Tasks 为可选依赖：为 nil 时「重新检查」不可用。
@@ -361,12 +376,62 @@ func (s *EvolutionService) effectFor(ctx context.Context, action model.Evolution
 			}
 			return s.Outdated.SetOutdated(ctx, alert.UserID, target, nil, "")
 		}, nil
-	case model.EvolutionActionAcceptRevision, model.EvolutionActionCreateRelation:
-		// 两种动作依赖后续迭代的能力：采纳修订要走 AI 版本链路，矛盾关系随冲突识别落地。
-		return nil, ErrEvolutionUnsupported
+	case model.EvolutionActionAcceptRevision:
+		if s.Reviser == nil {
+			return nil, fmt.Errorf("%w: 修订采纳能力未配置", ErrEvolutionUnsupported)
+		}
+		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
+			ids := alert.SubjectIDList()
+			if len(ids) < 2 {
+				return fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+			}
+			payload := ParseEvolutionPayload(alert.Payload)
+			// 修订稿只在证据全部校验通过时才留在载荷里；没有修订稿就没有可采纳的内容，
+			// 这里按「动作不可用」拒绝（handler 映射 400），而不是静默关掉提醒。
+			if strings.TrimSpace(payload.RevisedTitle) == "" || strings.TrimSpace(payload.RevisedContent) == "" {
+				return fmt.Errorf("%w: 该提醒没有可采纳的修订稿", ErrEvolutionInvalid)
+			}
+			// 修订稿写在触发侧的知识上：它是本次检查的对象，被比对的一条只是参照。
+			if _, err := s.Reviser.AcceptRevision(ctx, alert.UserID, ids[0], payload.RevisedTitle, payload.RevisedContent); err != nil {
+				return evolutionEffectError(err)
+			}
+			return nil
+		}, nil
+	case model.EvolutionActionCreateRelation:
+		if s.Relations == nil {
+			return nil, fmt.Errorf("%w: 关系写入能力未配置", ErrEvolutionUnsupported)
+		}
+		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
+			ids := alert.SubjectIDList()
+			if len(ids) < 2 {
+				return fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+			}
+			// 冲突提醒的「建立矛盾关系」固定写 contradicts（对称，仓储按 min/max 归一），
+			// 来源为 manual、状态为已确认；同对已存在时仓储复用既有行，不会重复写入。
+			_, err := s.Relations.Create(ctx, alert.UserID, ids[0], RelationCreateInput{
+				TargetID: ids[1], RelationType: model.RelationTypeContradicts,
+			})
+			if err != nil {
+				return evolutionEffectError(err)
+			}
+			return nil
+		}, nil
 	default:
 		return nil, nil
 	}
+}
+
+// evolutionEffectError 把副作用里的知识/关系错误翻译成裁决接口能表达的错误：
+// 知识已被改动（版本不符、非就绪）属于「现在做不了」，按 400 拒绝并保留原文案；
+// 其余错误原样上抛，交给 handler 归为 500。
+func evolutionEffectError(err error) error {
+	if errors.Is(err, repository.ErrKnowledgeConflict) {
+		return fmt.Errorf("%w: 知识状态已变化，请刷新后重试", ErrEvolutionInvalid)
+	}
+	if errors.Is(err, ErrRelationInvalid) {
+		return fmt.Errorf("%w: %s", ErrEvolutionInvalid, err.Error())
+	}
+	return err
 }
 
 // outdatedSubject 取过时提醒里被判定过时的那条知识：subject_ids[1] 是被比对的知识，

@@ -58,7 +58,7 @@ func (knowledgeHandlerStore) CreateManual(_ context.Context, item *model.Knowled
 	return nil
 }
 
-func (knowledgeHandlerStore) Update(_ context.Context, user, id uint, title, content, sourceHash string, baseVersion uint) (*model.KnowledgeItem, error) {
+func (knowledgeHandlerStore) Update(_ context.Context, user, id uint, title, content, sourceHash string, _ model.KnowledgeChangeSource, baseVersion uint) (*model.KnowledgeItem, error) {
 	if user != 2 || id != 10 {
 		return nil, gorm.ErrRecordNotFound
 	}
@@ -300,7 +300,7 @@ func (knowledgeVersionHandlerStore) GetVersion(_ context.Context, user, id, vers
 	return &model.KnowledgeVersion{ID: 1, UserID: 2, KnowledgeID: 10, VersionNumber: 1, Title: "第一版", Content: "# 第一版正文", ChangeSource: model.KnowledgeChangeSourceManual}, nil
 }
 
-func (knowledgeVersionHandlerStore) Update(_ context.Context, user, id uint, title, content, sourceHash string, baseVersion uint) (*model.KnowledgeItem, error) {
+func (knowledgeVersionHandlerStore) Update(_ context.Context, user, id uint, title, content, sourceHash string, _ model.KnowledgeChangeSource, baseVersion uint) (*model.KnowledgeItem, error) {
 	if user != 2 || id != 10 || baseVersion != 2 {
 		return nil, repository.ErrKnowledgeConflict
 	}

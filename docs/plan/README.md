@@ -42,8 +42,7 @@ last_reviewed: 2026-11-11
 
 **关键路径**：P1（标签/版本表）→ P3（整理/关联）→ P4（演化）→ P5（实验）。P2 独立于数据表依赖，可并行启动。
 
-**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 已完成（2026-11-11，W3.1~W3.5，AC-04 与 AC-07 闭环）；P4-W4.1 局部知识图谱已完成（2026-11-11，AC-10 待真机验收）；P4-W4.2 已完成（2026-11-12：GitHub #9 建表/content_hash 回填/evolve 任务/列表摘要裁决接口，#10 语义近重复与 `POST /evolve` 判定契约）；P4-W4.3 已完成（2026-11-12，GitHub #11：过时识别放行与弱信号双侧证据门槛、`mark_outdated`/`mark_verified` 副作用与操作日志、详情页过时横幅与「重新检查」）；P4-W4.5 已完成（2026-11-12，GitHub #13：`/home/evolution` 演化中心两页签、类型与状态筛选、并排证据高亮、按类型裁剪的裁决动作与备注、首页「待处理提醒」卡片只取 summary）；W4.4 见 #12；P5 未开始。
-
+**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 已完成（2026-11-11，W3.1~W3.5，AC-04 与 AC-07 闭环）；P4-W4.1 局部知识图谱已完成（2026-11-11，AC-10 待真机验收）；P4-W4.2 已完成（2026-11-12：GitHub #9 建表/content_hash 回填/evolve 任务/列表摘要裁决接口，#10 语义近重复与 `POST /evolve` 判定契约）；P4-W4.3 已完成（2026-11-12，GitHub #11：过时识别放行与弱信号双侧证据门槛、`mark_outdated`/`mark_verified` 副作用与操作日志、详情页过时横幅与「重新检查」）；P4-W4.4 已完成（2026-11-12，GitHub #12：`contradicts` 第六种关系类型与 AI 推荐白名单排除、冲突提醒接入 evolve 管线与修订稿门槛、`accept_revision` 走版本链路写 `change_source=ai` 新版本、`create_relation` 写 `confirmed`+`manual` 矛盾关系、图谱与图例渲染矛盾边）；P4-W4.5 已完成（2026-11-12，GitHub #13：`/home/evolution` 演化中心两页签、类型与状态筛选、并排证据高亮、按类型裁剪的裁决动作与备注、首页「待处理提醒」卡片只取 summary）；P5 未开始。
 ## 数据库变更总表
 
 新增表（GORM AutoMigrate，全部带 `user_id` 或经知识条目归属隔离）：
@@ -62,7 +61,7 @@ last_reviewed: 2026-11-11
 
 | 表 | 变更 | 引入阶段 |
 |---|---|---|
-| `knowledge_items` | +`source_type`(manual/markdown/pdf/web)、+`source_url`、+`summary`、+`keywords`(JSON)、+`is_favorite`、+`version`(乐观锁) | P1（source_type/favorite/version）、P3（summary/keywords） |
+| `knowledge_items` | +`source_type`(manual/markdown/pdf/web)、+`source_url`、+`summary`、+`keywords`(JSON)、+`is_favorite`、+`version`(乐观锁)、+`change_source`(manual/ai，当前正文来源) | P1（source_type/favorite/version）、P3（summary/keywords）、P4-W4.4（change_source） |
 | `knowledge_chunks` | `content` 建 MySQL ngram 全文索引（`WITH PARSER ngram`） | P2-W2.1 |
 | `vectorize_tasks` | +`stale_chunk_ids`(TEXT)、+`cleanup_collection`（编辑后旧向量按点清理） | P1-W1.2 |
 

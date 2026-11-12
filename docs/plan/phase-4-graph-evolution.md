@@ -74,6 +74,8 @@ status: pending
 - **Go**：接受后自动建 `knowledge_relations(type=contradicts)`。
 - **依赖**：W4.3（复用同一工作流与回调）。**验收**：AC-13 冲突部分——导入观点矛盾的两篇文档，出现冲突提醒并展示双方引文。
 
+**完成情况（2026-11-12，第四部分 / GitHub #12）**：冲突识别、修订稿采纳与矛盾关系已落地——关系类型新增第六种 `contradicts`（对称，写入前 min/max 归一，唯一键 `(user_id, source_id, target_id, relation_type)` 不变），并新增 `RelationType.Recommendable()` 作为 AI 关联推荐的白名单（五值 true、`contradicts` false），`relate.go` 与 `relation_task.go` 两处清洗改用它——`Valid()` 是「所有合法类型」，直接当白名单用会让模型建议出矛盾关系，ADR-0002 明确要求排除；冲突提醒接入同一条 evolve 管线（删除 #11 留下的 `if conflict { continue }` 跳过分支），相似度 0.75~0.90 的候选只接受冲突结论，同一对同时给出重复与冲突时按 `evolveTypePriority` 只留重复；修订稿由同一次模型调用产出并存入提醒载荷，门槛在客户端清洗（`sanitizeEvolveJudgements`）与处理器（`buildAlert` 的 `evolveRevisionUsable`）两处各守一道：证据未全部定位或正文超 20000 字即整份丢弃（不截断），提醒严重度降级为 `review`，建议动作随之从 `accept_revision` 改回 `create_relation`；裁决侧 `accept_revision` 经 `EvolutionService.Reviser` 调到 `KnowledgeService.AcceptRevision`，走既有版本链路写为新版本（`change_source=ai`），原文进版本快照、不覆盖历史，无修订稿时 effectFor 直接返回 `ErrEvolutionInvalid` 由 handler 映射 400；`create_relation` 经 `EvolutionService.Relations` 以 `subject_ids[0]` 为源、`[1]` 为目标写一条 `confirmed`+`manual` 的 `contradicts`，同对已存在时由仓储 `findPair`/`confirm` 复用而不重复插入。版本来源语义随之补全：`knowledge_items` 新增 `change_source`(manual/ai) 记录**当前正文**的产生来源，版本快照行记录**被替换掉的旧正文**的来源，版本列表的「当前」条目据此标注（此前硬编码 manual，采纳修订只能错记在被替换的旧版本上）。图谱侧后端无需改动（`relation_type` 原样透出、不按类型过滤），前端补 `contradicts` 的「矛盾」标签与选项（仍是 `utils/relation.ts` 唯一文案源）、矛盾边改用 `--color-danger` 系而非按来源分色（类型比来源更需要一眼可辨），图例项仅在图中真的出现矛盾边时显示。测试覆盖：对称归一与幂等复用、AI 推荐不产出矛盾、修订稿门槛三分支（客户端清洗 + 处理器各一）、采纳修订生成新版本且原文入快照、无修订稿 400、矛盾关系不重复、图谱返回矛盾边。后端 `go build`/`go vet`/`go test ./...` 全绿；前端 `npm test` 与 `npm run typecheck` 全绿（本单范围内 47 文件 324 用例，合并 #13 后 52 文件 354 用例）。
+
 ### W4.5 演化中心与人工审核（FR-EVO-05）
 
 - **后端**：
