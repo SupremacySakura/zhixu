@@ -5,9 +5,11 @@ import { Motion } from 'motion-v'
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import FilePagination from '../components/file-management/FilePagination.vue'
 import { EVOLUTION_PAGE_SIZE, useEvolutionAlerts } from '../composables/useEvolutionAlerts'
+import { pendingTotal } from '../services/apis/evolution'
 import type {
   EvolutionAction,
   EvolutionAlert,
+  EvolutionAlertStatus,
   EvolutionAlertType,
 } from '../services/apis/evolution'
 import { evolutionActionLabel } from '../utils/operationLog'
@@ -39,7 +41,7 @@ const TYPE_LABELS: Record<EvolutionAlertType, string> = {
   outdated: '过时',
   conflict: '冲突',
 }
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<EvolutionAlertStatus, string> = {
   pending: '待处理',
   deferred: '暂不处理',
   resolved: '已处理',
@@ -87,7 +89,8 @@ const note = ref('')
 
 const selectedAlert = computed(() => items.value.find(item => item.id === selectedId.value) ?? null)
 const filtered = computed(() => Boolean(type.value || status.value))
-const pendingCount = computed(() => (summary.value?.pending ?? 0) + (summary.value?.deferred ?? 0))
+/** 页头展示待办视野总数（待处理 + 暂不处理）；首页卡片的「待处理」只算 pending。 */
+const pendingCount = computed(() => pendingTotal(summary.value))
 
 const archived = (alert: EvolutionAlert) => alert.subjects.some(subject => subject.archived)
 const hasRevision = (alert: EvolutionAlert) => Boolean(alert.payload.revised_content?.trim())

@@ -9,11 +9,17 @@ import {
 } from '../../services/apis/evolution'
 import type { EvolutionAlert } from '../../services/apis/evolution'
 
-vi.mock('../../services/apis/evolution', () => ({
-  listEvolutionAlerts: vi.fn(),
-  getEvolutionSummary: vi.fn(),
-  resolveEvolutionAlert: vi.fn(),
-}))
+vi.mock('../../services/apis/evolution', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../services/apis/evolution')>()
+  return {
+    // pendingTotal 是纯计算，保留真实实现；三个接口打桩。
+    pendingTotal: actual.pendingTotal,
+    evolutionStatusesParam: actual.evolutionStatusesParam,
+    listEvolutionAlerts: vi.fn(),
+    getEvolutionSummary: vi.fn(),
+    resolveEvolutionAlert: vi.fn(),
+  }
+})
 vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
 
 const listMock = vi.mocked(listEvolutionAlerts)
@@ -301,10 +307,23 @@ describe('EvolutionCenter', () => {
     expect(card.text()).toContain('保留两者')
     expect(card.text()).toContain('两条都保留')
     expect(card.text()).toContain('2026')
+    // 记录页签一次请求两个状态，排序与 total 都由服务端给。
     expect(listMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'resolved' }),
+      expect.objectContaining({ status: 'resolved,dismissed' }),
       expect.any(AbortSignal),
     )
+  })
+
+  it('页头待办数含暂不处理，与首页卡片的待处理数语义不同', async () => {
+    summaryMock.mockResolvedValue({
+      pending: 4,
+      deferred: 1,
+      by_type: { duplicate: 2, outdated: 2, conflict: 1 },
+    })
+    const wrapper = await render()
+
+    // 演化中心页头是待办视野总数（pending + deferred），首页卡片只算 pending。
+    expect(wrapper.find('header').text()).toContain('5')
   })
 
   it('裁决失败时把服务端文案显示在面板里', async () => {

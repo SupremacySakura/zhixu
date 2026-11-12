@@ -69,7 +69,8 @@ describe('DashboardPage 演化提醒卡片', () => {
     const card = wrapper.find('[data-test="evolution-card"]')
     expect(card.exists()).toBe(true)
     expect(card.text()).toContain('待处理提醒')
-    expect(card.text()).toContain('5')
+    // 规格 #8：首页「待处理」只算 pending，不含 deferred（这里是 4 而不是 4+1）。
+    expect(card.find('[data-test="evolution-pending-total"]').text()).toBe('4')
     expect(card.text()).toContain('重复')
     expect(card.text()).toContain('过时')
     expect(card.text()).toContain('冲突')
@@ -80,6 +81,19 @@ describe('DashboardPage 演化提醒卡片', () => {
     await render()
     expect(summaryMock).toHaveBeenCalledTimes(1)
     expect(listMock).not.toHaveBeenCalled()
+  })
+
+  it('暂不处理的提醒不计入首页待处理数量', async () => {
+    summaryMock.mockResolvedValue({
+      pending: 0,
+      deferred: 3,
+      by_type: { duplicate: 1, outdated: 1, conflict: 1 },
+    })
+    const { wrapper } = await render()
+
+    const card = wrapper.find('[data-test="evolution-card"]')
+    expect(card.find('[data-test="evolution-pending-total"]').exists()).toBe(false)
+    expect(card.text()).toContain('暂无待处理提醒')
   })
 
   it('摘要为空时给出无提醒文案', async () => {

@@ -71,11 +71,34 @@ export interface EvolutionSummary {
   by_type: { duplicate: number; outdated: number; conflict: number }
 }
 
+/**
+ * 待办视野总数（pending + deferred），演化中心页头用它；
+ * 首页卡片的「待处理」按规格 #8 只取 `summary.pending`，两者语义不同不可混用。
+ */
+export const pendingTotal = (summary: EvolutionSummary | null | undefined) =>
+  (summary?.pending ?? 0) + (summary?.deferred ?? 0)
+
+/** 多状态查询参数：单状态返回自身，双状态拼成 `resolved,dismissed`。 */
+export function evolutionStatusesParam(
+  first: EvolutionAlertStatus,
+  second?: EvolutionAlertStatus,
+): EvolutionAlertStatusFilter {
+  return second ? `${first},${second}` : first
+}
+
+/**
+ * 状态筛选可传逗号分隔的多值（如 `status=resolved,dismissed`）：
+ * 后端在多状态下按 `resolved_at DESC, id DESC` 排序并返回合并后的 total。
+ */
+export type EvolutionAlertStatusFilter =
+  | EvolutionAlertStatus
+  | `${EvolutionAlertStatus},${EvolutionAlertStatus}`
+
 export interface EvolutionAlertQuery {
   page?: number
   pageSize?: number
   type?: EvolutionAlertType | ''
-  status?: EvolutionAlertStatus | ''
+  status?: EvolutionAlertStatusFilter | ''
   /** 只看待办视野（待处理 + 暂不处理）；后端优先于 status。 */
   open?: boolean
 }
