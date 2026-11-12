@@ -44,6 +44,12 @@ type RelationEnqueuer interface {
 	HasTaskForTarget(context.Context, uint, string, uint) (bool, error)
 }
 
+// EvolveEnqueuer 在向量化就绪后排入演化检查任务（*AiTaskService 满足）。
+// 与 RelationEnqueuer 分开：关联建议只在首次就绪时跑一次，演化检查每次正文变化都要重跑。
+type EvolveEnqueuer interface {
+	EnqueueEvolve(context.Context, uint, uint, uint) error
+}
+
 type VectorizeService struct {
 	Store     VectorizeStore
 	Knowledge KnowledgeStore
@@ -52,6 +58,8 @@ type VectorizeService struct {
 	Vectors   VectorDatabase
 	// Relations 为可选依赖：为 nil 时不排入关联建议任务（测试与未启用 AI 的部署）。
 	Relations RelationEnqueuer
+	// Evolutions 为可选依赖：为 nil 时不排入演化检查任务。
+	Evolutions EvolveEnqueuer
 }
 
 func vectorCollection(user uint, version uint64) string {
@@ -197,6 +205,13 @@ func (s *VectorizeService) ProcessNext(ctx context.Context) (bool, error) {
 			if err := s.Relations.EnqueueRelation(ctx, task.UserID, task.KnowledgeID, item.Version); err != nil {
 				log.Warn().Err(err).Uint("knowledge_id", task.KnowledgeID).Msg("关联任务入队失败")
 			}
+		}
+	}
+	// 演化检查的触发策略与关联建议不同：每次向量化成功都要排一次，编辑正文后需要重新判定。
+	// 幂等键 evolve:<id> 保证同一知识同时只有一个活跃任务；入队失败只记日志，不回滚已完成的向量化。
+	if failure == "" && s.Evolutions != nil {
+		if err := s.Evolutions.EnqueueEvolve(ctx, task.UserID, task.KnowledgeID, item.Version); err != nil {
+			log.Warn().Err(err).Uint("knowledge_id", task.KnowledgeID).Msg("演化检查任务入队失败")
 		}
 	}
 	return true, nil

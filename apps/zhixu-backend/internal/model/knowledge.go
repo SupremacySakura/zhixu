@@ -40,6 +40,13 @@ type KnowledgeItem struct {
 	Keywords string `gorm:"type:varchar(1000);not null;default:''" json:"-"`
 	// KeywordList 是 Keywords 的解析视图，由服务层填充，不落库。
 	KeywordList []string `gorm:"-" json:"keywords"`
+	// ContentHash 是规范化正文的 sha256（见 utils.NormalizeKnowledgeContent），用于精确重复判定。
+	// 与 SourceHash 语义不同：SourceHash 在文件来源时是文件哈希、手动创建时是原始正文哈希，
+	// 两者不可混用，因此重复检测单独占一列。
+	ContentHash string `gorm:"type:char(64);not null;default:'';index:idx_knowledge_content_hash" json:"-"`
+	// OutdatedAt 非空表示被演化检查判为「可能过时」；只是标记，不影响可检索性与处理状态。
+	OutdatedAt     *time.Time `json:"outdated_at"`
+	OutdatedReason string     `gorm:"type:text" json:"outdated_reason"`
 	// IsFavorite 收藏标记；ArchivedAt 非空表示已归档，归档知识不参与检索与默认列表。
 	IsFavorite       bool            `gorm:"not null;default:false" json:"is_favorite"`
 	ArchivedAt       *time.Time      `gorm:"index" json:"archived_at"`

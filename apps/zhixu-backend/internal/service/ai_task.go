@@ -100,6 +100,33 @@ func (s *AiTaskService) EnqueueRelationTask(ctx context.Context, userID, knowled
 	})
 }
 
+// EvolveEnqueuePayload 是演化检查任务的载荷：BaseVersion 是入队时触发知识的版本号，
+// 处理时版本不一致说明正文已改，旧正文得出的结论不该落到新版本上。
+type EvolveEnqueuePayload struct {
+	KnowledgeID uint `json:"knowledge_id"`
+	BaseVersion uint `json:"base_version"`
+}
+
+// EnqueueEvolveTask 按知识维度入队演化检查：dedupe_key 为 evolve:<knowledgeID>，
+// 同一知识在活跃期只保留一个任务，与关联任务同构。
+func (s *AiTaskService) EnqueueEvolveTask(ctx context.Context, userID, knowledgeID, baseVersion uint) (*model.AiTask, error) {
+	payload, err := json.Marshal(EvolveEnqueuePayload{KnowledgeID: knowledgeID, BaseVersion: baseVersion})
+	if err != nil {
+		return nil, err
+	}
+	key := fmt.Sprintf("evolve:%d", knowledgeID)
+	return s.Store.Enqueue(ctx, model.AiTask{
+		UserID: userID, TaskType: model.AiTaskTypeEvolve, TargetID: knowledgeID,
+		Payload: string(payload), DedupeKey: &key,
+	})
+}
+
+// EnqueueEvolve 与 EnqueueEvolveTask 共用幂等键，只关心是否排入成功。
+func (s *AiTaskService) EnqueueEvolve(ctx context.Context, userID, knowledgeID, baseVersion uint) error {
+	_, err := s.EnqueueEvolveTask(ctx, userID, knowledgeID, baseVersion)
+	return err
+}
+
 // Latest 返回目标最近一次任务。
 func (s *AiTaskService) Latest(ctx context.Context, userID uint, taskType string, targetID uint) (*model.AiTask, error) {
 	return s.Store.Latest(ctx, userID, taskType, targetID)

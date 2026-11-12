@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-11-09
+last_reviewed: 2026-11-12
 phase: P4
 status: pending
 ---
@@ -15,6 +15,23 @@ status: pending
 - 版本表与关系表在 P1/P3 落地；演化相关表、工作流、页面全部空白。
 - 云盘秒传的 hash 精确去重已存在（架构文档附录映射：FR-EVO-01 的"精确重复"部分复用它，本阶段补**语义近重复**）。
 - 进度紧张时的裁剪预案（产品设计第十章）：演化模块优先 FR-EVO-01 重复检测 + FR-EVO-04 版本管理，冲突/过时识别可降为规则简化版。
+
+## 方案调整记录（2026-11-12，第五批设计定稿）
+
+第五批 = 本文件剩余工作项 W4.2~W4.5，规格见 GitHub Issue #8（`第五批：知识演化检测与演化中心`）。讨论中确认以下口径，与下文原文不一致处以本记录为准：
+
+- **契约简化为 Go→AI 单向同步调用**：新增 `POST {CHAT_AI_URL}/evolve`，同步返回结构化判定；不实现架构文档 5.1/5.2 的 `POST /v1/evolve/check` 异步与 `POST /internal/ai/files/{fileId}/evolution-alerts` 回调。理由同 P3（organize/relate 均已简化）。
+- **提醒独立成表**：`evolution_alerts` 不复用 `knowledge_relations`。关系表状态表达「关系是否存在」，提醒状态表达「审计结论是否被人看过」，两套生命周期混表会让 `uniq_relation_pair` 失效（同一对知识可同时有重复与冲突两条提醒）。
+- **冲突关系类型为 `contradicts`**：新增第六种关系类型（对称），推翻 ADR-0001 的「合并进 contrasts」决定，见 [ADR-0002](../adr/0002-conflict-relation-type.md)。AI 关联推荐不产出该类型，只能由用户或冲突提醒的 `create_relation` 动作建立。
+- **「过时」不是知识状态**：`knowledge_items.status` 是处理状态（pending/running/ready/failed），不能承载 `outdated`。改为新增 `outdated_at`、`outdated_reason` 两列，不改变可检索性。
+- **精确重复需要 `content_hash`**：现有 `SourceHash` 在文件导入时是文件哈希、手动创建时才是正文哈希，不能直接用于精确重复。新增 `content_hash`（正文规范化后 sha256），全来源统一计算。
+- **重复提醒的裁决不含合并**：采纳 = 保留一条、归档另一条（复用 `archived_at`）；「保留两者」并列可选。真合并写入范围之外。
+- **状态与动作**：`status` 四值 pending/resolved/dismissed/deferred；`action` 六值 accept_revision/keep_both/archive_one/create_relation/mark_outdated/mark_verified；SRS 的「采纳/忽略/暂不处理/标记已核实」分别映射到这六个动作、`dismiss`、`deferred`、`mark_verified`。
+- **过时提醒带严重度**：`severity` ∈ review/strong，由证据强度决定；引文无法在原文定位或知识不属于当前用户时降级或丢弃（SRS FR-EVO-03 降级要求）。重复与冲突固定 review。
+- **阈值仍用 Go 常量**（`EvolveDuplicateMinScore` 等），不进 `Config`，与 relation 的 `RelationMinScore` 保持一致。
+- **触发**：新建/导入/编辑后向量化就绪时入队 `evolve` 任务（`dedupe_key=evolve:<knowledgeID>`）；演化中心与详情页提供手动「重新检查」；不做全库定时扫描。同一知识的版本之间不产生过时提醒（只做跨条目判定）。
+- **前端四块**：`/home/evolution` 演化中心（W4.5）、详情页过时徽标（W4.3）、图谱渲染 contradicts 边（W4.4）、Dashboard 待处理提醒卡片（W4.5 收尾）。
+- 术语以根 `GLOSSARY.md` 新增的「知识演化」分区为准。
 
 ## 工作项
 
@@ -37,6 +54,8 @@ status: pending
   1. **精确重复**：复用 `content_hash`/秒传 hash——hash 相同直接产生 duplicate 提醒（无需 LLM）。
   2. **语义近重复**：新知识向量在 Qdrant 找 Top5 近邻，相似度 >0.9（阈值入配置）→ 入 candidate → 走 `POST /v1/evolve/check` 由 LLM 复核（防误报）→ 回调 `POST /internal/ai/files/{fileId}/evolution-alerts`。
 - **依赖**：W3.1（ai_tasks，task_type=evolve）。**验收**：AC-11——导入与已有知识语义近重复的文档，演化中心出现提醒。
+
+**完成情况（2026-11-12，第一部分 / GitHub #9）**：提醒骨架与精确重复已落地——`evolution_alerts` 表（含 `dedupe_key` 唯一索引且终态不清空）、`knowledge_items` 的 `content_hash`（规范化后 sha256，历史数据每批 500 条回填）、`evolve` 任务（幂等键 `evolve:<id>`，向量化就绪入队，载荷带 `base_version` 做版本栅栏）、精确重复判定（正文指纹相同即产提醒，不调模型）、列表/摘要/裁决接口（六动作 + defer，按类型裁剪）。语义近重复（向量召回 + `POST /evolve` 模型复核）在 GitHub #10 接同一处理器。
 
 ### W4.3 过时识别（FR-EVO-02）
 

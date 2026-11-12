@@ -17,6 +17,7 @@ import (
 	"zhixu-backend/internal/log"
 	"zhixu-backend/internal/model"
 	"zhixu-backend/internal/repository"
+	"zhixu-backend/internal/utils"
 
 	"gorm.io/gorm"
 )
@@ -34,6 +35,7 @@ type KnowledgeStore interface {
 	ByFile(context.Context, uint, uint) (*model.KnowledgeItem, error)
 	Get(context.Context, uint, uint) (*model.KnowledgeItem, error)
 	ListByIDs(context.Context, uint, []uint) ([]model.KnowledgeItem, error)
+	FindByContentHash(context.Context, uint, string, uint) (*model.KnowledgeItem, error)
 	Create(context.Context, *model.KnowledgeItem) (*model.KnowledgeItem, bool, error)
 	CreateManual(context.Context, *model.KnowledgeItem) error
 	Update(context.Context, uint, uint, string, string, string, uint) (*model.KnowledgeItem, error)
@@ -445,6 +447,9 @@ func buildInlineKnowledge(userID uint, title, content, sourceType, sourceURL str
 	return &model.KnowledgeItem{
 		UserID: userID, SourceHash: hex.EncodeToString(sum[:]), SourceType: sourceType, SourceURL: sourceURL,
 		Title: title, Content: content, Status: model.KnowledgeReady, Version: 1, ImportedAt: &now,
+		// 正文指纹与来源哈希分开算：SourceHash 保留原语义（手动/网页=原始正文哈希），
+		// ContentHash 走规范化正文，才能和文件导入的知识互相比对。
+		ContentHash: utils.KnowledgeContentHash(content),
 	}, nil
 }
 
@@ -745,6 +750,12 @@ func (s *KnowledgeService) Get(ctx context.Context, userID, id uint) (*model.Kno
 // ListByIDs 批量取知识，供关联候选一次性补标题与摘要；缺失的 ID 直接跳过。
 func (s *KnowledgeService) ListByIDs(ctx context.Context, userID uint, ids []uint) ([]model.KnowledgeItem, error) {
 	return s.store.ListByIDs(ctx, userID, ids)
+}
+
+// FindByContentHash 按正文指纹找精确重复：命中同用户、未归档、非自身的条目，
+// 多条命中时只返回 ID 最小的一条（同一段正文不该产出多条提醒）。
+func (s *KnowledgeService) FindByContentHash(ctx context.Context, userID uint, hash string, excludeID uint) (*model.KnowledgeItem, error) {
+	return s.store.FindByContentHash(ctx, userID, hash, excludeID)
 }
 
 // hydrateKeywords 为列表项填充关键词接口视图；纯内存解析，不额外查库。

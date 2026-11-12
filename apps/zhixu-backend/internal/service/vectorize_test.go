@@ -405,3 +405,59 @@ func TestProcessNextToleratesRelationEnqueueError(t *testing.T) {
 	require.Empty(t, store.finished)
 	require.Equal(t, 1, relations.calls)
 }
+
+type evolveEnqueuerFake struct {
+	calls                     int
+	userID, knowledgeID, base uint
+	err                       error
+}
+
+func (f *evolveEnqueuerFake) EnqueueEvolve(_ context.Context, userID, knowledgeID, baseVersion uint) error {
+	f.calls++
+	f.userID, f.knowledgeID, f.base = userID, knowledgeID, baseVersion
+	return f.err
+}
+
+// 演化检查与关联建议的触发策略不同：向量化成功每次都排一次，编辑正文后要重新判定。
+func TestProcessNextEnqueuesEvolveAfterVectorReady(t *testing.T) {
+	service, store, _, _ := newVectorizeFixture(nil)
+	evolutions := &evolveEnqueuerFake{}
+	service.Evolutions = evolutions
+
+	processed, err := service.ProcessNext(context.Background())
+
+	require.NoError(t, err)
+	require.True(t, processed)
+	require.Empty(t, store.finished)
+	require.Equal(t, 1, evolutions.calls)
+	require.Equal(t, uint(7), evolutions.userID)
+	require.Equal(t, uint(9), evolutions.knowledgeID)
+	require.Equal(t, uint(5), evolutions.base, "带上入队时的知识版本")
+}
+
+// 向量化失败时不该排演化检查：没有向量就没有可比对的候选。
+func TestProcessNextSkipsEvolveAfterFailure(t *testing.T) {
+	service, _, _, _ := newVectorizeFixture(errors.New("embedding down"))
+	evolutions := &evolveEnqueuerFake{}
+	service.Evolutions = evolutions
+
+	processed, err := service.ProcessNext(context.Background())
+
+	require.NoError(t, err)
+	require.True(t, processed)
+	require.Zero(t, evolutions.calls)
+}
+
+// 入队失败只记日志，不回滚已经成功的向量化。
+func TestProcessNextToleratesEvolveEnqueueError(t *testing.T) {
+	service, store, _, _ := newVectorizeFixture(nil)
+	evolutions := &evolveEnqueuerFake{err: errors.New("queue down")}
+	service.Evolutions = evolutions
+
+	processed, err := service.ProcessNext(context.Background())
+
+	require.NoError(t, err)
+	require.True(t, processed)
+	require.Empty(t, store.finished)
+	require.Equal(t, 1, evolutions.calls)
+}
