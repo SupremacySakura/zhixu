@@ -48,7 +48,7 @@ const fallbackTitle = (targetType: OperationLogItem['target_type']): string => {
 }
 
 /** 演化裁决动作的中文文案，与后端 model.EvolutionAction 一一对应。 */
-const evolutionActionLabel = (action: string): string => {
+export const evolutionActionLabel = (action: string): string => {
   switch (action) {
     case 'archive_one':
       return '归档重复的一条'
