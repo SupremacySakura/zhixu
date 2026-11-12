@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-// RelationType 知识关系类型。related 与 contrasts 对称，其余三种严格有向。
+// RelationType 知识关系类型。related、contrasts 与 contradicts 对称，其余三种严格有向。
 type RelationType string
 
 const (
@@ -11,10 +11,26 @@ const (
 	RelationTypeSupplements RelationType = "supplements"
 	RelationTypeContrasts   RelationType = "contrasts"
 	RelationTypeUpdates     RelationType = "updates"
+	// RelationTypeContradicts 表示两条知识就同一事实给出互斥说法（ADR-0002 推翻 ADR-0001 的合并决定）。
+	// 只能由用户手动建立或从冲突提醒建立，AI 关联推荐不得产出该类型。
+	RelationTypeContradicts RelationType = "contradicts"
 )
 
 // Valid 判断是否为支持的关系类型；接口入参校验用。
 func (t RelationType) Valid() bool {
+	switch t {
+	case RelationTypeRelated, RelationTypeDependsOn, RelationTypeSupplements, RelationTypeContrasts, RelationTypeUpdates, RelationTypeContradicts:
+		return true
+	default:
+		return false
+	}
+}
+
+// Recommendable 报告该类型是否允许由 AI 关联推荐产出。
+//
+// 白名单必须独立于 Valid：矛盾是「两说互斥」的判断，只有人（或冲突提醒的裁决）能下定论，
+// 模型凭向量相似度猜出来的矛盾会把正常的知识关联污染成互相打架的一对。
+func (t RelationType) Recommendable() bool {
 	switch t {
 	case RelationTypeRelated, RelationTypeDependsOn, RelationTypeSupplements, RelationTypeContrasts, RelationTypeUpdates:
 		return true
@@ -26,7 +42,7 @@ func (t RelationType) Valid() bool {
 // Symmetric 报告该类型是否对称：对称关系入库前按两侧知识 ID 的 min/max 归一，
 // 保证同一对知识只有一行，无论从哪一侧发起。
 func (t RelationType) Symmetric() bool {
-	return t == RelationTypeRelated || t == RelationTypeContrasts
+	return t == RelationTypeRelated || t == RelationTypeContrasts || t == RelationTypeContradicts
 }
 
 // RelationStatus 关系的确认状态。suggested 是 AI 推荐待确认，rejected 保留行用于抑制重复推荐。

@@ -86,7 +86,8 @@ func main() {
 	evolutionRepo := repository.NewEvolutionAlertRepository(database.DB)
 	evolutionService := &service.EvolutionService{
 		Alerts: evolutionRepo, Knowledge: knowledgeService, Archiver: knowledgeService,
-		Outdated: knowledgeService, Logs: knowledgeService.Logs, Tasks: aiTasks,
+		Outdated: knowledgeService, Reviser: knowledgeService, Relations: relationService,
+		Logs: knowledgeService.Logs, Tasks: aiTasks,
 	}
 	router.RegisterEvolutionRouter(r, evolutionService)
 	// 采纳 AI 整理结果时需要追加标签：只增不删，不覆盖用户手工标签。
@@ -104,7 +105,7 @@ func main() {
 		Client:   &service.RelateClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 	})
 	// 演化检测工作流：向量化就绪后入队，精确重复先走正文指纹（不花模型钱），
-	// 指纹没命中时再召回近邻送模型判定；过时/冲突的消费在后续迭代接入同一处理器。
+	// 指纹没命中时再召回近邻送模型判定；重复、过时与冲突三种结论都在这一个处理器里落成提醒。
 	aiTasks.Register(&service.EvolveProcessor{
 		Knowledge: knowledgeService, Alerts: evolutionRepo,
 		Chat: chat.Service, Embedding: chat.Service, Relations: relationRepo,

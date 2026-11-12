@@ -176,12 +176,53 @@ func (f *evolutionLogFake) CreateOperationLog(entry *model.OperationLogModel) er
 
 func (f *evolutionLogFake) PruneOperationLogs(uint, int) (int64, error) { return 0, nil }
 
+type evolutionRevisionCall struct {
+	userID  uint
+	id      uint
+	title   string
+	content string
+}
+
+type evolutionReviserFake struct {
+	calls []evolutionRevisionCall
+	err   error
+}
+
+func (f *evolutionReviserFake) AcceptRevision(_ context.Context, userID, id uint, title, content string) (*model.KnowledgeItem, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	f.calls = append(f.calls, evolutionRevisionCall{userID: userID, id: id, title: title, content: content})
+	return &model.KnowledgeItem{ID: id, UserID: userID, Title: title, Content: content}, nil
+}
+
+type evolutionRelationCall struct {
+	userID      uint
+	knowledgeID uint
+	input       RelationCreateInput
+}
+
+type evolutionRelationWriterFake struct {
+	created []evolutionRelationCall
+	err     error
+}
+
+func (f *evolutionRelationWriterFake) Create(_ context.Context, userID, knowledgeID uint, input RelationCreateInput) (*RelationView, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	f.created = append(f.created, evolutionRelationCall{userID: userID, knowledgeID: knowledgeID, input: input})
+	return &RelationView{ID: uint(len(f.created)), RelationType: input.RelationType}, nil
+}
+
 type evolutionFixture struct {
 	service   *EvolutionService
 	store     *evolutionStoreFake
 	knowledge *evolutionKnowledgeFake
 	archiver  *evolutionArchiverFake
 	outdated  *evolutionOutdatedFake
+	reviser   *evolutionReviserFake
+	relations *evolutionRelationWriterFake
 	logs      *evolutionLogFake
 }
 
@@ -196,10 +237,12 @@ func newEvolutionFixture() *evolutionFixture {
 	}}
 	f := &evolutionFixture{
 		store: store, knowledge: knowledge, archiver: &evolutionArchiverFake{},
-		outdated: &evolutionOutdatedFake{}, logs: &evolutionLogFake{},
+		outdated: &evolutionOutdatedFake{}, reviser: &evolutionReviserFake{},
+		relations: &evolutionRelationWriterFake{}, logs: &evolutionLogFake{},
 	}
 	f.service = &EvolutionService{
-		Alerts: store, Knowledge: knowledge, Archiver: f.archiver, Outdated: f.outdated, Logs: f.logs,
+		Alerts: store, Knowledge: knowledge, Archiver: f.archiver, Outdated: f.outdated,
+		Reviser: f.reviser, Relations: f.relations, Logs: f.logs,
 	}
 	return f
 }
@@ -219,6 +262,18 @@ func (f *evolutionFixture) addAlert(id uint, alertType model.EvolutionAlertType,
 	}
 	f.store.alerts = append(f.store.alerts, alert)
 	return &f.store.alerts[len(f.store.alerts)-1]
+}
+
+// addConflictAlert 构造一条冲突提醒：载荷里带（或不带）修订稿，其余字段与 addAlert 一致。
+func (f *evolutionFixture) addConflictAlert(id uint, subjects []uint, revisedTitle, revisedContent string) *model.EvolutionAlert {
+	alert := f.addAlert(id, model.EvolutionAlertTypeConflict, model.EvolutionAlertPending, subjects)
+	payload, _ := json.Marshal(EvolutionPayload{
+		Type: model.EvolutionAlertTypeConflict, Reason: "两处结论互斥", SuggestedAction: model.EvolutionActionCreateRelation,
+		Evidence:     []EvolutionEvidence{{KnowledgeID: subjects[0], Quote: "同一段正文"}, {KnowledgeID: subjects[1], Quote: "同一段正文"}},
+		RevisedTitle: revisedTitle, RevisedContent: revisedContent,
+	})
+	alert.Payload = string(payload)
+	return alert
 }
 
 // 列表：把涉及知识补成标题与状态，一次批量查询，缺失的 ID 保留占位。
@@ -370,15 +425,73 @@ func TestEvolutionResolveRejectsMismatchedAction(t *testing.T) {
 	}
 }
 
-// 后续迭代才接上的动作明确返回「尚未启用」，而不是静默成功。
-func TestEvolutionResolveUnsupportedActions(t *testing.T) {
+// 采纳修订：把载荷里的修订稿写成知识的新版本，提醒随之关闭。
+func TestEvolutionResolveAcceptRevisionWritesNewVersion(t *testing.T) {
 	f := newEvolutionFixture()
-	f.addAlert(1, model.EvolutionAlertTypeConflict, model.EvolutionAlertPending, []uint{10, 13})
-	f.addAlert(2, model.EvolutionAlertTypeConflict, model.EvolutionAlertPending, []uint{10, 11})
+	f.addConflictAlert(1, []uint{10, 11}, "HNSW 的召回率", "HNSW 的分层图结构在召回率上优于 IVF。")
+
+	view, changed, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionAcceptRevision})
+
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, model.EvolutionAlertResolved, view.Status)
+	require.Len(t, f.reviser.calls, 1)
+	require.Equal(t, uint(2), f.reviser.calls[0].userID)
+	require.Equal(t, uint(10), f.reviser.calls[0].id, "修订稿落在触发侧的知识上")
+	require.Equal(t, "HNSW 的召回率", f.reviser.calls[0].title)
+	require.Equal(t, "HNSW 的分层图结构在召回率上优于 IVF。", f.reviser.calls[0].content)
+	require.Len(t, f.logs.entries, 1, "裁决写一条操作日志")
+}
+
+// 没有修订稿的冲突提醒不能采纳修订：动作不可用，接口按 400 拒绝。
+func TestEvolutionResolveAcceptRevisionRequiresRevision(t *testing.T) {
+	f := newEvolutionFixture()
+	f.addConflictAlert(1, []uint{10, 11}, "", "")
 
 	_, _, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionAcceptRevision})
+
+	require.ErrorIs(t, err, ErrEvolutionInvalid)
+	require.Empty(t, f.reviser.calls)
+	require.Equal(t, model.EvolutionAlertPending, f.store.alerts[0].Status, "动作被拒时提醒状态不变")
+}
+
+// 未接修订能力时明确返回「尚未启用」，而不是静默成功。
+func TestEvolutionResolveAcceptRevisionRequiresReviser(t *testing.T) {
+	f := newEvolutionFixture()
+	f.service.Reviser = nil
+	f.addConflictAlert(1, []uint{10, 11}, "HNSW 的召回率", "HNSW 的分层图结构在召回率上优于 IVF。")
+
+	_, _, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionAcceptRevision})
+
 	require.ErrorIs(t, err, ErrEvolutionUnsupported)
-	_, _, err = f.service.Resolve(context.Background(), 2, 2, EvolutionResolveInput{Action: model.EvolutionActionCreateRelation})
+}
+
+// 建立矛盾关系：以触发侧为源、被比对侧为目标写一条已确认的手工 contradicts 关系。
+func TestEvolutionResolveCreateRelationWritesContradicts(t *testing.T) {
+	f := newEvolutionFixture()
+	f.addConflictAlert(1, []uint{10, 11}, "", "")
+
+	view, changed, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionCreateRelation})
+
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, model.EvolutionAlertResolved, view.Status)
+	require.Len(t, f.relations.created, 1)
+	require.Equal(t, uint(2), f.relations.created[0].userID)
+	require.Equal(t, uint(10), f.relations.created[0].knowledgeID)
+	require.Equal(t, uint(11), f.relations.created[0].input.TargetID)
+	require.Equal(t, model.RelationTypeContradicts, f.relations.created[0].input.RelationType)
+	require.Len(t, f.logs.entries, 1)
+}
+
+// 未接关系能力时「建立矛盾关系」明确不可用。
+func TestEvolutionResolveCreateRelationRequiresWriter(t *testing.T) {
+	f := newEvolutionFixture()
+	f.service.Relations = nil
+	f.addConflictAlert(1, []uint{10, 11}, "", "")
+
+	_, _, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionCreateRelation})
+
 	require.ErrorIs(t, err, ErrEvolutionUnsupported)
 }
 

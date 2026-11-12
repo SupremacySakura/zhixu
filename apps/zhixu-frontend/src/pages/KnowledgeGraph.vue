@@ -56,6 +56,9 @@ const tagFilter = computed({
   },
 })
 
+/** 图例只在图里真的出现矛盾边时补一项，避免给不存在的样式留说明。 */
+const hasContradiction = computed(() => graph.value.edges.some(edge => edge.relation_type === 'contradicts'))
+
 const STATUS_LABELS: Record<RelationStatus, string> = {
   suggested: '建议',
   confirmed: '已确认',
@@ -258,6 +261,10 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
             <span class="flex items-center gap-2">
               <span class="size-2 rounded-full bg-label-tertiary" />
               手动关联
+            </span>
+            <span v-if="hasContradiction" class="flex items-center gap-2" data-test="legend-contradicts">
+              <span class="h-0 w-6 border-t-2 border-solid border-danger" />
+              矛盾关系
             </span>
           </div>
         </section>

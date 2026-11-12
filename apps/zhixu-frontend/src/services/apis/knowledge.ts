@@ -341,7 +341,14 @@ export async function retryKnowledgeVectorize(id: number, signal?: AbortSignal) 
   )
 }
 
-export type RelationType = 'related' | 'depends_on' | 'supplements' | 'contrasts' | 'updates'
+export type RelationType =
+  | 'related'
+  | 'depends_on'
+  | 'supplements'
+  | 'contrasts'
+  | 'updates'
+  /** 矛盾：对称关系，只能由用户手动或冲突提醒建立，AI 关联推荐不会产出。 */
+  | 'contradicts'
 export type RelationStatus = 'suggested' | 'confirmed' | 'rejected'
 export type RelationSource = 'ai' | 'manual'
 export interface KnowledgeRelation {

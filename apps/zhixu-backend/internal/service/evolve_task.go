@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"zhixu-backend/internal/log"
 	"zhixu-backend/internal/model"
@@ -300,10 +302,6 @@ func (p *EvolveProcessor) buildAlerts(trigger *model.KnowledgeItem, candidates [
 		if !evolutionAllowedTypes(candidate.origin, candidate.score)[judgement.Type] {
 			continue
 		}
-		// 本迭代消费重复与过时结论；冲突随冲突识别迭代接入同一条管线。
-		if judgement.Type == model.EvolutionAlertTypeConflict {
-			continue
-		}
 		alert, ok := p.buildAlert(trigger, candidate, judgement)
 		if !ok {
 			continue
@@ -351,19 +349,23 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 		severity = model.EvolutionSeverityReview
 	}
 	payload := EvolutionPayload{
-		Type:            judgement.Type,
-		Reason:          judgement.Reason,
-		Evidence:        evidence,
-		SuggestedAction: evolveSuggestedAction(judgement),
+		Type:     judgement.Type,
+		Reason:   judgement.Reason,
+		Evidence: evidence,
 	}
 	// 修订稿只在证据全部校验通过时保留：缺一条引文说明模型对这条知识的判断没有原文支撑，
 	// 拿它去覆盖正文风险太大，降级为「仅提示、无修订稿」，前端会把采纳修订置灰。
-	if len(evidence) == len(judgement.Evidence) && judgement.Type == model.EvolutionAlertTypeConflict {
+	// 长度门槛在这里再守一道：客户端清洗已经挡过模型输出，但处理器可能被别的调用方直接喂判定。
+	if len(evidence) == len(judgement.Evidence) && judgement.Type == model.EvolutionAlertTypeConflict &&
+		evolveRevisionUsable(judgement.RevisedTitle, judgement.RevisedContent) {
 		payload.RevisedTitle = judgement.RevisedTitle
 		payload.RevisedContent = judgement.RevisedContent
-	} else if len(evidence) < len(judgement.Evidence) {
+	} else if len(evidence) < len(judgement.Evidence) || judgement.RevisedContent != "" {
+		// 有修订稿却被丢弃时同样降级：让用户知道这条提醒只剩「仅提示」的分量。
 		severity = model.EvolutionSeverityReview
 	}
+	// 建议动作跟着「修订稿是否留下」走：修订稿被丢弃后还推荐采纳修订，用户点下去只会拿到 400。
+	payload.SuggestedAction = evolveSuggestedAction(payload)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return model.EvolutionAlert{}, false
@@ -383,16 +385,25 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 	return alert, true
 }
 
+// evolveRevisionUsable 判断一份修订稿是否完整可用：标题正文都得在，正文不能超过上限。
+// 半份修订稿比没有更糟——用户会以为采纳的是完整修订。
+func evolveRevisionUsable(title, content string) bool {
+	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
+		return false
+	}
+	return utf8.RuneCountInString(content) <= EvolveRevisedContentMaxRunes
+}
+
 // evolveSuggestedAction 给出一条默认建议动作，供前端预选按钮。
-func evolveSuggestedAction(judgement EvolveJudgement) model.EvolutionAction {
-	switch judgement.Type {
+func evolveSuggestedAction(payload EvolutionPayload) model.EvolutionAction {
+	switch payload.Type {
 	case model.EvolutionAlertTypeDuplicate:
 		return model.EvolutionActionArchiveOne
 	case model.EvolutionAlertTypeOutdated:
 		return model.EvolutionActionMarkOutdated
 	case model.EvolutionAlertTypeConflict:
 		// 有修订稿时「采纳修订」是最省事的一步，没有就只能建矛盾关系。
-		if judgement.RevisedContent != "" {
+		if payload.RevisedContent != "" {
 			return model.EvolutionActionAcceptRevision
 		}
 		return model.EvolutionActionCreateRelation

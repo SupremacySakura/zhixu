@@ -29,6 +29,7 @@ const palette = {
   },
   edgeAI: 'rgb(10 11 12)',
   edgeManual: 'rgb(13 14 15)',
+  edgeContradicts: 'rgb(25 26 27)',
   label: 'rgb(16 17 18)',
   labelSecondary: 'rgb(19 20 21)',
   surface: 'rgb(255 255 255)',
@@ -128,6 +129,28 @@ describe('KnowledgeGraphChart', () => {
     expect(series.edgeLabel.fontSize).toBe(10)
     expect(series.edgeLabel.formatter({ data: { relation_type: 'related' } })).toBe('相关')
     expect(series.edgeLabel.formatter({ data: { relation_type: 'depends_on' } })).toBe('依赖')
+    wrapper.unmount()
+  })
+
+  it('矛盾边使用矛盾色并标注「矛盾」', async () => {
+    const contradiction = {
+      id: 12,
+      source_id: 1,
+      target_id: 2,
+      relation_type: 'contradicts' as const,
+      status: 'confirmed' as const,
+      source: 'manual' as const,
+      confidence: 1,
+    }
+    const wrapper = render({
+      edges: [...edges, contradiction],
+      palette: { ...palette, edgeContradicts: 'rgb(22 23 24)' },
+    })
+    await nextTick()
+    const series = mocks.chart.setOption.mock.calls.at(-1)?.[0].series[0]
+    const link = series.links.find((item: { id: string }) => item.id === '12')
+    expect(link.lineStyle.color).toBe('rgb(22 23 24)')
+    expect(series.edgeLabel.formatter({ data: { relation_type: 'contradicts' } })).toBe('矛盾')
     wrapper.unmount()
   })
 

@@ -113,13 +113,14 @@ const chooseOption = async (
 }
 
 describe('relation type labels', () => {
-  it('exposes the five Chinese labels and keeps their order', () => {
+  it('exposes the six Chinese labels and keeps their order', () => {
     expect(RELATION_TYPE_LABELS).toEqual({
       related: '相关',
       depends_on: '依赖',
       supplements: '补充说明',
       contrasts: '对比',
       updates: '更新替代',
+      contradicts: '矛盾',
     })
     expect(RELATION_TYPE_OPTIONS.map(option => option.value)).toEqual([
       'related',
@@ -127,6 +128,7 @@ describe('relation type labels', () => {
       'supplements',
       'contrasts',
       'updates',
+      'contradicts',
     ])
   })
 })

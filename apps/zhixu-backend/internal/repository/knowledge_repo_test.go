@@ -396,9 +396,13 @@ func TestKnowledgeUpdateTransactional(t *testing.T) {
 		return sqlmock.NewRows([]string{"id", "knowledge_id", "user_id", "status", "collection", "model_id", "embedding_version", "config_version", "attempts", "lease_token"}).
 			AddRow(5, 7, 2, model.VectorRunning, "zhixu_u2_v3", 4, 3, 5, 1, "token")
 	}
+	// itemRowWithSource 的 change_source 是「旧正文」的产生来源：采纳修订前正文由用户手动编辑。
+	itemRowWithSource := func(version uint, changeSource string) *sqlmock.Rows {
+		return sqlmock.NewRows([]string{"id", "user_id", "title", "content", "status", "version", "embedding_version", "vector_state", "source_hash", "change_source"}).
+			AddRow(7, 2, "旧标题", "旧正文", model.KnowledgeReady, version, 3, model.VectorReady, "oldhash", changeSource)
+	}
 	itemRow := func(version uint) *sqlmock.Rows {
-		return sqlmock.NewRows([]string{"id", "user_id", "title", "content", "status", "version", "embedding_version", "vector_state", "source_hash"}).
-			AddRow(7, 2, "旧标题", "旧正文", model.KnowledgeReady, version, 3, model.VectorReady, "oldhash")
+		return itemRowWithSource(version, string(model.KnowledgeChangeSourceManual))
 	}
 
 	t.Run("snapshots then rebuilds vectors", func(t *testing.T) {
@@ -420,7 +424,7 @@ func TestKnowledgeUpdateTransactional(t *testing.T) {
 		mock.ExpectExec("UPDATE `vectorize_tasks`.*cleanup_collection").WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectCommit()
 
-		item, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "新标题", "新正文", "newhash", 1)
+		item, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "新标题", "新正文", "newhash", model.KnowledgeChangeSourceManual, 1)
 		require.NoError(t, err)
 		require.Equal(t, uint(7), item.ID)
 		require.Equal(t, "新标题", item.Title)
@@ -428,6 +432,33 @@ func TestKnowledgeUpdateTransactional(t *testing.T) {
 		require.Equal(t, "newhash", item.SourceHash)
 		require.Equal(t, uint(2), item.Version)
 		require.Equal(t, model.VectorPending, item.VectorState)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	// 采纳 AI 修订：条目来源改写为 ai，被替换的旧正文以它自己的来源（manual）进快照。
+	t.Run("records revision source on item and snapshot", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT .* FROM `vectorize_tasks` WHERE .*FOR UPDATE").
+			WillReturnRows(taskRow())
+		mock.ExpectQuery("SELECT .* FROM `knowledge_items` WHERE .*FOR UPDATE").
+			WillReturnRows(itemRowWithSource(1, string(model.KnowledgeChangeSourceManual)))
+		mock.ExpectExec("INSERT INTO `knowledge_versions`").
+			WithArgs(uint(2), uint(7), uint(1), "旧标题", "旧正文", string(model.KnowledgeChangeSourceManual), sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(30, 1))
+		mock.ExpectQuery("SELECT `id` FROM `knowledge_chunks`").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}))
+		mock.ExpectExec("UPDATE `knowledge_items` SET .*change_source.*").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec("DELETE FROM `vectorize_tasks`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec("DELETE FROM `knowledge_chunks`").WillReturnResult(sqlmock.NewResult(0, 2))
+		mock.ExpectExec("INSERT INTO `vectorize_tasks`").WillReturnResult(sqlmock.NewResult(20, 1))
+		mock.ExpectExec("UPDATE `knowledge_items`.*vector_state").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		item, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "修订标题", "修订正文", "newhash", model.KnowledgeChangeSourceAI, 1)
+		require.NoError(t, err)
+		require.Equal(t, model.KnowledgeChangeSourceAI, item.ChangeSource)
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -441,7 +472,7 @@ func TestKnowledgeUpdateTransactional(t *testing.T) {
 			WillReturnRows(itemRow(1))
 		mock.ExpectRollback()
 
-		_, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "新标题", "新正文", "newhash", 2)
+		_, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "新标题", "新正文", "newhash", model.KnowledgeChangeSourceManual, 2)
 		require.ErrorIs(t, err, ErrKnowledgeConflict)
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -457,7 +488,7 @@ func TestKnowledgeUpdateTransactional(t *testing.T) {
 		mock.ExpectExec("INSERT INTO `knowledge_versions`").WillReturnError(assertionError{})
 		mock.ExpectRollback()
 
-		_, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "新标题", "新正文", "newhash", 1)
+		_, err := NewKnowledgeRepository(db).Update(context.Background(), 2, 7, "新标题", "新正文", "newhash", model.KnowledgeChangeSourceManual, 1)
 		require.Error(t, err)
 		require.NoError(t, mock.ExpectationsWereMet())
 	})

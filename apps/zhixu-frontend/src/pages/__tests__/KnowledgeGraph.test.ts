@@ -253,6 +253,33 @@ describe('KnowledgeGraph 页面', () => {
     expect(legend.find('.border-dashed').exists()).toBe(true)
   })
 
+  it('图中有矛盾边时图例补一条矛盾关系', async () => {
+    vi.mocked(getKnowledgeGraph).mockResolvedValue({
+      ...graph,
+      edges: [
+        ...graph.edges,
+        {
+          id: 12,
+          source_id: 1,
+          target_id: 2,
+          relation_type: 'contradicts' as const,
+          status: 'confirmed' as const,
+          source: 'manual' as const,
+          confidence: 1,
+        },
+      ],
+    })
+    const { wrapper } = await render()
+    const legend = wrapper.find('[data-test="graph-legend"]')
+    expect(legend.text()).toContain('矛盾关系')
+    expect(legend.find('[data-test="legend-contradicts"]').exists()).toBe(true)
+  })
+
+  it('没有矛盾边时不显示矛盾关系图例项', async () => {
+    const { wrapper } = await render()
+    expect(wrapper.find('[data-test="graph-legend"]').text()).not.toContain('矛盾关系')
+  })
+
   it('清空筛选后恢复默认请求与完整图', async () => {
     vi.mocked(getKnowledgeGraph).mockImplementation(async (options = {}) =>
       options.tagId === 7 ? { nodes: [graph.nodes[0]], edges: [], truncated: false } : { ...graph },
