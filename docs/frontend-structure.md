@@ -70,7 +70,7 @@
 
 ## 对话页
 
-- `/home/chat` 根高度为 `h-[calc(100dvh-60px)] lg:h-auto`，扣除移动端顶栏后内部滚动；桌面端会话历史 `ConversationSidebar` 常驻，移动端（`<lg`）改为左侧抽屉（复用 HomePage 导航抽屉模式：motion-v 弹簧滑入、遮罩点击与拖拽左滑关闭），入口为头部 `lg:hidden` 的历史按钮，选择会话或新建后自动关闭。
+- `/home/chat` 根高度为 `h-[calc(100dvh-60px)] lg:h-auto`，扣除移动端顶栏后内部滚动；桌面端会话历史 `ConversationSidebar` 常驻，移动端（`<lg`）改为左侧抽屉（复用 HomePage 导航抽屉模式：motion-v 面板滑入、遮罩点击与拖拽左滑关闭；动效取值见上节，弹簧随旧世界作废），入口为头部 `lg:hidden` 的历史按钮，选择会话或新建后自动关闭。
 - 会话项的改名/删除按钮在触屏常显、桌面端 hover/focus 显示；输入区带底部安全区 padding，键盘提示仅 `sm:` 以上显示。
 - 对话不区分普通/知识库：检索由 Mastra 侧模型自主调用 `search_knowledge` 工具，`sources` 事件在回答过程中到达并渲染为引用卡片，页面无「知识库检索」开关。
 
@@ -78,8 +78,22 @@
 
 模型设置 `/home/settings` 的页面、表单和请求管理见 [模型设置前端](./model-settings-frontend.md)。已接入真实配置存储与[基础服务检测](./service-status.md)，实际模型连接测试仍待实现。
 
-- 样式体系为 Tailwind v4 CSS-first：设计令牌集中维护在 `src/style.css` 的 `@theme`（颜色/字级/圆角/阴影/动效），唯一权威文档为仓库根目录 `DESIGN.md`。旧 `tailwind.config.js` 已废弃（仅留迁移对照），新代码禁止硬编码色值，并避免使用兼容令牌 `--color-background-light/dark`、`--font-display`。
-- 主色为品牌绿 `#10b674`（语义令牌 `--color-primary`）；浅色优先，暗色模式保留 class 方案能力（`@custom-variant dark`），暗色令牌后续单独定义，当前代码不新增 `dark:` 变体。
-- 动效由 `motion-v` 驱动（`Motion` / `AnimatePresence`），弹簧预设统一取自 `src/utils/motion.ts`（`springSnappy` / `springBouncy` / `fadeTransition`）；减弱动态降级为 `App.vue` 的 `<MotionConfig reduced-motion="user">` 加 `style.css` 的 prefers-\* 媒体查询。新增浮层/弹窗入场必须走 motion-v，不要再引入 Vue `<Transition>`；弹窗结构参照 `ConfirmDialog`（遮罩 + 面板 Motion 同组件内联）。
+- **视觉规范唯一权威是仓库根目录 [DESIGN.md](../DESIGN.md)（v2「索引卡盒 Card Cabinet」）。** 它在 2026-11 整份替换了 2026-09 那份「浅色 Apple 风格设计规范」（279 行 → 614 行），旧世界的令牌、圆角、阴影、字号、弹簧与动效口径**随替换一并作废，不是并存、也不是兼容关系**。v2 的版本状态是「**骨架 + 三章待回填**」：`Layout`、`States & Accessibility`、`Responsive` 三章的规则已冻结，但章首明确标注「待第一批 after-build 回填」，回填问题清单写在各章末；其余章节为已定稿。引用规范时请引章节名（v2 用 canonical order，**没有全局节号**）。
+- 样式体系为 Tailwind v4 CSS-first：设计令牌集中维护在 `src/style.css` 的 `@theme`（颜色/字级/圆角/阴影/动效），**令牌表以 `DESIGN.md` v2 为准**，取值冻结于[世界参数与令牌表](https://github.com/SupremacySakura/zhixu/issues/24)。旧 `tailwind.config.js` 已废弃（仅留迁移对照）。新代码禁止硬编码色值；旧的兼容令牌 `--color-background-light/dark`、`--font-display` **已从 `style.css` 删除**，不要再引用，也不要在新代码里重建。
+- 主色为**图书馆蓝 `#1f4e79`**（语义令牌 `--color-primary`）。旧品牌绿 `#10b674` **已退役为 `--color-ai`**，只作 AI 内容标记（`bg-ai-tint` + `border-t-2 border-ai`），**永不作文字色**。世界材料：暖米白画布 `#e9e5db` / 卡面 `#f2eee4` / 墨 `#181818` / 印章红 `#a8322a`；零圆角、1px 规则线、2px 硬偏移，**没有柔和模糊阴影**。v2 的 scope **不含暗色模式**：`@custom-variant dark` 与 `dark:` 变体均已移除（全仓 0 处），不再保留 class 方案能力。
+- 动效由 `motion-v` 驱动（`Motion` / `AnimatePresence`），这是唯一实现，**禁止 Vue 原生 `<Transition>`**。`src/utils/motion.ts` 的三个导出名（`springSnappy` / `springBouncy` / `fadeTransition`）**保留不变**（改名要动 24 个文件、收益为零），但**值已换成 tween，`bounce` / `damping` / `response` / 动量投影 / 橡皮筋随旧世界一并作废**（该替换由[批 1：组件原子层与消息提示收敛](https://github.com/SupremacySakura/zhixu/issues/37) 落地，尚未合入前 `motion.ts` 内仍是旧弹簧值——**以规范为准，不要照抄现存代码**）；同时新增 `overlayIn` / `overlayExit` / `fadeIn` / `snapBack`。三档时长 `micro` 90ms / `standard` 160ms / `sheet` 220ms，两条曲线 `--ease-settle` / `--ease-exit`，**不新增第四档第三条**。减弱动态由 `App.vue` 的 `<MotionConfig reduced-motion="user">` 与 `style.css` 的 prefers-\* 媒体查询双轨互补；弹窗结构参照 `ConfirmDialog`（遮罩 + 面板 Motion 同组件内联）。
+- **外壳**：桌面 ≥1024px = 左侧栏 **200px**（1px hairline 右边线）+ **每个页面自带的 64px 页头带**；**桌面端没有全局顶栏**（加一条会形成双层栏杆并吃掉 60px 内容高度）。移动 <1024px = 60px 全局条 + 左滑抽屉 `min(15rem, 84vw)`。`<aside>` 语义必须保留（`ChatPage.test.ts` 用 `findAll('aside')` 计数：桌面 1 / 抽屉打开 2 / 关闭后 1）。
+- **页面容器只有四级**：`measure`（`--container-measure`，40em/640px，长文正文唯一合法宽度）/ `panel`（56rem/896px，表单与双列对照）/ `wide`（72rem/1152px，索引列表、表格、对话）/ `full`（无 max-width，仅画布）。`wide` 只允许出现在表格行与卡片行上，页内一旦出现连续正文段落，那段必须收进 `measure`。**禁止 `max-w-6xl` 及其它任意宽度**——非这四级的一律视为违规。
+- **新增页面先选六个布局原型之一**（见[Operate 模式下的信息层级与密度](https://github.com/SupremacySakura/zhixu/issues/21)）：①索引列表 / ②长文阅读 / ③画布 / ④表单 / ⑤对话 / ⑥认证独立页。仪表盘是 ① 的**总览变体**（不是第七个原型）；分块结构页是 ② 的**双列变体**（唯一被授权突破 `measure` 的长文场景）。选型决定「容器档 × 页头带 × 密度档」三元组，页面的长相不靠换内容区分。
 - 页面优先使用组合式 API 与 TypeScript 严格模式，减少隐式类型风险。
 - 复杂页面应保留为编排器：API 请求、取消与资源释放放入 composable，重复视图和弹窗放入对应业务组件；模板事件优先使用具名处理函数和 typed emits。
+- **三份权威的边界**（详表与冲突序见 [ADR-0003](./adr/0003-visual-world-replacement.md)）：`apps/zhixu-frontend/PRODUCT.md` 管**产品真相**（用户是谁、产品让什么成为可能、不可破的产品与实现契约）；`DESIGN.md` v2 管**视觉规范**（令牌、字级、版面语法、组件、动效）；`docs/design/` 三份毕设源头文档对 AI **全程只读**，只在人工审阅后由人修改。**冲突时：产品真相 > 视觉规范 > 源头文档的历史表述。**
+
+## 迁移状态与验收口径
+
+本节记录「规范已定」与「代码已实现」之间的落差，避免把未落地的规范当成现状引用。**逐项进度以[前端视觉世界迁移规格](https://github.com/SupremacySakura/zhixu/issues/35)与各批议题为准，本节只记口径。**
+
+- 迁移按**扩展—迁移—收缩**三段式推进，不得一次性切换：批 0 地基与批 1 原子层只新增、不动旧代码（视觉零变化）；批 2 机械收敛、批 3 外壳、批 4A–4F 六个页面群分批迁移；**批 5 才删兼容层，且必须等六个页面群全完**——否则 4 个页面的 `<h1>` 会从 `text-title-1`（26px）塌成默认字号。依据见[分批实施与验收口径](https://github.com/SupremacySakura/zhixu/issues/28)。
+- 兼容层现存于 `src/style.css` 的 `@theme` 段（`--text-title-1/2/3`、`--text-headline`、`--text-subhead`、`--text-caption`、`--color-material*` 等旧名映射），**标记为 deprecated**：新代码只写 v2 语义名，不引用兼容令牌，也不在兼容层上加新条目。
+- 触控目标口径为 **≥44×44 CSS px**（原规范中 40 的三处已统一改为 44，见[状态语法与可访问性地板](https://github.com/SupremacySakura/zhixu/issues/26)）。
+- 已知未落地项一律**以规范为准、不以代码为准**：`src/utils/motion.ts` 仍是旧弹簧值；`.vue` 模板仍用旧字号与旧 class；`<meta name="viewport">` 全仓 0 处（批 0 一行补齐）。

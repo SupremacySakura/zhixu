@@ -76,7 +76,9 @@ export type EvolveJudgement = z.infer<typeof evolveItemSchema>;
 
 // Deliberately loose: per-entry validation happens in sanitizeJudgements, so one bad
 // judgement does not throw away the model's other answers.
-export const evolveAnswerSchema = z.object({ judgements: z.array(z.unknown()) });
+export const evolveAnswerSchema = z.object({
+  judgements: z.array(z.unknown()),
+});
 
 // Schema/parse failures after the internal retry: Go marks the task failed without
 // spending further model calls. Transport/provider failures stay retryable on Go.
@@ -192,7 +194,11 @@ export function sanitizeJudgements(raw: unknown): EvolveJudgement[] | null {
     // worse than none, and Go greys out "adopt revision" when the draft is missing.
     const revisedTitle = truncate(text(value.revised_title), 200);
     const revisedContent = text(value.revised_content).trim();
-    if (revisedTitle !== "" && revisedContent !== "" && revisedContent.length <= 20_000) {
+    if (
+      revisedTitle !== "" &&
+      revisedContent !== "" &&
+      revisedContent.length <= 20_000
+    ) {
       candidate.revised_title = revisedTitle;
       candidate.revised_content = revisedContent;
     }

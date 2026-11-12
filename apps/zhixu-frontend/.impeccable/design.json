@@ -1,0 +1,457 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-12T23:50:00+08:00",
+  "title": "Design System: 知序 KnowledgeFlow — 索引卡盒",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "马尼拉地",
+        "canonical": "#e9e5db",
+        "tonalRamp": [
+          "#292724",
+          "#4b473b",
+          "#716750",
+          "#998962",
+          "#b1a485",
+          "#c4bdac",
+          "#dad7d0",
+          "#f3f3f1"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "卡面",
+        "canonical": "#f2eee4",
+        "tonalRamp": [
+          "#2a2823",
+          "#4f4838",
+          "#786b49",
+          "#a58f56",
+          "#baa87b",
+          "#c9bfa7",
+          "#dcd8ce",
+          "#f3f3f1"
+        ]
+      },
+      "surface-secondary": {
+        "role": "neutral",
+        "displayName": "侧栏面",
+        "canonical": "#e2ddd0",
+        "tonalRamp": [
+          "#292724",
+          "#4b473c",
+          "#706851",
+          "#988a63",
+          "#b0a486",
+          "#c4bdac",
+          "#dad7d0",
+          "#f3f3f1"
+        ]
+      },
+      "surface-tertiary": {
+        "role": "neutral",
+        "displayName": "纸条",
+        "canonical": "#fbf8ef",
+        "tonalRamp": [
+          "#2d2920",
+          "#574d30",
+          "#897538",
+          "#c1a03a",
+          "#d1b665",
+          "#d5c79a",
+          "#e1dbc9",
+          "#f4f3f0"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "墨",
+        "canonical": "#181818",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7e7e7e",
+          "#9b9b9b",
+          "#b8b8b8",
+          "#d5d5d5",
+          "#f2f2f2"
+        ]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "次级墨",
+        "canonical": "#605949",
+        "tonalRamp": [
+          "#282725",
+          "#48453f",
+          "#6a6457",
+          "#8d846e",
+          "#a7a08f",
+          "#bfbbb1",
+          "#d8d6d2",
+          "#f3f2f2"
+        ]
+      },
+      "ink-tertiary": {
+        "role": "neutral",
+        "displayName": "三级墨",
+        "canonical": "#847c6b",
+        "tonalRamp": [
+          "#272725",
+          "#474540",
+          "#68635a",
+          "#898272",
+          "#a49e91",
+          "#bdbab3",
+          "#d7d6d3",
+          "#f3f2f2"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "图书馆蓝",
+        "canonical": "#1f4e79",
+        "tonalRamp": [
+          "#20272d",
+          "#304457",
+          "#396288",
+          "#3b81c0",
+          "#669dd0",
+          "#9bb9d5",
+          "#c9d6e1",
+          "#f0f2f4"
+        ]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "图书馆蓝·悬停",
+        "canonical": "#17405f",
+        "tonalRamp": [
+          "#20272d",
+          "#2f4657",
+          "#386689",
+          "#3987c2",
+          "#64a2d2",
+          "#9abcd6",
+          "#c9d7e2",
+          "#f0f3f4"
+        ]
+      },
+      "primary-pressed": {
+        "role": "primary",
+        "displayName": "图书馆蓝·按下",
+        "canonical": "#123350",
+        "tonalRamp": [
+          "#1f272d",
+          "#2f4558",
+          "#36638b",
+          "#3682c5",
+          "#629ed4",
+          "#99bad7",
+          "#c8d6e2",
+          "#f0f2f5"
+        ]
+      },
+      "danger": {
+        "role": "danger",
+        "displayName": "印章红",
+        "canonical": "#a8322a",
+        "tonalRamp": [
+          "#2d2120",
+          "#573230",
+          "#893e38",
+          "#c1433a",
+          "#d16c65",
+          "#d59e9a",
+          "#e1cac9",
+          "#f4f0f0"
+        ]
+      },
+      "warning": {
+        "role": "warning",
+        "displayName": "深琥珀",
+        "canonical": "#6f4700",
+        "tonalRamp": [
+          "#31291c",
+          "#644d23",
+          "#a3731e",
+          "#ee9d0d",
+          "#f5b441",
+          "#e9c687",
+          "#e9dbc1",
+          "#f6f3ef"
+        ]
+      },
+      "success": {
+        "role": "success",
+        "displayName": "印泥绿",
+        "canonical": "#0a5f3c",
+        "tonalRamp": [
+          "#1e2f28",
+          "#295e48",
+          "#2b976a",
+          "#22d98e",
+          "#52e4a8",
+          "#90e0bf",
+          "#c5e6d8",
+          "#eff5f3"
+        ]
+      },
+      "ai": {
+        "role": "accent",
+        "displayName": "AI 标记绿（退役品牌绿）",
+        "canonical": "#10b674",
+        "tonalRamp": [
+          "#1d2f28",
+          "#285f49",
+          "#29986c",
+          "#1fdc91",
+          "#4fe6aa",
+          "#8fe1c0",
+          "#c4e6d9",
+          "#eff5f3"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "页面主标题",
+        "purpose": "每页最多一个；长文 h1。"
+      },
+      "title": {
+        "displayName": "区块标题",
+        "purpose": "页头带标题、弹窗标题、区块 h2。"
+      },
+      "read": {
+        "displayName": "长文正文",
+        "purpose": "长文正文唯一合法档位，16/28。"
+      },
+      "lead": {
+        "displayName": "按钮与字段标签",
+        "purpose": "按钮文字、表单标签、强调短语。"
+      },
+      "body": {
+        "displayName": "界面正文",
+        "purpose": "列表、表格、常规界面文字。"
+      },
+      "note": {
+        "displayName": "辅助说明",
+        "purpose": "meta 行、计数、辅助说明。"
+      },
+      "micro": {
+        "displayName": "等宽小标签",
+        "purpose": "分类号、日期章、分组名，必走 --font-type。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "2px 2px 0 rgb(24 24 24 / 0.13), 3px 3px 0 rgb(24 24 24 / 0.05)",
+        "purpose": "卡片与面板。双层偏移造出纸的厚度，无模糊。"
+      },
+      {
+        "name": "popover",
+        "value": "2px 2px 0 rgb(24 24 24 / 0.16)",
+        "purpose": "输入框、次按钮、下拉。"
+      },
+      {
+        "name": "floating",
+        "value": "2px 2px 0 rgb(24 24 24 / 0.26)",
+        "purpose": "主按钮、弹窗。最深的一档。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "duration-micro",
+        "value": "90ms",
+        "purpose": "状态切换、淡入、按压反馈、所有退场。"
+      },
+      {
+        "name": "duration-standard",
+        "value": "160ms",
+        "purpose": "弹窗、进度推进。"
+      },
+      {
+        "name": "duration-sheet",
+        "value": "220ms",
+        "purpose": "抽屉、贴底面板、拖拽归位。"
+      },
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "所有入场曲线。"
+      },
+      {
+        "name": "ease-exit",
+        "value": "cubic-bezier(0.4, 0, 1, 1)",
+        "purpose": "所有退场曲线，退场一律 90ms。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "base",
+        "value": "<768px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "主按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "页头带右端的唯一实心操作。蓝底反白，硬偏移最深的一档。",
+      "html": "<button class=\"ds-btn-primary\">新建知识</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; padding: 0 16px; border-radius: 0; font-size: 15px; font-weight: 700; line-height: 1.4; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; cursor: pointer; transition: background-color 90ms cubic-bezier(0.2,0.8,0.2,1), box-shadow 90ms cubic-bezier(0.2,0.8,0.2,1); background: var(--color-primary, #1f4e79); color: var(--color-surface-tertiary, #fbf8ef); border: 1px solid var(--color-primary-pressed, #123350); box-shadow: 2px 2px 0 rgb(24 24 24 / 0.26); } .ds-btn-primary:hover { background: var(--color-primary-hover, #17405f); } .ds-btn-primary:active { background: var(--color-primary-pressed, #123350); box-shadow: none; } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-primary, #1f4e79); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "次按钮",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "与主按钮成对出现的描边操作。卡面底 + 48% 规则线。",
+      "html": "<button class=\"ds-btn-secondary\">从文件加入</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; padding: 0 16px; border-radius: 0; font-size: 15px; font-weight: 700; line-height: 1.4; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; cursor: pointer; transition: background-color 90ms cubic-bezier(0.2,0.8,0.2,1), box-shadow 90ms cubic-bezier(0.2,0.8,0.2,1); background: var(--color-surface, #f2eee4); color: var(--color-label, #181818); border: 1px solid var(--color-rule, rgb(24 24 24 / 0.48)); box-shadow: 2px 2px 0 rgb(24 24 24 / 0.16); } .ds-btn-secondary:hover { background: var(--color-surface-secondary, #e2ddd0); } .ds-btn-secondary:active { box-shadow: none; } .ds-btn-secondary:focus-visible { outline: 2px solid var(--color-primary, #1f4e79); outline-offset: 2px; }"
+    },
+    {
+      "name": "静音按钮",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "三级操作。蓝 tint 底，用于表格行内与卡片内。",
+      "html": "<button class=\"ds-btn-quiet\">重试</button>",
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; padding: 0 16px; border-radius: 0; font-size: 15px; font-weight: 700; line-height: 1.4; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; cursor: pointer; transition: background-color 90ms cubic-bezier(0.2,0.8,0.2,1), box-shadow 90ms cubic-bezier(0.2,0.8,0.2,1); background: var(--color-primary-tint, rgb(31 78 121 / 0.12)); color: var(--color-primary-pressed, #123350); border: 1px solid transparent; box-shadow: none; } .ds-btn-quiet:hover { border-color: var(--color-rule, rgb(24 24 24 / 0.48)); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--color-primary, #1f4e79); outline-offset: 2px; }"
+    },
+    {
+      "name": "输入框",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "单行检索与表单字段。直角、48% 规则线描边、硬偏移。",
+      "html": "<input class=\"ds-input\" placeholder=\"检索知识标题、标签或内容\" />",
+      "css": ".ds-input { height: 32px; padding: 0 10px; border-radius: 0; width: 100%; box-sizing: border-box; background: var(--color-surface, #f2eee4); color: var(--color-label, #181818); border: 1px solid var(--color-rule, rgb(24 24 24 / 0.48)); box-shadow: 2px 2px 0 rgb(24 24 24 / 0.1); font-size: 13px; line-height: 1.46; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; transition: border-color 90ms cubic-bezier(0.2,0.8,0.2,1); } .ds-input::placeholder { color: var(--color-label-tertiary, #847c6b); } .ds-input:focus-visible { outline: 2px solid var(--color-primary, #1f4e79); outline-offset: 2px; }"
+    },
+    {
+      "name": "知识硬卡（招牌动作）",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "知识库列表页独有的招牌动作：左侧硬卡 + 右侧交叉引用纸条堆。其余 12 页不得复制此形态。",
+      "html": "<article class=\"ds-card\"><div class=\"ds-card__body\"><div class=\"ds-card__head\"><span class=\"ds-card__num\">KM-0142</span><h3 class=\"ds-card__title\">Transformer 位置编码的三种实现</h3></div><p class=\"ds-card__ex\">绝对位置编码、可学习编码与 RoPE 各自的取舍，以及在长序列上的实际表现差异……</p><div class=\"ds-card__meta\">分块 12 · 已向量化 · 注意力机制 / PyTorch</div></div><div class=\"ds-card__side\"><div class=\"ds-slip\">依赖 071 团队共享的术语表</div><div class=\"ds-slip\">矛盾 062 渐进增强还值得吗</div><div class=\"ds-slip ds-slip--stamp\">2026-11-12</div></div></article>",
+      "css": ".ds-card { display: flex; background: var(--color-surface, #f2eee4); border: 1px solid var(--color-hairline, rgb(24 24 24 / 0.26)); border-radius: 0; box-shadow: 2px 2px 0 rgb(24 24 24 / 0.13), 3px 3px 0 rgb(24 24 24 / 0.05); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; } .ds-card__body { flex: 1 1 auto; min-width: 0; padding: 6px 12px 8px 14px; } .ds-card__head { display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid rgb(31 78 121 / 0.3); padding-bottom: 4px; } .ds-card__num { font-family: 'Courier Prime', ui-monospace, monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--color-primary, #1f4e79); } .ds-card__title { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 700; color: var(--color-label, #181818); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-card__ex { margin: 6px 0 0; font-size: 13px; line-height: 18px; max-height: 54px; overflow: hidden; color: var(--color-label, #181818); background-image: repeating-linear-gradient(to bottom, transparent 0 17px, rgb(31 78 121 / 0.2) 17px 18px); } .ds-card__meta { margin-top: 5px; font-size: 12px; line-height: 1.42; color: var(--color-label-secondary, #605949); font-family: 'Courier Prime', ui-monospace, monospace; } .ds-card__side { flex: 0 0 176px; border-left: 1px solid var(--color-hairline, rgb(24 24 24 / 0.26)); padding: 8px 10px; display: flex; flex-direction: column; } .ds-slip { height: 17px; line-height: 15px; padding: 0 5px; font-size: 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; background: var(--color-surface-tertiary, #fbf8ef); border: 1px solid var(--color-hairline, rgb(24 24 24 / 0.26)); box-shadow: 1px 1px 0 rgb(24 24 24 / 0.12); color: var(--color-label, #181818); } .ds-slip + .ds-slip { margin-top: -1px; margin-left: 5px; } .ds-slip--stamp { align-self: flex-end; margin-top: auto; margin-left: 0; font-family: 'Courier Prime', ui-monospace, monospace; letter-spacing: 0.06em; color: var(--color-primary, #1f4e79); border-color: var(--color-primary, #1f4e79); background: rgb(31 78 121 / 0.05); }"
+    },
+    {
+      "name": "筛选控件",
+      "kind": "chip",
+      "refersTo": "nav-item-active",
+      "description": "26px 直角描边筛选项。禁止胶囊形态，选中态用蓝描边 + 硬偏移而非填色。",
+      "html": "<div class=\"ds-filters\"><button class=\"ds-chip ds-chip--on\">全部状态</button><button class=\"ds-chip\">已向量化</button><button class=\"ds-chip\">待向量化</button><span class=\"ds-hits\">命中 9 / 142</span></div>",
+      "css": ".ds-filters { display: flex; align-items: center; gap: 8px; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; } .ds-chip { height: 26px; padding: 0 9px; border-radius: 0; font-size: 12px; line-height: 24px; background: var(--color-surface, #f2eee4); color: var(--color-label-secondary, #605949); border: 1px solid var(--color-hairline, rgb(24 24 24 / 0.26)); cursor: pointer; transition: border-color 90ms cubic-bezier(0.2,0.8,0.2,1); } .ds-chip:hover { border-color: var(--color-rule, rgb(24 24 24 / 0.48)); } .ds-chip--on { color: var(--color-primary, #1f4e79); font-weight: 700; border-color: var(--color-primary, #1f4e79); box-shadow: 2px 2px 0 rgb(31 78 121 / 0.18); } .ds-chip:focus-visible { outline: 2px solid var(--color-primary, #1f4e79); outline-offset: 2px; } .ds-hits { margin-left: auto; font-family: 'Courier Prime', ui-monospace, monospace; font-size: 12px; color: var(--color-label-secondary, #605949); }"
+    },
+    {
+      "name": "侧栏导航项",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "29px 一行，激活态是 3px 蓝左边条 + 浅底，不是整块 tint 填充。",
+      "html": "<nav class=\"ds-rail\"><a class=\"ds-rail__item ds-rail__item--on\">知识库</a><a class=\"ds-rail__item\">知识图谱</a><a class=\"ds-rail__item\">演化中心</a></nav>",
+      "css": ".ds-rail { width: 200px; background: var(--color-surface-secondary, #e2ddd0); border-right: 1px solid var(--color-hairline, rgb(24 24 24 / 0.26)); padding: 6px 0; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; box-sizing: border-box; } .ds-rail__item { display: flex; align-items: center; height: 29px; padding: 0 14px 0 13px; border-left: 3px solid transparent; font-size: 13px; line-height: 1.46; color: var(--color-label-secondary, #605949); text-decoration: none; cursor: pointer; transition: background-color 90ms cubic-bezier(0.2,0.8,0.2,1); } .ds-rail__item:hover { background: rgb(24 24 24 / 0.04); color: var(--color-label, #181818); } .ds-rail__item--on { border-left-color: var(--color-primary, #1f4e79); background: #e6e2d4; color: var(--color-primary, #1f4e79); font-weight: 600; } .ds-rail__item:focus-visible { outline: 2px solid var(--color-primary, #1f4e79); outline-offset: -2px; }"
+    },
+    {
+      "name": "状态徽章",
+      "kind": "chip",
+      "refersTo": "panel",
+      "description": "四态方块徽章（圆角恒 0）。圆点改 4px 方块，色相只取语义四色。",
+      "html": "<div class=\"ds-badges\"><span class=\"ds-badge ds-badge--ok\">已向量化</span><span class=\"ds-badge ds-badge--pending\">待向量化</span><span class=\"ds-badge ds-badge--fail\">向量失败</span></div>",
+      "css": ".ds-badges { display: flex; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; } .ds-badge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px; border-radius: 0; font-size: 12px; line-height: 1.42; border: 1px solid var(--color-hairline, rgb(24 24 24 / 0.26)); } .ds-badge::before { content: ''; width: 4px; height: 4px; display: block; } .ds-badge--ok { color: var(--color-success, #0a5f3c); background: rgb(10 95 60 / 0.12); border-color: var(--color-success, #0a5f3c); } .ds-badge--ok::before { background: var(--color-success, #0a5f3c); } .ds-badge--pending { color: var(--color-label-secondary, #605949); background: var(--color-surface-secondary, #e2ddd0); } .ds-badge--pending::before { background: var(--color-label-secondary, #605949); } .ds-badge--fail { color: var(--color-danger, #a8322a); background: rgb(168 50 42 / 0.12); border-color: var(--color-danger, #a8322a); } .ds-badge--fail::before { background: var(--color-danger, #a8322a); }"
+    },
+    {
+      "name": "页头带",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "64px，不吸顶。左标题 + 等宽计数，右主次操作。下沿一条 hairline。",
+      "html": "<header class=\"ds-pagehead\"><div><h1 class=\"ds-pagehead__title\">知识库</h1><div class=\"ds-pagehead__count\">142 条 · 1,284 分块</div></div><div class=\"ds-pagehead__actions\"><button class=\"ds-pagehead__btn\">从文件加入</button><button class=\"ds-pagehead__btn ds-pagehead__btn--pri\">新建知识</button></div></header>",
+      "css": ".ds-pagehead { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; border-bottom: 1px solid var(--color-hairline, rgb(24 24 24 / 0.26)); background: var(--color-canvas, #e9e5db); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; } .ds-pagehead__title { margin: 0; font-size: 19px; line-height: 26px; font-weight: 700; color: var(--color-label, #181818); } .ds-pagehead__count { font-family: 'Courier Prime', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--color-label-secondary, #605949); } .ds-pagehead__actions { display: flex; gap: 8px; } .ds-pagehead__btn { height: 32px; padding: 0 13px; border-radius: 0; font-size: 13px; font-weight: 700; background: var(--color-surface, #f2eee4); color: var(--color-label, #181818); border: 1px solid var(--color-rule, rgb(24 24 24 / 0.48)); box-shadow: 2px 2px 0 rgb(24 24 24 / 0.16); cursor: pointer; transition: background-color 90ms cubic-bezier(0.2,0.8,0.2,1); } .ds-pagehead__btn--pri { background: var(--color-primary, #1f4e79); color: var(--color-surface-tertiary, #fbf8ef); border-color: var(--color-primary-pressed, #123350); box-shadow: 2px 2px 0 rgb(24 24 24 / 0.26); } .ds-pagehead__btn--pri:hover { background: var(--color-primary-hover, #17405f); } .ds-pagehead__btn:focus-visible { outline: 2px solid var(--color-primary, #1f4e79); outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "索引卡盒",
+    "overview": "知序是一个人的知识库。它的第一动作不是浏览，是读：读自己三个月前存进来的长文，读系统替它做的整理，读它和别的条目之间被找出来的关系。所以这个界面不是一叠悬浮的白卡片，而是一盒被认真维护的索引卡——马尼拉卡纸的底、印着横线的卡面、打在边角的日期章、以及另立在卡片右侧的那一叠手写交叉引用小卡。它拒绝品类默认的「圆角白卡 + 柔和阴影 + 胶囊筛选」，也拒绝把工作屏做成报纸、海报或任何世界自身器物的戏服。",
+    "keyCharacteristics": [
+      "四表面几乎同色（亮度比 1.08–1.28），层级绝不靠底色差建立，只靠规则线、留白与硬偏移。",
+      "圆角恒为 0，所有浮起感由 1–2px 无模糊硬偏移承担，不存在任何柔和阴影。",
+      "两套字面：西文与数字走自托管的 Courier Prime（打字机），中文走系统黑体。",
+      "一枚主色：图书馆蓝 #1f4e79 只承担结构与选中，不承担装饰。",
+      "一枚警示色：印章红 #a8322a 只给真需要被看见的那一条。",
+      "品牌绿退役：#10b674 仅作 AI 内容标记，且永不作文字色。"
+    ],
+    "rules": [
+      {
+        "name": "The Rule-Vs-Hairline Rule",
+        "section": "colors",
+        "body": "世界只有两种线。hairline（墨 26%，对比度 1.72）是装饰纹理，永远不能当控件边界；rule（墨 48%，对比度 3.01）是控件边界。48% 是实测出的 3:1 最小 alpha，不要向下取。"
+      },
+      {
+        "name": "The One Stamp Rule",
+        "section": "colors",
+        "body": "一枚屏幕里只能有一处用印章红。它表示「这条真的需要你现在看一眼」，不是强调色，不能做 hover 或图标色。"
+      },
+      {
+        "name": "The Green Is Not Text Rule",
+        "section": "colors",
+        "body": "#10b674 在该世界底色上作文字只有 1.94–2.28。它唯一合格的用法是当底色、墨字压其上（6.74）。"
+      },
+      {
+        "name": "The One Measure Rule",
+        "section": "typography",
+        "body": "长文正文只能有一个宽度：40em（约 640px）。中文最舒服是每行 36–40 字，硬上限 48 字。"
+      },
+      {
+        "name": "The Zero Letter-Spacing Rule",
+        "section": "typography",
+        "body": "中文 letter-spacing 恒为 0，标题也不许取负值。唯一例外是 micro 档等宽小标签的 0.06em。"
+      },
+      {
+        "name": "The No-Indent Rule",
+        "section": "typography",
+        "body": "中文长文不缩进。段距 1em，不靠首行缩进 2em。"
+      },
+      {
+        "name": "The Three-Means Rule",
+        "section": "elevation",
+        "body": "层级只能由线、留白、硬偏移三种手段承担，同一元素上最多用两种。绝不允许第四种：换底色。"
+      },
+      {
+        "name": "The No-Glass Rule",
+        "section": "elevation",
+        "body": "毛玻璃已退役。backdrop-blur / backdrop-saturate / --color-material* 全部不存在于这个世界。"
+      }
+    ],
+    "dos": [
+      "用 --color-rule（48%）画任何控件边界，用 --color-hairline（26%）画纯装饰线。",
+      "长文正文用 --text-read + max-w-measure，中文每行 36–40 字。",
+      "层级用线、留白、硬偏移三选二。",
+      "数字、编号、计数、日期一律走 --font-type（Courier Prime）。",
+      "主操作放页头带右端，最多 1 主 + 2 次，其余进溢出菜单。",
+      "空态、加载态、错误态都朝同一左内边距线对齐。",
+      "用 AppLoading 表达加载，用静态 bg-hairline 条表达骨架屏。"
+    ],
+    "donts": [
+      "不要用底色差表示层级——四表面亮度比全部低于 1.2。",
+      "不要用柔和阴影、模糊阴影、shadow-md 一类（七档已封死为 none）。",
+      "不要用圆角、胶囊、rounded-full（九个圆角键全部为 0）。",
+      "不要用毛玻璃、backdrop-blur、--color-material*。",
+      "不要把 #10b674 用作文字色或主按钮底色。",
+      "不要用 text-[13px] 一类任意值字号。",
+      "不要给表格画列线；不要让一屏超过 5 条水平线（表格行间线除外）。",
+      "不要在知识库列表页之外复制「硬卡 + 右侧纸条」形态。",
+      "不要用弹簧、弹性、回弹、动量投影、橡皮筋。",
+      "不要用 transition-all、active:scale-*、hover:-translate-y-*、group-hover:scale-*。",
+      "不要用 opacity 表达禁用态，用规则线 + 颜色降级。"
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 # 文件知识前端
 
-按 `design/MarkdownKnowledge.html` 的浅色品牌绿风格接入真实后端。删除语义与接口见 [文件知识后端](./markdown-knowledge-backend.md)。
+按 `design/MarkdownKnowledge.html` 的交互结构接入真实后端。**注意：`design/` 下的 HTML 样张是旧视觉世界（2026-09 浅色 Apple 风格）的历史样张，只作交互结构对照，视觉口径一律以仓库根 [DESIGN.md](../DESIGN.md) v2「索引卡盒」为准**（旧世界已整份替换，见 [ADR-0003](./adr/0003-visual-world-replacement.md)）。删除语义与接口见 [文件知识后端](./markdown-knowledge-backend.md)。
 
 ## 功能
 

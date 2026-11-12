@@ -40,10 +40,19 @@ AI 工具进入项目时应优先读取的必读层。
 
 - [README.md](./plan/README.md) — 完成度矩阵、阶段总览、数据库与 API 契约变更总表
 
+### 视觉与产品规范
+
+前端的视觉权威与产品真相，两者都不是实现细节，冲突时的优先级见 [ADR-0003](./adr/0003-visual-world-replacement.md)。
+
+- [../DESIGN.md](../DESIGN.md) — 索引卡盒视觉规范（v2，骨架 + 三章待回填）
+- [../apps/zhixu-frontend/PRODUCT.md](../apps/zhixu-frontend/PRODUCT.md) — 产品真相（用户、定位、不可破契约）
+
 ### 领域术语与决策记录
 
 - [../GLOSSARY.md](../GLOSSARY.md) — 领域术语表（知识管理、AI 工作流、知识关联、知识图谱）
 - [adr/0001-knowledge-relation-model.md](./adr/0001-knowledge-relation-model.md) — ADR-0001 知识关系模型（有向行、五种类型、唯一键含类型）
+- [adr/0002-conflict-relation-type.md](./adr/0002-conflict-relation-type.md) — ADR-0002 冲突关系类型 contradicts（对称类型、不进 AI 推荐白名单）
+- [adr/0003-visual-world-replacement.md](./adr/0003-visual-world-replacement.md) — ADR-0003 视觉世界替换（redesign 而非 refinement、三份权威边界、扩展—迁移—收缩）
 
 ### 详细结构参考
 
