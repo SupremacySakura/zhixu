@@ -377,7 +377,11 @@ onBeforeUnmount(() => {
                 type="button"
                 aria-label="排序"
               >
-                <AppIcon icon="material-symbols:sort-rounded" class="text-[20px]" aria-hidden="true" />
+                <AppIcon
+                  icon="material-symbols:sort-rounded"
+                  class="text-[20px]"
+                  aria-hidden="true"
+                />
               </button>
             </div>
           </div>
@@ -549,7 +553,11 @@ onBeforeUnmount(() => {
                 :disabled="currentPage <= 1 || loading"
                 @click="handlePageChange(currentPage - 1)"
               >
-                <AppIcon class="text-[16px]" icon="material-symbols:chevron-left" aria-hidden="true" />
+                <AppIcon
+                  class="text-[16px]"
+                  icon="material-symbols:chevron-left"
+                  aria-hidden="true"
+                />
               </button>
               <button
                 v-for="p in pageNumbers"
@@ -719,7 +727,11 @@ onBeforeUnmount(() => {
                 aria-label="复制取件码"
                 @click="handleCopyCode(selectedItem.code)"
               >
-                <AppIcon class="text-[16px]" icon="material-symbols:content-copy" aria-hidden="true" />
+                <AppIcon
+                  class="text-[16px]"
+                  icon="material-symbols:content-copy"
+                  aria-hidden="true"
+                />
                 复制取件码
               </button>
             </div>

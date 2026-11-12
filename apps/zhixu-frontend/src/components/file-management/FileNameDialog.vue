@@ -127,7 +127,11 @@ watch(
               :disabled="isConfirmDisabled"
               @click="handleConfirm"
             >
-              <AppIcon v-if="loading" icon="material-symbols:progress-activity" class="animate-spin" />
+              <AppIcon
+                v-if="loading"
+                icon="material-symbols:progress-activity"
+                class="animate-spin"
+              />
               {{ loading ? loadingText : confirmText }}
             </button>
           </div>

@@ -78,7 +78,9 @@ if (missing.length) {
 }
 
 if (unused.length) {
-  console.log(`提示：${unused.length} 个本地字形当前未被引用（无害，可留待后续批次）：${unused.join(', ')}`)
+  console.log(
+    `提示：${unused.length} 个本地字形当前未被引用（无害，可留待后续批次）：${unused.join(', ')}`,
+  )
 }
 
 console.log('✓ 引用的图标全部存在于本地数据')

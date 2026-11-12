@@ -1,0 +1,764 @@
+/* ============================================================
+   原子层骨架（#37 批 1 · 十一个零件的共享承重墙）
+
+   为什么是 @utility 而不是 @layer components：
+   Tailwind v4 里 @layer components 的自定义类**不能被 @apply 引用**
+   （报 Cannot apply unknown utility class 'cabinet-btn'），只有 @utility
+   定义的才能当原子被别的样式组合。批 0 已把五个 .cabinet-* 迁到
+   @utility，这里继续用同一手法，让「一个按钮长什么样」只有一处真值。
+
+   为什么尺寸走 CSS 自定义属性：
+   票面契约只有三档（26 / 32 / 36px）。属性化之后，调用方可以用
+   style="--atom-control-height: 44px" 就地开一个逃生口，而不必逼我们
+   在组件里加第四档 size —— 加档等于允许每个人重定义世界刻度。
+
+   为什么语气是「一个类设一组变量」而不是四套骨架：
+   骨架（边框 / 阴影 / 过渡 / 禁用降级）必须只有一份，否则改一次按钮
+   要改四处。语气只负责覆盖颜色变量。
+   ============================================================ */
+
+@keyframes atom-ring-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes atom-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes atom-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes atom-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+/* —— 加载线环：全仓唯一的加载指示形态（1s 匀速）
+   border-radius: 50% 是唯一允许的圆——它就是线环本身，
+   不是「圆角」。世界令牌里 --radius-full 被压成 0，所以这里必须直写。 —— */
+@utility atom-ring {
+  display: inline-block;
+  flex: none;
+  width: var(--atom-ring-size, 16px);
+  height: var(--atom-ring-size, 16px);
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: atom-ring-turn 1s linear infinite;
+}
+
+/* —— 图标盒：图标是 1em 见方的 SVG，所以「尺寸」= font-size —— */
+@utility atom-glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--atom-glyph-size, 16px);
+  line-height: 1;
+}
+
+/* ============================================================
+   语气矩阵（控件层）
+   ============================================================ */
+
+@utility atom-tone-primary {
+  --atom-surface: var(--color-primary);
+  --atom-surface-hover: var(--color-primary-hover);
+  --atom-surface-active: var(--color-primary-pressed);
+  --atom-ink: var(--color-surface-tertiary);
+  --atom-border: var(--color-primary-pressed);
+  --atom-shadow: var(--shadow-floating);
+}
+
+@utility atom-tone-secondary {
+  --atom-surface: var(--color-surface);
+  --atom-surface-hover: var(--color-surface-secondary);
+  --atom-surface-active: var(--color-surface-secondary);
+  --atom-ink: var(--color-label);
+  --atom-border: var(--color-rule);
+  --atom-shadow: var(--shadow-popover);
+}
+
+/* 安静语气 = 文字动作（没有壳）。禁用时不能塌成「看不见」，
+   所以 ink-disabled 仍用 label-secondary（卡面上 6.00:1）。 */
+@utility atom-tone-quiet {
+  --atom-surface: transparent;
+  --atom-surface-hover: var(--color-primary-tint);
+  --atom-surface-active: var(--color-primary-tint);
+  --atom-ink: var(--color-primary-pressed);
+  --atom-border: transparent;
+  --atom-shadow: none;
+  --atom-surface-disabled: transparent;
+}
+
+/* 印章红：实心红底 + 纸白字（6.27:1）。没有更深的危险色令牌，
+   压深态用世界墨色按比例混出，绝不新造一个红。 */
+@utility atom-tone-danger {
+  --atom-surface: var(--color-danger);
+  --atom-surface-hover: color-mix(in srgb, var(--color-danger) 86%, var(--color-label));
+  --atom-surface-active: color-mix(in srgb, var(--color-danger) 78%, var(--color-label));
+  --atom-ink: var(--color-surface-tertiary);
+  --atom-border: var(--color-danger);
+  --atom-shadow: var(--shadow-floating);
+}
+
+/* ============================================================
+   语气矩阵（容器 / 徽章：浅底 + 深字，不做实心）
+   ============================================================ */
+
+@utility atom-tint-primary {
+  --atom-tint-surface: var(--color-primary-tint);
+  --atom-tint-ink: var(--color-primary-pressed);
+  --atom-tint-border: var(--color-primary);
+}
+
+@utility atom-tint-secondary {
+  --atom-tint-surface: var(--color-surface-secondary);
+  --atom-tint-ink: var(--color-label-secondary);
+  --atom-tint-border: var(--color-hairline);
+}
+
+@utility atom-tint-quiet {
+  --atom-tint-surface: transparent;
+  --atom-tint-ink: var(--color-label-secondary);
+  --atom-tint-border: var(--color-hairline);
+}
+
+@utility atom-tint-danger {
+  --atom-tint-surface: var(--color-danger-tint);
+  --atom-tint-ink: var(--color-danger);
+  --atom-tint-border: var(--color-danger);
+}
+
+/* ============================================================
+   按钮骨架
+   ============================================================ */
+
+@utility atom-btn {
+  @apply cabinet-btn justify-center;
+  position: relative;
+  min-height: var(--atom-control-height, 32px);
+  padding-inline: var(--atom-control-padding, 12px);
+  font-size: var(--atom-control-font-size, var(--text-body));
+  font-weight: 700;
+  line-height: 1;
+  background-color: var(--atom-surface, var(--color-surface));
+  color: var(--atom-ink, var(--color-label));
+  border-color: var(--atom-border, var(--color-rule));
+  box-shadow: var(--atom-shadow, var(--shadow-popover));
+
+  /* 禁用态：颜色降级 + 保留原生 disabled，**不用 opacity**。
+     opacity 会把文字一起压淡，卡面上直接掉到 AA 以下；
+     这里换成 surface-secondary 底 + label-secondary 字（5.12:1 达标）。 */
+  &:disabled,
+  &[aria-disabled='true'] {
+    background-color: var(--atom-surface-disabled, var(--color-surface-secondary));
+    color: var(--atom-ink-disabled, var(--color-label-secondary));
+    border-color: var(--color-hairline);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  /* 悬停只在真指针上生效：触摸设备没有 hover 态，
+     不加这条会让点完的按钮「粘」在悬停色上。 */
+  @media (hover: hover) and (pointer: fine) {
+    &:not(:disabled):not([aria-disabled='true']):hover {
+      background-color: var(--atom-surface-hover, var(--color-surface-secondary));
+    }
+  }
+
+  &:not(:disabled):not([aria-disabled='true']):active {
+    background-color: var(--atom-surface-active, var(--color-surface-secondary));
+  }
+
+  /* 触控地板：票面要求可点击目标 ≥44×44。只在粗指针上抬，
+     桌面端视觉高度仍是 26 / 32 / 36。 */
+  @media (pointer: coarse) {
+    min-height: max(var(--atom-control-height, 32px), 44px);
+  }
+}
+
+/* 图标按钮形态：正方形，宽度跟着高度走 */
+@utility atom-btn-square {
+  padding-inline: 0;
+  width: var(--atom-control-height, 32px);
+  min-width: var(--atom-control-height, 32px);
+  justify-content: center;
+
+  @media (pointer: coarse) {
+    width: max(var(--atom-control-height, 32px), 44px);
+    min-width: max(var(--atom-control-height, 32px), 44px);
+  }
+}
+
+/* 加载态锁宽度：内容保留占位（visibility 而不是 display / v-if），
+   所以按钮宽度一格都不动；线环绝对居中叠在上面。
+   用 visibility 而不是 opacity，是因为 opacity 会连占位一起变，
+   而 visibility: hidden 仍然占布局。 */
+@utility atom-btn-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--atom-control-gap, 8px);
+
+  &[data-busy='true'] {
+    visibility: hidden;
+  }
+}
+
+@utility atom-btn-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  pointer-events: none;
+}
+
+/* ============================================================
+   输入骨架
+   ============================================================ */
+
+@utility atom-field {
+  @apply w-full bg-surface text-label;
+  min-height: var(--atom-control-height, 32px);
+  padding-inline: var(--atom-control-padding, 12px);
+  font-size: var(--atom-control-font-size, var(--text-body));
+  line-height: var(--text-body--line-height, 19px);
+  color: var(--atom-ink, var(--color-label));
+  background-color: var(--atom-surface, var(--color-surface));
+  border: 1px solid var(--atom-border, var(--color-rule));
+  border-radius: 0;
+  /* 不写 outline-none / ring-*：焦点环由 style.css 的全局
+     :focus-visible 一条规则统一提供，组件各写一份就会不一致。 */
+
+  &::placeholder {
+    color: var(--color-label-tertiary);
+  }
+
+  &:disabled,
+  &[aria-disabled='true'] {
+    background-color: var(--color-surface-secondary);
+    color: var(--color-label-secondary);
+    border-color: var(--color-hairline);
+    cursor: not-allowed;
+
+    &::placeholder {
+      color: var(--color-label-secondary);
+    }
+  }
+
+  @media (pointer: coarse) {
+    min-height: max(var(--atom-control-height, 32px), 44px);
+  }
+}
+
+/* 多行输入：高度交给 rows，只补内边距与纵向伸缩 */
+@utility atom-field-multiline {
+  min-height: calc(var(--atom-control-height, 32px) * 2);
+  padding-block: 8px;
+  line-height: var(--text-read--line-height, 28px);
+  resize: vertical;
+}
+
+/* 输入框的加载指示：右侧贴边，不遮字 */
+@utility atom-field-shell {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+@utility atom-field-spinner {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  translate: 0 -50%;
+  pointer-events: none;
+  color: var(--color-label-secondary);
+}
+
+@utility atom-field-spinner-top {
+  top: 10px;
+  translate: none;
+}
+
+/* ============================================================
+   徽章骨架
+   ============================================================ */
+
+@utility atom-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--atom-control-height, 32px);
+  padding-inline: var(--atom-control-padding, 12px);
+  font-size: var(--atom-control-font-size, var(--text-body));
+  line-height: 1;
+  white-space: nowrap;
+  background-color: var(--atom-tint-surface, var(--color-surface-secondary));
+  color: var(--atom-tint-ink, var(--color-label-secondary));
+  border: 1px solid var(--atom-tint-border, var(--color-hairline));
+  border-radius: 0;
+
+  &[aria-disabled='true'] {
+    background-color: var(--color-surface-secondary);
+    color: var(--color-label-secondary);
+    border-color: var(--color-hairline);
+  }
+}
+
+@utility atom-badge-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+/* ============================================================
+   面板骨架
+   ============================================================ */
+
+@utility atom-panel {
+  @apply cabinet-card;
+  position: relative;
+  padding: var(--atom-panel-padding, 16px);
+  background-color: var(--atom-tint-surface, var(--color-surface));
+  border-color: var(--atom-tint-border, var(--color-hairline));
+
+  &[aria-disabled='true'] {
+    background-color: var(--color-surface-secondary);
+    color: var(--color-label-secondary);
+    border-color: var(--color-hairline);
+    box-shadow: none;
+  }
+}
+
+/* 面板的三种「更强调」形态：世界靠描边与硬偏移建层级，不靠底色差
+   （四表面亮度比全 <1.2，换底色看不出来）。 */
+@utility atom-panel-primary {
+  border-top: 2px solid var(--color-primary);
+}
+
+@utility atom-panel-danger {
+  border-top: 2px solid var(--color-danger);
+}
+
+@utility atom-panel-quiet {
+  box-shadow: none;
+}
+
+@utility atom-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@utility atom-panel-title {
+  @apply text-title;
+}
+
+@utility atom-panel-description {
+  @apply text-note mt-1 text-label-secondary;
+}
+
+@utility atom-panel-body {
+  min-width: 0;
+}
+
+@utility atom-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-hairline);
+}
+
+/* 面板忙态：半透明只压在**遮罩层**上，不动内容文字，
+   所以文字对比度不参与降级。 */
+@utility atom-panel-busy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  color: var(--color-primary);
+  z-index: 1;
+}
+
+/* ============================================================
+   弹窗骨架（原生 <dialog> + showModal）
+   焦点陷阱、Esc、惰性化背景都由浏览器给，自己实现只会漏浏览器行为。
+   ============================================================ */
+
+@utility atom-dialog {
+  /* 原生 dialog 的 UA 样式带 margin:auto 与边框，这里全部归零后自己定位 */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: 100dvh;
+  margin: auto;
+  padding: 16px;
+  overflow: visible;
+  background-color: transparent;
+  color: var(--color-label);
+  border: 0;
+  /* 世界：遮罩是实色压深，没有毛玻璃 */
+  &::backdrop {
+    background-color: var(--color-scrim);
+  }
+}
+
+@utility atom-dialog-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100dvh - 32px);
+  margin-inline: auto;
+  overflow-y: auto;
+  padding: 20px;
+  background-color: var(--color-surface);
+  color: var(--color-label);
+  border: 1px solid var(--color-rule);
+  box-shadow: var(--shadow-floating);
+  border-radius: 0;
+  /* 160ms 纯淡入，不加缩放：世界里纸是「安顿」，不是「弹出」 */
+  animation: atom-fade-in var(--transition-duration-standard) var(--ease-settle) both;
+}
+
+/* 三档宽度：sm = 表单小确认，md = 常规，lg = 设置面板 */
+@utility atom-dialog-sm {
+  max-width: 24rem;
+}
+
+@utility atom-dialog-md {
+  max-width: 32rem;
+}
+
+@utility atom-dialog-lg {
+  max-width: 48rem;
+}
+
+@utility atom-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@utility atom-dialog-title {
+  @apply text-title;
+  min-width: 0;
+}
+
+@utility atom-dialog-description {
+  @apply text-note mt-1;
+  color: var(--color-label-secondary);
+}
+
+@utility atom-dialog-close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+  color: var(--color-label-secondary);
+  background-color: transparent;
+  border: 1px solid var(--color-hairline);
+  border-radius: 0;
+  cursor: pointer;
+
+  &:disabled {
+    color: var(--color-label-secondary);
+    background-color: var(--color-surface-secondary);
+    cursor: not-allowed;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &:not(:disabled):hover {
+      color: var(--color-label);
+      background-color: var(--color-surface-secondary);
+    }
+  }
+}
+
+@utility atom-dialog-body {
+  min-width: 0;
+}
+
+@utility atom-dialog-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+/* 窄屏：贴底抽屉（直角、无偏移、上边框用控件边界色） */
+@media (max-width: 640px) {
+  .atom-dialog {
+    padding: 0;
+  }
+
+  .atom-dialog-panel {
+    max-width: none;
+    max-height: 88dvh;
+    margin-top: auto;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-top: 1px solid var(--color-rule);
+    box-shadow: none;
+  }
+}
+
+/* ============================================================
+   菜单骨架
+   ============================================================ */
+
+@utility atom-menu-surface {
+  /* 菜单 Teleport 到 body 后按视口坐标定位，所以是 fixed 而不是 absolute */
+  position: fixed;
+  z-index: var(--z-index-menu);
+  min-width: 12rem;
+  max-width: min(20rem, calc(100vw - 24px));
+  padding: 4px;
+  background-color: var(--color-surface);
+  color: var(--color-label);
+  border: 1px solid var(--color-rule);
+  box-shadow: var(--shadow-popover);
+  border-radius: 0;
+  /* 90ms scale .98→1 + 淡入（世界：菜单是「翻开一张卡片」） */
+  animation: atom-menu-in var(--transition-duration-micro) var(--ease-settle) both;
+}
+
+@utility atom-menu-root {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 触发器：世界里的「更多操作」是一个方章大小的方块。
+   焦点环仍由全局 :focus-visible 提供，这里不写 outline/ring。 */
+@utility atom-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--atom-control-height, 32px);
+  padding-inline: 8px;
+  font-size: var(--atom-control-font-size, var(--text-body));
+  color: var(--color-label-secondary);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-rule);
+  border-radius: 0;
+  cursor: pointer;
+
+  &:disabled {
+    color: var(--color-label-secondary);
+    background-color: var(--color-surface-secondary);
+    border-color: var(--color-hairline);
+    cursor: not-allowed;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &:not(:disabled):hover {
+      color: var(--color-label);
+      background-color: var(--color-surface-secondary);
+    }
+  }
+
+  @media (pointer: coarse) {
+    min-height: max(var(--atom-control-height, 32px), 44px);
+  }
+}
+
+@utility atom-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--atom-control-height, 32px);
+  padding-inline: 8px;
+  font-size: var(--atom-control-font-size, var(--text-body));
+  line-height: 1.2;
+  text-align: left;
+  color: var(--atom-menu-item-ink, var(--color-label));
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+
+  &:disabled,
+  &[aria-disabled='true'] {
+    color: var(--color-label-secondary);
+    background-color: var(--color-surface-secondary);
+    cursor: not-allowed;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &:not(:disabled):not([aria-disabled='true']):hover {
+      background-color: var(--color-surface-secondary);
+    }
+  }
+
+  &:not(:disabled):not([aria-disabled='true']):active {
+    background-color: var(--color-surface-tertiary);
+  }
+}
+
+/* 破坏性菜单项：危险色只给字，不给整行红底 —— 红是「被看见」的标记，
+   不是背景色。这一条同时承接 KnowledgeActionMenu.test 的
+   classList.contains('text-danger') 语义。 */
+@utility atom-menu-item-danger {
+  --atom-menu-item-ink: var(--color-danger);
+}
+
+@utility atom-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background-color: var(--color-hairline);
+}
+
+/* ============================================================
+   提示条骨架
+   ============================================================ */
+
+@utility atom-toast-layer {
+  position: fixed;
+  inset-inline: 0;
+  top: 72px;
+  z-index: var(--z-index-toast);
+  display: flex;
+  justify-content: center;
+  padding-inline: 16px;
+  pointer-events: none;
+}
+
+@utility atom-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 32rem;
+  min-height: 40px;
+  padding-inline: 16px;
+  background-color: var(--color-surface);
+  color: var(--color-label);
+  border: 1px solid var(--color-rule);
+  border-left: 3px solid var(--atom-toast-accent, var(--color-primary));
+  box-shadow: var(--shadow-floating);
+  border-radius: 0;
+  pointer-events: auto;
+  /* 90ms 从 -8px 落下 */
+  animation: atom-toast-in var(--transition-duration-micro) var(--ease-settle) both;
+}
+
+@utility atom-toast-success {
+  --atom-toast-accent: var(--color-success);
+}
+
+@utility atom-toast-error {
+  --atom-toast-accent: var(--color-danger);
+}
+
+@utility atom-toast-warning {
+  --atom-toast-accent: var(--color-warning);
+}
+
+@utility atom-toast-info {
+  --atom-toast-accent: var(--color-info);
+}
+
+@utility atom-toast-icon {
+  flex: none;
+  font-size: 18px;
+  line-height: 1;
+}
+
+@utility atom-toast-message {
+  @apply text-lead;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================
+   空状态骨架
+   ============================================================ */
+
+@utility atom-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-block: var(--atom-empty-padding, 32px);
+  text-align: center;
+  color: var(--color-label-secondary);
+}
+
+@utility atom-empty-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--atom-empty-mark-size, 48px);
+  height: var(--atom-empty-mark-size, 48px);
+  margin-bottom: 6px;
+  /* 图标是 1em 见方的 SVG，所以方章的一半就是图标尺寸；
+     走变量而不是 font-size，是因为 AppIcon 的 atom-glyph 只认 --atom-glyph-size。 */
+  --atom-glyph-size: calc(var(--atom-empty-mark-size, 48px) / 2);
+  line-height: 1;
+  color: var(--atom-tint-ink, var(--color-label-secondary));
+  background-color: var(--atom-tint-surface, var(--color-surface-secondary));
+  border: 1px solid var(--atom-tint-border, var(--color-hairline));
+  border-radius: 0;
+}
+
+@utility atom-empty-title {
+  @apply text-lead;
+  color: var(--color-label);
+}
+
+@utility atom-empty-description {
+  @apply text-note;
+  max-width: var(--container-measure);
+}
+
+@utility atom-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* ============================================================
+   输入框的标签与说明（AppInput / AppTextarea 共用）
+   ============================================================ */
+
+@utility atom-field-label {
+  @apply text-note mb-1 block;
+  color: var(--color-label-secondary);
+}
+
+@utility atom-field-description {
+  @apply text-note mt-1;
+  color: var(--color-label-secondary);
+}
