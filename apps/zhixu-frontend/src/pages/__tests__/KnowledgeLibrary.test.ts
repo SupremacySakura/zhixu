@@ -11,7 +11,7 @@ import {
   type KnowledgeItem,
 } from '../../services/apis/knowledge'
 import KnowledgeActionMenu from '../../components/knowledge/KnowledgeActionMenu.vue'
-import ToastNotice from '../../components/file-management/ToastNotice.vue'
+import AppToast from '../../components/ui/AppToast.vue'
 import { defineComponent } from 'vue'
 vi.mock('../../services/apis/knowledge', () => ({
   listKnowledge: vi.fn(),
@@ -34,8 +34,8 @@ afterEach(() => {
 // 页面在生产里永远活在带 toast 宿主的外壳里；测试如实照搬这个结构，
 // 而不是让页面自己渲染提示——那样测的是旧架构，不是用户看到的东西。
 const Harness = defineComponent({
-  components: { Page: KnowledgeLibrary, ToastNotice },
-  template: '<div><Page /><ToastNotice /></div>',
+  components: { Page: KnowledgeLibrary, AppToast },
+  template: '<div><Page /><AppToast /></div>',
 })
 
 async function render() {
