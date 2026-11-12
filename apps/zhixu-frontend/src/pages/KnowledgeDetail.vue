@@ -127,7 +127,7 @@ function onOrganized(updated: KnowledgeItem) {
 </script>
 <template>
   <main class="overflow-y-auto p-4 sm:p-6 lg:p-8">
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto max-w-wide">
       <div class="mb-5 flex gap-3 text-subhead text-label-secondary">
         <RouterLink to="/home/knowledge" class="text-primary-pressed">知识库</RouterLink
         ><span>/</span><span>知识详情</span>

@@ -136,6 +136,12 @@
   --ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
+  /* —— 默认过渡：不写时长/曲线的 transition-* 直接落到世界的刻度，
+     而不是框架默认的 150ms + cubic-bezier(0.4, 0, 0.2, 1)。
+     两个默认令牌都能引用上面的语义令牌，因此只有一处真值。 —— */
+  --default-transition-duration: var(--transition-duration-micro);
+  --default-transition-timing-function: var(--ease-settle);
+
   /* —— z 序六档（命名空间是 --z-index-*）—— */
   --z-index-rail: 10;
   --z-index-toolbar: 20;
@@ -144,8 +150,14 @@
   --z-index-dialog: 50;
   --z-index-toast: 60;
 
-  /* —— 行长：正文 40em ≈ 640px，落在中文 36–40 字区间；硬上限 768px —— */
+  /* —— 三档页面容器宽度 ——
+     measure 40em ≈ 640px，长文行长落在中文 36–40 字区间；
+     panel 56rem = 896px，面板/表单页；
+     wide 72rem = 1152px，索引列表、画布、演化中心这类宽版页。
+     三者由 --container-* 命名空间自动生成 max-w-measure/panel/wide。 */
   --container-measure: 40em;
+  --container-panel: 56rem;
+  --container-wide: 72rem;
 }
 
 /* ============================================================
@@ -221,45 +233,50 @@
   }
 }
 
+/* ============================================================
+   世界骨架（#24 冻结的五个）
+   以 @utility 定义而不是 @layer components：Tailwind v4 里
+   @layer components 的自定义类**不能**被 @apply 引用（报
+   Cannot apply unknown utility class 'cabinet-btn'），只有 @utility
+   定义的才能作为原子被别的样式/组件组合。外观与 #24 裁定一致，
+   迁移前后声明逐条相同。
+   ============================================================ */
+@utility cabinet-card {
+  @apply bg-surface text-body;
+  border: 1px solid var(--color-hairline);
+  box-shadow: var(--shadow-card);
+}
+
+@utility cabinet-btn {
+  @apply inline-flex items-center gap-2 bg-surface px-4 text-lead;
+  min-height: 2.25rem;
+  border: 1px solid var(--color-rule);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-label);
+  transition-property: box-shadow, background-color;
+  transition-duration: var(--transition-duration-micro);
+  transition-timing-function: var(--ease-settle);
+}
+
+@utility cabinet-btn-primary {
+  border-color: var(--color-primary-pressed);
+  background-color: var(--color-primary);
+  box-shadow: var(--shadow-floating);
+  color: var(--color-surface-tertiary);
+}
+
+/* AI 生成内容标记：绿只做底与条，绝不做字 */
+@utility cabinet-ai {
+  @apply bg-ai-tint text-label;
+  border-top: 2px solid var(--color-ai);
+}
+
+/* 打字机编号/计数 */
+@utility cabinet-num {
+  @apply font-type text-micro tabular-nums;
+}
+
 @layer components {
-  /* —— 新世界组件：只有 #24 冻结的五个骨架。
-     完整 API 与变体留给 #19「组件原子层范围与 API」，此处不越界定案。 —— */
-
-  .cabinet-card {
-    @apply bg-surface text-body;
-    border: 1px solid var(--color-hairline);
-    box-shadow: var(--shadow-card);
-  }
-
-  .cabinet-btn {
-    @apply inline-flex items-center gap-2 bg-surface px-4 text-lead;
-    min-height: 2.25rem;
-    border: 1px solid var(--color-rule);
-    box-shadow: var(--shadow-popover);
-    color: var(--color-label);
-    transition-property: box-shadow, background-color;
-    transition-duration: var(--transition-duration-micro);
-    transition-timing-function: var(--ease-settle);
-  }
-
-  .cabinet-btn-primary {
-    border-color: var(--color-primary-pressed);
-    background-color: var(--color-primary);
-    box-shadow: var(--shadow-floating);
-    color: var(--color-surface-tertiary);
-  }
-
-  /* AI 生成内容标记：绿只做底与条，绝不做字 */
-  .cabinet-ai {
-    @apply bg-ai-tint text-label;
-    border-top: 2px solid var(--color-ai);
-  }
-
-  /* 打字机编号/计数 */
-  .cabinet-num {
-    @apply font-type text-micro tabular-nums;
-  }
-
   /* —— 过渡版旧组件类：外观已换到新世界，API 保持不变，
      待 #28 的批次把调用点改为 .cabinet-* 后删除本段。 —— */
 

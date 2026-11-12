@@ -93,7 +93,7 @@ onScopeDispose(() => {
 
 <template>
   <main class="overflow-y-auto p-4 sm:p-6 lg:p-8">
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto max-w-wide">
       <nav aria-label="面包屑" class="mb-5 flex flex-wrap gap-3 text-subhead text-label-secondary">
         <RouterLink to="/home/knowledge" class="text-primary-pressed">知识库</RouterLink>
         <span>/</span>
