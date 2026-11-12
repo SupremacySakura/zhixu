@@ -10,6 +10,8 @@ import {
 } from '../../services/apis/aiSettings'
 import type { AIConfiguration } from '../../services/apis/aiSettings'
 import { getServiceStatus } from '../../services/apis/serviceStatus'
+import ToastNotice from '../../components/file-management/ToastNotice.vue'
+import { defineComponent } from 'vue'
 
 vi.mock('../../services/apis/serviceStatus', () => ({ getServiceStatus: vi.fn() }))
 
@@ -21,6 +23,13 @@ vi.mock('../../services/apis/aiSettings', () => ({
   deleteAIProvider: vi.fn(),
 }))
 vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
+
+// 页面在生产里永远活在带 toast 宿主的外壳里；测试如实照搬这个结构，
+// 而不是让页面自己渲染提示——那样测的是旧架构，不是用户看到的东西。
+const Harness = defineComponent({
+  components: { Page: ModelSettings, ToastNotice },
+  template: '<div><Page /><ToastNotice /></div>',
+})
 const fixture = (): AIConfiguration => ({
   providers: [
     {
@@ -66,7 +75,7 @@ afterEach(() => {
 })
 describe('ModelSettings', () => {
   it('loads configuration and checks real service reports only on tab entry or refresh', async () => {
-    const wrapper = mount(ModelSettings, { global: { stubs: { teleport: true } } })
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
     await flushPromises()
     expect(wrapper.text()).toContain('模型网关')
     expect(wrapper.find('select').exists()).toBe(false)
@@ -93,7 +102,7 @@ describe('ModelSettings', () => {
   })
   it('confirms same-dimension embedding changes before submitting', async () => {
     vi.mocked(saveAIDefaults).mockResolvedValue(fixture())
-    const wrapper = mount(ModelSettings, { global: { stubs: { teleport: true } } })
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
     await flushPromises()
     await wrapper.get('[aria-label="选择默认 Embedding 模型"]').trigger('click')
     const option = wrapper
@@ -126,7 +135,7 @@ describe('ModelSettings', () => {
   })
   it('submits retrieval breadth and threshold with the defaults payload', async () => {
     vi.mocked(saveAIDefaults).mockResolvedValue(fixture())
-    const wrapper = mount(ModelSettings, { global: { stubs: { teleport: true } } })
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
     await flushPromises()
     await wrapper.get<HTMLInputElement>('#rag-top-k').setValue(20)
     await wrapper.get<HTMLInputElement>('#rag-min-score').setValue(0.7)
@@ -149,7 +158,7 @@ describe('ModelSettings', () => {
     wrapper.unmount()
   })
   it('rejects out-of-range retrieval settings before saving', async () => {
-    const wrapper = mount(ModelSettings, { global: { stubs: { teleport: true } } })
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
     await flushPromises()
     await wrapper.get<HTMLInputElement>('#rag-min-score').setValue(0.01)
     await wrapper
@@ -165,7 +174,7 @@ describe('ModelSettings', () => {
     vi.mocked(saveAIProvider)
       .mockRejectedValueOnce(new Error('无法保存配置'))
       .mockResolvedValue(fixture())
-    const wrapper = mount(ModelSettings, { global: { stubs: { teleport: true } } })
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
     await flushPromises()
     await wrapper.get('[aria-label="配置 模型网关"]').trigger('click')
     const editor = wrapper.getComponent(ProviderEditor)

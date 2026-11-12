@@ -9,6 +9,7 @@ import type { PickupCodeItem, PickupCodeType } from '../services/types/file'
 import CreatePickupCodeModal from '../components/bussiness/CreatePickupCodeModal.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import { sanitizeFileName } from '../utils/file'
+import { useToast } from '../composables/useToast'
 
 const pickupList = ref<PickupCodeItem[]>([])
 const loading = ref(false)
@@ -23,10 +24,8 @@ const deletingCodeId = ref<number | null>(null)
 const showDeleteConfirm = ref(false)
 const deleteTargetItem = ref<PickupCodeItem | null>(null)
 
-const toastMessage = ref('')
-const toastType = ref<'success' | 'error' | 'info'>('info')
-const showToast = ref(false)
-let toastTimer: ReturnType<typeof setTimeout> | null = null
+// 消息提示统一走外壳宿主：本页不再自持 toast 状态，也不再画胶囊。
+const { displayToast } = useToast()
 
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -125,18 +124,6 @@ const closeCreateModal = () => {
 const handleCreateSuccess = () => {
   showCreateModal.value = false
   fetchData()
-}
-
-const displayToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-  if (toastTimer) {
-    clearTimeout(toastTimer)
-  }
-  toastMessage.value = message
-  toastType.value = type
-  showToast.value = true
-  toastTimer = setTimeout(() => {
-    showToast.value = false
-  }, 3000)
 }
 
 const closeOverlays = () => {
@@ -246,9 +233,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onGlobalClick)
-  if (toastTimer) {
-    clearTimeout(toastTimer)
-  }
 })
 </script>
 
@@ -759,32 +743,6 @@ onBeforeUnmount(() => {
         />
       </template>
     </ConfirmDialog>
-
-    <!-- Toast（顶部居中胶囊，material-thick；非阻塞不加遮罩；motion-v 弹簧） -->
-    <AnimatePresence>
-      <Motion
-        v-if="showToast"
-        key="pickup-toast"
-        :initial="{ opacity: 0, y: -8 }"
-        :animate="{ opacity: 1, y: 0 }"
-        :exit="{ opacity: 0, y: -8 }"
-        :transition="springSnappy"
-        class="fixed left-1/2 top-4 z-[60] flex h-10 -translate-x-1/2 items-center gap-2 rounded-full bg-material-thick px-4 shadow-floating backdrop-blur-[20px] backdrop-saturate-[180%]"
-      >
-        <AppIcon
-          v-if="toastType === 'success'"
-          icon="material-symbols:check-circle"
-          class="text-[18px] text-primary"
-        />
-        <AppIcon
-          v-else-if="toastType === 'error'"
-          icon="material-symbols:error"
-          class="text-[18px] text-danger"
-        />
-        <AppIcon v-else icon="material-symbols:info" class="text-[18px] text-info" />
-        <span class="text-sm font-medium text-label">{{ toastMessage }}</span>
-      </Motion>
-    </AnimatePresence>
 
     <!-- 行内操作菜单（FileActionMenu 模式：从触发源弹簧 scale 0.95→1，danger 置底） -->
     <Teleport to="body">

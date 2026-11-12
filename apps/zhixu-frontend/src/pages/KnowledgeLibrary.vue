@@ -32,7 +32,6 @@ import KnowledgeVectorBadge from '../components/knowledge/KnowledgeVectorBadge.v
 import KnowledgeTaskPanel from '../components/knowledge/KnowledgeTaskPanel.vue'
 import WebImportDialog from '../components/knowledge/WebImportDialog.vue'
 import FilePagination from '../components/file-management/FilePagination.vue'
-import ToastNotice from '../components/file-management/ToastNotice.vue'
 const {
   items,
   total,
@@ -52,7 +51,7 @@ const {
   loadTags,
   changePage,
 } = useKnowledgeLibrary()
-const { displayToast, showToast, toastMessage, toastType } = useToast()
+const { displayToast } = useToast()
 const { item, panelOpen, panelError, busy, track, retry, poll } = useKnowledgeImport(displayToast)
 const router = useRouter()
 const showWebImport = ref(false)
@@ -419,7 +418,6 @@ onMounted(() => {
       @retry="retry"
       @refresh="poll"
     />
-    <ToastNotice :visible="showToast" :message="toastMessage" :type="toastType" />
     <WebImportDialog
       v-if="showWebImport"
       @close="showWebImport = false"
