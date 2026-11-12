@@ -104,9 +104,13 @@ func main() {
 		Client:   &service.RelateClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 	})
 	// 演化检测工作流：向量化就绪后入队，精确重复先走正文指纹（不花模型钱），
-	// 语义近重复/过时/冲突在后续迭代接入同一个处理器。
+	// 指纹没命中时再召回近邻送模型判定；过时/冲突的消费在后续迭代接入同一处理器。
 	aiTasks.Register(&service.EvolveProcessor{
 		Knowledge: knowledgeService, Alerts: evolutionRepo,
+		Chat: chat.Service, Embedding: chat.Service, Relations: relationRepo,
+		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+		Vectors:  qdrant,
+		Client:   &service.EvolveClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 	})
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})
