@@ -265,7 +265,8 @@ func sanitizeEvolveJudgements(triggerID uint, candidates []EvolveCandidate, raw 
 //
 // updates 关系是用户显式声明过的「谁更新谁」，这类候选只接受过时结论——把它判成重复
 // 会给出「归档其一」这种明显错误的选择。向量近邻只能按相似度分派：越像越可能重复，
-// 中等相似才可能是对同一事实的不同说法（冲突），再低就没有依据。
+// 中等相似才可能是对同一事实的不同说法（冲突），再低就没有依据；过时看的是「谁更晚更全」，
+// 与相似度高低无关，因此从过时阈值往上都允许，同一对出现多种结论时由优先级收敛。
 func evolutionAllowedTypes(origin string, score float64) map[model.EvolutionAlertType]bool {
 	if origin == EvolveOriginUpdateRelation {
 		return map[model.EvolutionAlertType]bool{model.EvolutionAlertTypeOutdated: true}
@@ -273,12 +274,15 @@ func evolutionAllowedTypes(origin string, score float64) map[model.EvolutionAler
 	if math.IsNaN(score) {
 		return nil
 	}
-	switch {
-	case score >= EvolveDuplicateMinScore:
-		return map[model.EvolutionAlertType]bool{model.EvolutionAlertTypeDuplicate: true}
-	case score >= EvolveConflictMinScore:
-		return map[model.EvolutionAlertType]bool{model.EvolutionAlertTypeConflict: true}
-	default:
-		return nil
+	allowed := make(map[model.EvolutionAlertType]bool, 3)
+	if score >= EvolveDuplicateMinScore {
+		allowed[model.EvolutionAlertTypeDuplicate] = true
 	}
+	if score >= EvolveConflictMinScore {
+		allowed[model.EvolutionAlertTypeConflict] = true
+	}
+	if score >= EvolveOutdatedMinScore {
+		allowed[model.EvolutionAlertTypeOutdated] = true
+	}
+	return allowed
 }

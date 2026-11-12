@@ -47,12 +47,36 @@ const fallbackTitle = (targetType: OperationLogItem['target_type']): string => {
   return '未知文件'
 }
 
+/** 演化裁决动作的中文文案，与后端 model.EvolutionAction 一一对应。 */
+const evolutionActionLabel = (action: string): string => {
+  switch (action) {
+    case 'archive_one':
+      return '归档重复的一条'
+    case 'keep_both':
+      return '保留两者'
+    case 'mark_outdated':
+      return '标记过时'
+    case 'mark_verified':
+      return '标记已核实'
+    case 'accept_revision':
+      return '采纳修订稿'
+    case 'create_relation':
+      return '建立矛盾关系'
+    case 'dismiss':
+      return '忽略提醒'
+    case 'defer':
+      return '暂不处理'
+    default:
+      return '处理演化提醒'
+  }
+}
+
 const UNKNOWN_ACTION_META = {
   icon: 'material-symbols:help-outline-rounded',
   colorClass: 'bg-surface-tertiary text-label-secondary',
 } as const
 
-/** 将操作日志条目映射为展示描述（纯函数，22 个 action 全覆盖） */
+/** 将操作日志条目映射为展示描述（纯函数，27 个 action 全覆盖） */
 export const describeOperationLog = (log: OperationLogItem): OperationLogDescription => {
   const detail = parseDetail(log.detail)
   const title = sanitizeFileName(log.target_name) || fallbackTitle(log.target_type)
@@ -242,6 +266,46 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
         colorClass: 'bg-info-tint text-info',
         title,
         subtitle: '恢复归档',
+        highlight: '',
+      }
+    case 'knowledge_web_import':
+      return {
+        icon: 'material-symbols:link-rounded',
+        colorClass: 'bg-primary-tint text-primary',
+        title,
+        subtitle: '从网页导入',
+        highlight: '',
+      }
+    case 'knowledge_organize_accept':
+      return {
+        icon: 'material-symbols:auto-awesome-rounded',
+        colorClass: 'bg-purple-tint text-purple',
+        title,
+        subtitle: '采纳 AI 整理结果',
+        highlight: '',
+      }
+    case 'knowledge_outdated':
+      return {
+        icon: 'material-symbols:history-rounded',
+        colorClass: 'bg-warning-tint text-warning',
+        title,
+        subtitle: '标记可能过时',
+        highlight: '',
+      }
+    case 'knowledge_verified':
+      return {
+        icon: 'material-symbols:verified-rounded',
+        colorClass: 'bg-primary-tint text-primary',
+        title,
+        subtitle: '标记已核实',
+        highlight: '',
+      }
+    case 'evolution_resolve':
+      return {
+        icon: 'material-symbols:rule-rounded',
+        colorClass: 'bg-teal-tint text-teal',
+        title,
+        subtitle: evolutionActionLabel(detailString(detail, 'action')),
         highlight: '',
       }
     default:

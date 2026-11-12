@@ -291,6 +291,94 @@ func TestEvolveProcessorTreatsUpdateRelationAsOutdatedOnly(t *testing.T) {
 	require.Empty(t, f.alerts.upserted, "强候选只接受过时结论")
 }
 
+// 强候选给出过时结论时落一条过时提醒，建议动作是「标记过时」。
+func TestEvolveProcessorRecordsOutdatedFromUpdateRelation(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "被更新的旧文", "旧版本的结论。", 0.95)
+	f.relations.rows = []repository.RelationRecord{{
+		KnowledgeRelation: model.KnowledgeRelation{
+			SourceID: 10, TargetID: 21, RelationType: model.RelationTypeUpdates, Status: model.RelationConfirmed,
+		},
+		CounterpartID: 21,
+	}}
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeOutdated,
+		Reason:   "本次知识给出了更晚的结论。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 21, Quote: "旧版本的结论"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	alert := f.alerts.upserted[0]
+	require.Equal(t, model.EvolutionAlertTypeOutdated, alert.AlertType)
+	require.Equal(t, model.EvolutionSeverityStrong, alert.Severity)
+	require.Equal(t, []uint{10, 21}, alert.SubjectIDList(), "触发知识在前，被比对的在后")
+	payload := ParseEvolutionPayload(alert.Payload)
+	require.Equal(t, model.EvolutionActionMarkOutdated, payload.SuggestedAction)
+	require.Len(t, payload.Evidence, 2)
+}
+
+// 弱信号（向量近邻）判过时必须有双方原文对照：只有一侧引文就不落库。
+func TestEvolveProcessorDropsWeakOutdatedWithoutTwoSidedEvidence(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一篇", "旧版本的结论。", 0.85)
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeOutdated,
+		Reason:   "候选的结论已被取代。",
+		Evidence: []EvolutionEvidence{{KnowledgeID: 21, Quote: "旧版本的结论"}},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Empty(t, f.alerts.upserted, "弱信号缺一侧证据不足以判定过时")
+}
+
+// 弱信号两侧证据都在时正常落库。
+func TestEvolveProcessorRecordsWeakOutdatedWithTwoSidedEvidence(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一篇", "旧版本的结论。", 0.85)
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeOutdated,
+		Reason:   "候选的结论已被取代。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 21, Quote: "旧版本的结论"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	require.Equal(t, model.EvolutionAlertTypeOutdated, f.alerts.upserted[0].AlertType)
+}
+
+// 同一知识的不同版本之间永不提醒：检查只针对别的条目，自身 ID 不参与候选。
+func TestEvolveProcessorNeverAlertsOnOwnVersions(t *testing.T) {
+	f := newEvolveFixture()
+	// 向量召回返回本条知识自己（同一 knowledge_id 的历史版本共用同一行），必须被过滤。
+	f.searcher.matches = []VectorMatch{{KnowledgeID: 10, Score: 0.99}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Empty(t, f.client.candidates)
+	require.Equal(t, 0, f.client.calls)
+	require.Empty(t, f.alerts.upserted)
+}
+
 // 反方向的 updates（本条是被更新的旧文）不构成强候选，否则会产出方向相反的提醒。
 func TestEvolveProcessorIgnoresReverseUpdateRelation(t *testing.T) {
 	f := newEvolveFixture()

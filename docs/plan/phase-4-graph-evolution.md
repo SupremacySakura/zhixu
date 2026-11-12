@@ -66,6 +66,8 @@ status: pending
 - **Go**：接受建议后旧知识标记 `outdated`（详情页徽标，仍可检索但标注）。
 - **依赖**：W4.2（alerts 表与工作流骨架）。**验收**：更新某知识后，旧版本/旧知识出现过时提醒。
 
+**完成情况（2026-11-12，第三部分 / GitHub #11）**：过时识别与详情页标记已落地——`EvolveProcessor` 放行 `outdated` 结论（仍挡 `conflict` 留给 #12），候选取「`updates` 关系指向的目标」（强信号，单侧证据即可）与「向量相似度 ≥ 0.80 近邻」（弱信号，必须双侧各至少一条可定位引文，否则整条不落库）；相似度分派放宽为「≥0.90 收 duplicate、≥0.75 收 conflict、≥0.80 收 outdated」，因此 0.80~0.90 段同时接受冲突与过时两类结论。裁决侧 `mark_outdated` 写目标知识（`subject_ids[1]`）的 `outdated_at` 与 `outdated_reason`，`mark_verified` 只对过时提醒清除标记（重复提醒的核实不会误清别的判定），两者都记 `knowledge_outdated`/`knowledge_verified` 操作日志。编辑正文（版本 +1）会清除过时标记——标记针对被判定时的正文，用户改写即视为自行处理。详情页新增过时横幅（含判定理由与判定时间）与「重新检查」按钮（`POST /knowledge/:id/evolve/regenerate`，已有活跃任务时后端复用）。
+
 ### W4.4 冲突识别（FR-EVO-03）
 
 - **AI 服务**：同一 `evolve-workflow` 增加冲突判定——对高相关候选对（相似度阈值可配，低于重复检测阈值），LLM 判断观点/数据是否矛盾 → `{type: conflict, reason, evidence[两条知识的冲突引文], suggestedAction: create_relation(contradicts)}`。

@@ -148,6 +148,25 @@ func (f *evolutionArchiverFake) Archive(_ context.Context, _ uint, id uint) (*ti
 	return &now, nil
 }
 
+type evolutionOutdatedCall struct {
+	id     uint
+	at     *time.Time
+	reason string
+}
+
+type evolutionOutdatedFake struct {
+	calls []evolutionOutdatedCall
+	err   error
+}
+
+func (f *evolutionOutdatedFake) SetOutdated(_ context.Context, _ uint, id uint, at *time.Time, reason string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.calls = append(f.calls, evolutionOutdatedCall{id: id, at: at, reason: reason})
+	return nil
+}
+
 type evolutionLogFake struct{ entries []*model.OperationLogModel }
 
 func (f *evolutionLogFake) CreateOperationLog(entry *model.OperationLogModel) error {
@@ -162,6 +181,7 @@ type evolutionFixture struct {
 	store     *evolutionStoreFake
 	knowledge *evolutionKnowledgeFake
 	archiver  *evolutionArchiverFake
+	outdated  *evolutionOutdatedFake
 	logs      *evolutionLogFake
 }
 
@@ -174,8 +194,13 @@ func newEvolutionFixture() *evolutionFixture {
 		12: {ID: 12, UserID: 2, Title: "已归档", Status: model.KnowledgeReady, ArchivedAt: &now},
 		13: {ID: 13, UserID: 2, Title: "旧版本", Status: model.KnowledgeReady, OutdatedAt: &now, OutdatedReason: "已被新版本取代"},
 	}}
-	f := &evolutionFixture{store: store, knowledge: knowledge, archiver: &evolutionArchiverFake{}, logs: &evolutionLogFake{}}
-	f.service = &EvolutionService{Alerts: store, Knowledge: knowledge, Archiver: f.archiver, Logs: f.logs}
+	f := &evolutionFixture{
+		store: store, knowledge: knowledge, archiver: &evolutionArchiverFake{},
+		outdated: &evolutionOutdatedFake{}, logs: &evolutionLogFake{},
+	}
+	f.service = &EvolutionService{
+		Alerts: store, Knowledge: knowledge, Archiver: f.archiver, Outdated: f.outdated, Logs: f.logs,
+	}
 	return f
 }
 
@@ -349,12 +374,61 @@ func TestEvolutionResolveRejectsMismatchedAction(t *testing.T) {
 func TestEvolutionResolveUnsupportedActions(t *testing.T) {
 	f := newEvolutionFixture()
 	f.addAlert(1, model.EvolutionAlertTypeConflict, model.EvolutionAlertPending, []uint{10, 13})
-	f.addAlert(2, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{13, 11})
+	f.addAlert(2, model.EvolutionAlertTypeConflict, model.EvolutionAlertPending, []uint{10, 11})
 
 	_, _, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionAcceptRevision})
 	require.ErrorIs(t, err, ErrEvolutionUnsupported)
-	_, _, err = f.service.Resolve(context.Background(), 2, 2, EvolutionResolveInput{Action: model.EvolutionActionMarkOutdated})
+	_, _, err = f.service.Resolve(context.Background(), 2, 2, EvolutionResolveInput{Action: model.EvolutionActionCreateRelation})
 	require.ErrorIs(t, err, ErrEvolutionUnsupported)
+}
+
+// 标记过时落在被比对的那条知识（subject_ids[1]）上，理由取提醒载荷。
+func TestEvolutionResolveMarkOutdatedMarksComparedKnowledge(t *testing.T) {
+	f := newEvolutionFixture()
+	f.addAlert(1, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{10, 11})
+
+	view, changed, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionMarkOutdated})
+
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, model.EvolutionAlertResolved, view.Status)
+	require.Len(t, f.outdated.calls, 1)
+	require.Equal(t, uint(11), f.outdated.calls[0].id, "过时的是被比对的那条，不是本次触发的知识")
+	require.NotNil(t, f.outdated.calls[0].at)
+	require.NotEmpty(t, f.outdated.calls[0].reason)
+	require.Len(t, f.logs.entries, 1, "裁决写一条操作日志")
+}
+
+// 标记已核实清除过时标记；重复提醒的核实不碰过时标记，避免顺手抹掉别的判定。
+func TestEvolutionResolveMarkVerifiedClearsOnlyOutdatedAlerts(t *testing.T) {
+	f := newEvolutionFixture()
+	f.addAlert(1, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{10, 11})
+	f.addAlert(2, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertPending, []uint{10, 13})
+
+	_, _, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionMarkVerified})
+	require.NoError(t, err)
+	require.Len(t, f.outdated.calls, 1)
+	require.Equal(t, uint(11), f.outdated.calls[0].id)
+	require.Nil(t, f.outdated.calls[0].at, "核实即清除标记")
+
+	_, _, err = f.service.Resolve(context.Background(), 2, 2, EvolutionResolveInput{Action: model.EvolutionActionMarkVerified})
+	require.NoError(t, err)
+	require.Len(t, f.outdated.calls, 1, "重复提醒的核实不该改过时标记")
+}
+
+// 未接标记能力时「标记过时」明确不可用，而「标记已核实」仍可完成（它本身只是记录看过）。
+func TestEvolutionResolveOutdatedRequiresMarker(t *testing.T) {
+	f := newEvolutionFixture()
+	f.service.Outdated = nil
+	f.addAlert(1, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{10, 11})
+	f.addAlert(2, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{10, 13})
+
+	_, _, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionMarkOutdated})
+	require.ErrorIs(t, err, ErrEvolutionUnsupported)
+
+	_, changed, err := f.service.Resolve(context.Background(), 2, 2, EvolutionResolveInput{Action: model.EvolutionActionMarkVerified})
+	require.NoError(t, err)
+	require.True(t, changed)
 }
 
 // 提醒不存在（含别人的提醒）返回 NotFound。

@@ -300,8 +300,8 @@ func (p *EvolveProcessor) buildAlerts(trigger *model.KnowledgeItem, candidates [
 		if !evolutionAllowedTypes(candidate.origin, candidate.score)[judgement.Type] {
 			continue
 		}
-		// 本迭代只消费重复结论；过时与冲突随各自迭代接入同一条管线。
-		if judgement.Type != model.EvolutionAlertTypeDuplicate {
+		// 本迭代消费重复与过时结论；冲突随冲突识别迭代接入同一条管线。
+		if judgement.Type == model.EvolutionAlertTypeConflict {
 			continue
 		}
 		alert, ok := p.buildAlert(trigger, candidate, judgement)
@@ -332,10 +332,20 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 		}
 	}
 	// 证据顺序与 subject 顺序对齐：先本次触发的知识，再被比对的知识，前端左右并排才对得上。
-	evidence := append(validEvidence(trigger.Content, triggerEvidence), validEvidence(candidate.item.Content, candidateEvidence)...)
-	if len(evidence) == 0 {
+	triggerValid := validEvidence(trigger.Content, triggerEvidence)
+	candidateValid := validEvidence(candidate.item.Content, candidateEvidence)
+	if len(triggerValid)+len(candidateValid) == 0 {
 		return model.EvolutionAlert{}, false
 	}
+	// 过时只有「本条更新了对方」是用户显式声明过的强信号，可以直接判定；
+	// 向量近邻只是相似，要说「候选已被取代」必须有双方原文对照，单侧证据不足以下这个结论。
+	if judgement.Type == model.EvolutionAlertTypeOutdated && candidate.origin != EvolveOriginUpdateRelation &&
+		(len(triggerValid) == 0 || len(candidateValid) == 0) {
+		return model.EvolutionAlert{}, false
+	}
+	evidence := make([]EvolutionEvidence, 0, len(triggerValid)+len(candidateValid))
+	evidence = append(evidence, triggerValid...)
+	evidence = append(evidence, candidateValid...)
 	severity := judgement.Severity
 	if !severity.Valid() {
 		severity = model.EvolutionSeverityReview

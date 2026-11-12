@@ -41,6 +41,7 @@ type KnowledgeStore interface {
 	Update(context.Context, uint, uint, string, string, string, uint) (*model.KnowledgeItem, error)
 	SetFavorite(context.Context, uint, uint, bool) error
 	SetArchived(context.Context, uint, uint, bool) (*time.Time, error)
+	SetOutdated(context.Context, uint, uint, *time.Time, string) error
 	ListVersions(context.Context, uint, uint) ([]model.KnowledgeVersion, error)
 	GetVersion(context.Context, uint, uint, uint) (*model.KnowledgeVersion, error)
 	List(context.Context, uint, int, int, string, model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error)
@@ -585,6 +586,26 @@ func (s *KnowledgeService) setArchived(ctx context.Context, userID, id uint, arc
 	}
 	s.recordOperation(userID, action, item.ID, item.Title, item.SourceFolderName, nil)
 	return at, nil
+}
+
+// SetOutdated 写入或清除「可能过时」判定并记操作日志；幂等，重复标记同一状态不产生新日志。
+func (s *KnowledgeService) SetOutdated(ctx context.Context, userID, id uint, at *time.Time, reason string) error {
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if (at == nil) == (item.OutdatedAt == nil) && (at == nil || item.OutdatedReason == reason) {
+		return nil
+	}
+	if err := s.store.SetOutdated(ctx, userID, id, at, reason); err != nil {
+		return knowledgeError(err)
+	}
+	action := model.OperationLogActionKnowledgeOutdated
+	if at == nil {
+		action = model.OperationLogActionKnowledgeVerified
+	}
+	s.recordOperation(userID, action, item.ID, item.Title, item.SourceFolderName, nil)
+	return nil
 }
 
 // KnowledgeVersionSummary 版本列表项：当前版本由 knowledge_items 实时合成，便于前端标出「当前」。

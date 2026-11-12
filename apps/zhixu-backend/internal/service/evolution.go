@@ -195,12 +195,20 @@ type EvolutionArchiver interface {
 	Archive(context.Context, uint, uint) (*time.Time, error)
 }
 
+// EvolutionOutdatedMarker 是「标记过时 / 标记已核实」需要的知识过时标记能力（*KnowledgeService 满足）。
+// at 为 nil 表示清除标记。
+type EvolutionOutdatedMarker interface {
+	SetOutdated(context.Context, uint, uint, *time.Time, string) error
+}
+
 // EvolutionService 负责提醒的读取、裁决与手动重跑；检测本身在 evolve 任务处理器里。
 type EvolutionService struct {
 	Alerts    EvolutionAlertStore
 	Knowledge EvolutionKnowledgeSource
 	// Archiver 为可选依赖：为 nil 时「归档其一」不可用（测试与未接知识服务的部署）。
 	Archiver EvolutionArchiver
+	// Outdated 为可选依赖：为 nil 时「标记过时 / 标记已核实」不可用。
+	Outdated EvolutionOutdatedMarker
 	// Logs 为可选依赖：为 nil 时跳过操作日志。
 	Logs OperationLogWriter
 	// Tasks 为可选依赖：为 nil 时「重新检查」不可用。
@@ -320,13 +328,55 @@ func (s *EvolutionService) effectFor(ctx context.Context, action model.Evolution
 			}
 			return nil
 		}, nil
-	case model.EvolutionActionAcceptRevision, model.EvolutionActionMarkOutdated, model.EvolutionActionCreateRelation:
-		// 三种动作依赖后续迭代的能力：采纳修订要走 AI 版本链路，标记过时与矛盾关系分别随
-		// 过时识别、冲突识别落地。重复提醒不会出现这些动作，因此正常流程到不了这里。
+	case model.EvolutionActionMarkOutdated:
+		if s.Outdated == nil {
+			return nil, fmt.Errorf("%w: 知识过时标记能力未配置", ErrEvolutionUnsupported)
+		}
+		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
+			target, err := outdatedSubject(alert)
+			if err != nil {
+				return err
+			}
+			reason := ParseEvolutionPayload(alert.Payload).Reason
+			if reason == "" {
+				reason = "已被更新的一条知识取代。"
+			}
+			now := time.Now()
+			return s.Outdated.SetOutdated(ctx, alert.UserID, target, &now, reason)
+		}, nil
+	case model.EvolutionActionMarkVerified:
+		// 核实本身是「这条提醒我看过了」：没有标记能力时它仍然有意义，只是清不掉过时标记。
+		if s.Outdated == nil {
+			return nil, nil
+		}
+		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
+			// 只有过时提醒的「标记已核实」才意味着「我看过了，这条不过时」；
+			// 重复提醒的核实不该顺手抹掉别的判定留下的过时标记。
+			if alert.AlertType != model.EvolutionAlertTypeOutdated {
+				return nil
+			}
+			target, err := outdatedSubject(alert)
+			if err != nil {
+				return err
+			}
+			return s.Outdated.SetOutdated(ctx, alert.UserID, target, nil, "")
+		}, nil
+	case model.EvolutionActionAcceptRevision, model.EvolutionActionCreateRelation:
+		// 两种动作依赖后续迭代的能力：采纳修订要走 AI 版本链路，矛盾关系随冲突识别落地。
 		return nil, ErrEvolutionUnsupported
 	default:
 		return nil, nil
 	}
+}
+
+// outdatedSubject 取过时提醒里被判定过时的那条知识：subject_ids[1] 是被比对的知识，
+// 本次触发的知识（[0]）是新的一方。过时只做跨条目判定，因此这里必须落在 [1] 上。
+func outdatedSubject(alert *model.EvolutionAlert) (uint, error) {
+	ids := alert.SubjectIDList()
+	if len(ids) < 2 {
+		return 0, fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+	}
+	return ids[1], nil
 }
 
 // recordResolve 写一条裁决操作日志；日志失败不影响裁决结果。

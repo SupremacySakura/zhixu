@@ -591,3 +591,45 @@ func TestKnowledgeSetArchived(t *testing.T) {
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 }
+
+func TestKnowledgeSetOutdated(t *testing.T) {
+	t.Run("marks with a timestamp and reason", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT .*id.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(10), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(10))
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE `knowledge_items` SET `outdated_at`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+		now := time.Now()
+		err := NewKnowledgeRepository(db).SetOutdated(context.Background(), 2, 10, &now, "已被新版本取代")
+		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("clearing empties the reason", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT .*id.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(10), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(10))
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE `knowledge_items` SET `outdated_at`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+		err := NewKnowledgeRepository(db).SetOutdated(context.Background(), 2, 10, nil, "")
+		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("missing knowledge returns record not found", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		mock.ExpectQuery("SELECT .*id.* FROM `knowledge_items` WHERE id = \\? AND user_id = \\? LIMIT \\?").
+			WithArgs(uint(99), uint(2), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}))
+		err := NewKnowledgeRepository(db).SetOutdated(context.Background(), 2, 99, nil, "")
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}

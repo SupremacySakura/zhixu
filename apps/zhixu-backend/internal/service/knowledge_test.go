@@ -91,6 +91,17 @@ func (f *knowledgeFake) SetArchived(_ context.Context, user, id uint, archived b
 	return &now, nil
 }
 
+func (f *knowledgeFake) SetOutdated(_ context.Context, user, id uint, at *time.Time, reason string) error {
+	if f.item == nil || f.item.UserID != user || f.item.ID != id {
+		return gorm.ErrRecordNotFound
+	}
+	f.item.OutdatedAt, f.item.OutdatedReason = at, ""
+	if at != nil {
+		f.item.OutdatedReason = reason
+	}
+	return nil
+}
+
 func (f *knowledgeFake) CreateManual(_ context.Context, item *model.KnowledgeItem) error {
 	f.manualCreated = true
 	item.ID = 11
@@ -794,6 +805,36 @@ func TestKnowledgeFavoriteAndArchive(t *testing.T) {
 		_, err := s.Archive(ctx, 2, 99)
 		require.ErrorIs(t, err, ErrKnowledgeNotFound)
 	})
+}
+
+// 过时标记：写入与清除都记知识侧日志，重复设置同一状态不再记日志。
+func TestKnowledgeSetOutdated(t *testing.T) {
+	ctx := context.Background()
+	item := &model.KnowledgeItem{ID: 7, UserID: 2, Title: "笔记", Status: model.KnowledgeReady}
+	fake := &knowledgeFake{item: item}
+	spy := &operationLogSpy{}
+	s := NewKnowledgeService(fake, "")
+	s.Logs = spy
+
+	now := time.Now()
+	require.NoError(t, s.SetOutdated(ctx, 2, 7, &now, "已被新版本取代"))
+	require.NotNil(t, fake.item.OutdatedAt)
+	require.Equal(t, "已被新版本取代", fake.item.OutdatedReason)
+	require.Len(t, spy.entries, 1)
+	require.Equal(t, model.OperationLogActionKnowledgeOutdated, spy.entries[0].Action)
+	require.Equal(t, model.OperationLogTargetTypeKnowledge, spy.entries[0].TargetType)
+
+	// 幂等：同样的标记重复写入不产生第二条日志。
+	require.NoError(t, s.SetOutdated(ctx, 2, 7, &now, "已被新版本取代"))
+	require.Len(t, spy.entries, 1)
+
+	require.NoError(t, s.SetOutdated(ctx, 2, 7, nil, ""))
+	require.Nil(t, fake.item.OutdatedAt)
+	require.Empty(t, fake.item.OutdatedReason)
+	require.Len(t, spy.entries, 2)
+	require.Equal(t, model.OperationLogActionKnowledgeVerified, spy.entries[1].Action)
+
+	require.ErrorIs(t, s.SetOutdated(ctx, 2, 99, nil, ""), ErrKnowledgeNotFound)
 }
 
 func TestKnowledgeImportWeb(t *testing.T) {

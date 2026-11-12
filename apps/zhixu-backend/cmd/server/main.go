@@ -86,7 +86,7 @@ func main() {
 	evolutionRepo := repository.NewEvolutionAlertRepository(database.DB)
 	evolutionService := &service.EvolutionService{
 		Alerts: evolutionRepo, Knowledge: knowledgeService, Archiver: knowledgeService,
-		Logs: knowledgeService.Logs, Tasks: aiTasks,
+		Outdated: knowledgeService, Logs: knowledgeService.Logs, Tasks: aiTasks,
 	}
 	router.RegisterEvolutionRouter(r, evolutionService)
 	// 采纳 AI 整理结果时需要追加标签：只增不删，不覆盖用户手工标签。

@@ -22,8 +22,13 @@ export type OperationLogAction =
   | 'knowledge_favorite'
   | 'knowledge_archive'
   | 'knowledge_unarchive'
+  | 'knowledge_web_import'
+  | 'knowledge_organize_accept'
+  | 'knowledge_outdated'
+  | 'knowledge_verified'
+  | 'evolution_resolve'
 
-export type OperationLogTargetType = 'file' | 'folder' | 'knowledge'
+export type OperationLogTargetType = 'file' | 'folder' | 'knowledge' | 'evolution'
 
 /**
  * 操作日志条目。
