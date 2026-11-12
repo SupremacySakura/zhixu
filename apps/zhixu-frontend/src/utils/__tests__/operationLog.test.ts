@@ -178,6 +178,73 @@ describe('describeOperationLog', () => {
     expect(restored.subtitle).toBe('恢复归档')
   })
 
+  it('maps knowledge_web_import and knowledge_organize_accept', () => {
+    const imported = describeOperationLog(
+      makeLog({
+        action: 'knowledge_web_import',
+        target_type: 'knowledge',
+        target_name: '网页笔记',
+      }),
+    )
+    expect(imported.icon).toBe('material-symbols:link-rounded')
+    expect(imported.colorClass).toBe('bg-primary-tint text-primary')
+    expect(imported.subtitle).toBe('从网页导入')
+
+    const accepted = describeOperationLog(
+      makeLog({
+        action: 'knowledge_organize_accept',
+        target_type: 'knowledge',
+        target_name: '笔记',
+      }),
+    )
+    expect(accepted.icon).toBe('material-symbols:auto-awesome-rounded')
+    expect(accepted.colorClass).toBe('bg-purple-tint text-purple')
+    expect(accepted.subtitle).toBe('采纳 AI 整理结果')
+  })
+
+  it('maps knowledge_outdated and knowledge_verified', () => {
+    const outdated = describeOperationLog(
+      makeLog({ action: 'knowledge_outdated', target_type: 'knowledge', target_name: '旧笔记' }),
+    )
+    expect(outdated.icon).toBe('material-symbols:history-rounded')
+    expect(outdated.colorClass).toBe('bg-warning-tint text-warning')
+    expect(outdated.subtitle).toBe('标记可能过时')
+
+    const verified = describeOperationLog(
+      makeLog({ action: 'knowledge_verified', target_type: 'knowledge', target_name: '旧笔记' }),
+    )
+    expect(verified.icon).toBe('material-symbols:verified-rounded')
+    expect(verified.colorClass).toBe('bg-primary-tint text-primary')
+    expect(verified.subtitle).toBe('标记已核实')
+  })
+
+  it('maps evolution_resolve with the resolved action label', () => {
+    const d = describeOperationLog(
+      makeLog({
+        action: 'evolution_resolve',
+        target_type: 'evolution',
+        target_name: '演化提醒 #7',
+        detail: '{"alert_type":"duplicate","action":"archive_one"}',
+      }),
+    )
+    expect(d.icon).toBe('material-symbols:rule-rounded')
+    expect(d.colorClass).toBe('bg-teal-tint text-teal')
+    expect(d.title).toBe('演化提醒 #7')
+    expect(d.subtitle).toBe('归档重复的一条')
+  })
+
+  it('falls back to a generic evolution label for unknown actions', () => {
+    const d = describeOperationLog(
+      makeLog({
+        action: 'evolution_resolve',
+        target_type: 'evolution',
+        target_name: '演化提醒 #7',
+        detail: '{"action":"future"}',
+      }),
+    )
+    expect(d.subtitle).toBe('处理演化提醒')
+  })
+
   it('maps knowledge_update with the saved version', () => {
     const d = describeOperationLog(
       makeLog({

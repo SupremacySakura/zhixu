@@ -29,6 +29,7 @@ type knowledgeFake struct {
 	manualCreated          bool
 	code, message, content string
 	versions               []model.KnowledgeVersion
+	snapshots              []model.KnowledgeVersion
 	listFilter             *repository.KnowledgeListFilter
 }
 
@@ -91,13 +92,26 @@ func (f *knowledgeFake) SetArchived(_ context.Context, user, id uint, archived b
 	return &now, nil
 }
 
+func (f *knowledgeFake) SetOutdated(_ context.Context, user, id uint, at *time.Time, reason string) error {
+	if f.item == nil || f.item.UserID != user || f.item.ID != id {
+		return gorm.ErrRecordNotFound
+	}
+	f.item.OutdatedAt, f.item.OutdatedReason = at, ""
+	if at != nil {
+		f.item.OutdatedReason = reason
+	}
+	return nil
+}
+
 func (f *knowledgeFake) CreateManual(_ context.Context, item *model.KnowledgeItem) error {
 	f.manualCreated = true
 	item.ID = 11
 	f.item = item
 	return nil
 }
-func (f *knowledgeFake) Update(_ context.Context, user, id uint, title, content, sourceHash string, baseVersion uint) (*model.KnowledgeItem, error) {
+
+// Update 复刻仓储语义：先给旧正文留快照（来源记旧正文的来源），再更新条目并写入新来源。
+func (f *knowledgeFake) Update(_ context.Context, user, id uint, title, content, sourceHash string, changeSource model.KnowledgeChangeSource, baseVersion uint) (*model.KnowledgeItem, error) {
 	if f.item == nil || f.item.UserID != user || f.item.ID != id {
 		return nil, gorm.ErrRecordNotFound
 	}
@@ -107,7 +121,16 @@ func (f *knowledgeFake) Update(_ context.Context, user, id uint, title, content,
 	if f.item.Title == title && f.item.Content == content {
 		return f.item, nil
 	}
+	previous := model.KnowledgeChangeSourceManual
+	if f.item.ChangeSource != "" {
+		previous = f.item.ChangeSource
+	}
+	f.snapshots = append(f.snapshots, model.KnowledgeVersion{
+		UserID: user, KnowledgeID: id, VersionNumber: f.item.Version,
+		Title: f.item.Title, Content: f.item.Content, ChangeSource: previous,
+	})
 	f.item.Title, f.item.Content, f.item.SourceHash = title, content, sourceHash
+	f.item.ChangeSource = changeSource
 	f.item.Version = baseVersion + 1
 	return f.item, nil
 }
@@ -637,6 +660,75 @@ func TestKnowledgeUpdate(t *testing.T) {
 	}
 }
 
+// 采纳 AI 修订：写为新版本（来源 ai），被替换的旧正文进快照（来源 manual），历史不被覆盖。
+func TestKnowledgeAcceptRevision(t *testing.T) {
+	newFixture := func() (*knowledgeFake, *operationLogSpy, *KnowledgeService) {
+		f := &knowledgeFake{item: &model.KnowledgeItem{
+			ID: 7, UserID: 2, Title: "旧标题", Content: "旧正文", Status: model.KnowledgeReady,
+			Version: 3, ChangeSource: model.KnowledgeChangeSourceManual, SourceFolderName: "学习资料",
+		}}
+		spy := &operationLogSpy{}
+		s := NewKnowledgeService(f, "")
+		s.Logs = spy
+		return f, spy, s
+	}
+
+	t.Run("writes a new version with ai source", func(t *testing.T) {
+		f, spy, s := newFixture()
+		item, err := s.AcceptRevision(context.Background(), 2, 7, "  HNSW 的召回率 ", " HNSW 优于 IVF。 ")
+		require.NoError(t, err)
+		require.Equal(t, uint(4), item.Version)
+		require.Equal(t, "HNSW 的召回率", item.Title)
+		require.Equal(t, "HNSW 优于 IVF。", item.Content)
+		require.Equal(t, model.KnowledgeChangeSourceAI, item.ChangeSource)
+		require.Len(t, f.snapshots, 1, "采纳前先给旧正文留快照")
+		snapshot := f.snapshots[0]
+		require.Equal(t, uint(3), snapshot.VersionNumber)
+		require.Equal(t, "旧标题", snapshot.Title)
+		require.Equal(t, "旧正文", snapshot.Content)
+		require.Equal(t, model.KnowledgeChangeSourceManual, snapshot.ChangeSource, "旧正文是手动编辑产生的")
+		require.Len(t, spy.entries, 1)
+		require.Equal(t, model.OperationLogActionKnowledgeUpdate, spy.entries[0].Action)
+		require.Equal(t, uint(7), spy.entries[0].TargetID)
+		require.JSONEq(t, `{"version":4,"change_source":"ai"}`, spy.entries[0].Detail)
+	})
+
+	t.Run("rejects invalid revision", func(t *testing.T) {
+		for _, tc := range []struct{ name, title, content string }{
+			{"empty title", "", "正文"},
+			{"long title", strings.Repeat("知", 201), "正文"},
+			{"empty content", "标题", ""},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				f, spy, s := newFixture()
+				_, err := s.AcceptRevision(context.Background(), 2, 7, tc.title, tc.content)
+				require.ErrorIs(t, err, ErrKnowledgeInvalid)
+				require.Empty(t, f.snapshots)
+				require.Empty(t, spy.entries)
+			})
+		}
+	})
+
+	t.Run("unready knowledge conflicts", func(t *testing.T) {
+		f, _, s := newFixture()
+		f.item.Status = model.KnowledgePending
+		_, err := s.AcceptRevision(context.Background(), 2, 7, "标题", "正文")
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+	})
+
+	// 归档是终态：规格 #8 规定涉及知识已归档时只允许忽略与标记已核实，
+	// 采纳修订必须拒绝，否则绕过前端直接调接口就能把已归档的知识改活。
+	t.Run("archived knowledge conflicts", func(t *testing.T) {
+		f, spy, s := newFixture()
+		now := time.Now()
+		f.item.ArchivedAt = &now
+		_, err := s.AcceptRevision(context.Background(), 2, 7, "标题", "正文")
+		require.ErrorIs(t, err, repository.ErrKnowledgeConflict)
+		require.Empty(t, f.snapshots, "拒绝时不该写快照")
+		require.Empty(t, spy.entries, "拒绝时不该写操作日志")
+	})
+}
+
 func TestKnowledgeVersions(t *testing.T) {
 	newFixture := func() (*knowledgeFake, *operationLogSpy, *KnowledgeService) {
 		f := &knowledgeFake{
@@ -695,6 +787,21 @@ func TestKnowledgeVersions(t *testing.T) {
 		require.ErrorIs(t, err, ErrKnowledgeNotFound)
 		_, err = s.VersionDetail(context.Background(), 2, 8, 1)
 		require.ErrorIs(t, err, ErrKnowledgeNotFound)
+	})
+
+	// 采纳 AI 修订后当前版本由 AI 产生：列表与详情都要如实标注来源，不能一律写 manual。
+	t.Run("current version keeps the source it was created with", func(t *testing.T) {
+		fake := &knowledgeFake{item: &model.KnowledgeItem{
+			ID: 7, UserID: 2, Title: "当前标题", Content: "# 当前正文", Status: model.KnowledgeReady,
+			Version: 3, ChangeSource: model.KnowledgeChangeSourceAI,
+		}}
+		s := NewKnowledgeService(fake, "")
+		versions, err := s.Versions(context.Background(), 2, 7)
+		require.NoError(t, err)
+		require.Equal(t, "ai", versions[0].ChangeSource)
+		detail, err := s.VersionDetail(context.Background(), 2, 7, 3)
+		require.NoError(t, err)
+		require.Equal(t, "ai", detail.ChangeSource)
 	})
 
 	t.Run("restore creates a new version and logs", func(t *testing.T) {
@@ -794,6 +901,36 @@ func TestKnowledgeFavoriteAndArchive(t *testing.T) {
 		_, err := s.Archive(ctx, 2, 99)
 		require.ErrorIs(t, err, ErrKnowledgeNotFound)
 	})
+}
+
+// 过时标记：写入与清除都记知识侧日志，重复设置同一状态不再记日志。
+func TestKnowledgeSetOutdated(t *testing.T) {
+	ctx := context.Background()
+	item := &model.KnowledgeItem{ID: 7, UserID: 2, Title: "笔记", Status: model.KnowledgeReady}
+	fake := &knowledgeFake{item: item}
+	spy := &operationLogSpy{}
+	s := NewKnowledgeService(fake, "")
+	s.Logs = spy
+
+	now := time.Now()
+	require.NoError(t, s.SetOutdated(ctx, 2, 7, &now, "已被新版本取代"))
+	require.NotNil(t, fake.item.OutdatedAt)
+	require.Equal(t, "已被新版本取代", fake.item.OutdatedReason)
+	require.Len(t, spy.entries, 1)
+	require.Equal(t, model.OperationLogActionKnowledgeOutdated, spy.entries[0].Action)
+	require.Equal(t, model.OperationLogTargetTypeKnowledge, spy.entries[0].TargetType)
+
+	// 幂等：同样的标记重复写入不产生第二条日志。
+	require.NoError(t, s.SetOutdated(ctx, 2, 7, &now, "已被新版本取代"))
+	require.Len(t, spy.entries, 1)
+
+	require.NoError(t, s.SetOutdated(ctx, 2, 7, nil, ""))
+	require.Nil(t, fake.item.OutdatedAt)
+	require.Empty(t, fake.item.OutdatedReason)
+	require.Len(t, spy.entries, 2)
+	require.Equal(t, model.OperationLogActionKnowledgeVerified, spy.entries[1].Action)
+
+	require.ErrorIs(t, s.SetOutdated(ctx, 2, 99, nil, ""), ErrKnowledgeNotFound)
 }
 
 func TestKnowledgeImportWeb(t *testing.T) {

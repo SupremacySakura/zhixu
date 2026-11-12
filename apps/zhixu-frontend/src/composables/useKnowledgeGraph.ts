@@ -6,6 +6,7 @@ import {
   type KnowledgeGraph,
   type KnowledgeGraphEdge,
   type KnowledgeItem,
+  type RelationType,
 } from '../services/apis/knowledge'
 import { listTags, type Tag } from '../services/apis/tag'
 import { knowledgeError } from '../utils/knowledge'
@@ -37,11 +38,22 @@ export function useKnowledgeGraph() {
   const tagId = ref(0)
   const sourceType = ref('')
   const showSuggested = ref(false)
+  /** 关系类型筛选只在客户端裁剪边，不改后端查询（图例与筛选因此始终同源）。 */
+  const relationType = ref<RelationType | ''>('')
 
   /** 标签/来源会裁剪节点，空图时要给出“无匹配”而不是“还没有知识”。 */
   const nodeFiltersActive = computed(() => tagId.value > 0 || sourceType.value !== '')
-  /** 建议边开关不裁剪节点，但也算筛选状态，用于显示“清空筛选”。 */
-  const filtersActive = computed(() => nodeFiltersActive.value || showSuggested.value)
+  /** 建议边开关与关系类型筛选不裁剪节点，但也算筛选状态，用于显示“清空筛选”。 */
+  const filtersActive = computed(
+    () => nodeFiltersActive.value || showSuggested.value || relationType.value !== '',
+  )
+
+  /** 按关系类型裁剪后的边；未选类型时原样透出后端结果。 */
+  const visibleEdges = computed<KnowledgeGraphEdge[]>(() =>
+    relationType.value === ''
+      ? graph.value.edges
+      : graph.value.edges.filter(edge => edge.relation_type === relationType.value),
+  )
 
   const selectedNode = computed(
     () => graph.value.nodes.find(node => node.id === selectedId.value) ?? null,
@@ -52,7 +64,7 @@ export function useKnowledgeGraph() {
     const center = selectedNode.value
     if (!center) return []
     const rows: OneHopRelation[] = []
-    for (const edge of graph.value.edges) {
+    for (const edge of visibleEdges.value) {
       const counterpartId =
         edge.source_id === center.id
           ? edge.target_id
@@ -126,6 +138,7 @@ export function useKnowledgeGraph() {
     tagId.value = 0
     sourceType.value = ''
     showSuggested.value = false
+    relationType.value = ''
   }
 
   async function loadTags() {
@@ -238,6 +251,8 @@ export function useKnowledgeGraph() {
     tagId,
     sourceType,
     showSuggested,
+    relationType,
+    visibleEdges,
     nodeFiltersActive,
     filtersActive,
     selectedNode,

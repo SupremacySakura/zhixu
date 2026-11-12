@@ -16,7 +16,7 @@ const chartStub = {
   name: 'KnowledgeGraphChart',
   props: ['nodes', 'edges', 'selectedId'],
   emits: ['node-click'],
-  template: `<div data-test="chart" :data-node-count="nodes.length" :data-edge-count="edges.length"><span v-for="edge in edges" :key="edge.id" :data-edge-id="edge.id" :data-edge-status="edge.status" /><button v-for="node in nodes" :key="node.id" :data-node-id="node.id" @click="$emit('node-click', node.id)">{{ node.title }}</button></div>`,
+  template: `<div data-test="chart" :data-node-count="nodes.length" :data-edge-count="edges.length"><span v-for="edge in edges" :key="edge.id" :data-edge-id="edge.id" :data-edge-status="edge.status" :data-edge-type="edge.relation_type" /><button v-for="node in nodes" :key="node.id" :data-node-id="node.id" @click="$emit('node-click', node.id)">{{ node.title }}</button></div>`,
 }
 
 const graph = {
@@ -241,6 +241,92 @@ describe('KnowledgeGraph 页面', () => {
     expect(wrapper.find('[data-test="chart"]').attributes('data-edge-count')).toBe('1')
   })
 
+  it('关系类型筛选提供全部与六种类型，文案与图例同源', async () => {
+    const { wrapper } = await render()
+    const trigger = wrapper.find('[data-test="relation-filter"] button[aria-haspopup="menu"]')
+    expect(trigger.text()).toContain('全部关系')
+    await trigger.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[role="menuitemradio"]').map(option => option.text().trim())).toEqual([
+      '全部关系',
+      '相关',
+      '依赖',
+      '补充说明',
+      '对比',
+      '更新替代',
+      '矛盾',
+    ])
+  })
+
+  it('选关系类型后在客户端裁剪边，不发新请求', async () => {
+    vi.mocked(getKnowledgeGraph).mockResolvedValue({
+      ...graph,
+      edges: [
+        ...graph.edges,
+        {
+          id: 13,
+          source_id: 2,
+          target_id: 1,
+          relation_type: 'depends_on' as const,
+          status: 'confirmed' as const,
+          source: 'manual' as const,
+          confidence: 1,
+        },
+      ],
+    })
+    const { wrapper } = await render()
+    const chart = wrapper.find('[data-test="chart"]')
+    expect(chart.attributes('data-edge-count')).toBe('2')
+
+    await chooseFilter(wrapper, '筛选关系类型', '依赖')
+
+    // 关系类型只在客户端裁剪：后端请求次数不变，节点也不被裁掉。
+    expect(getKnowledgeGraph).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-test="chart"]').attributes('data-edge-count')).toBe('1')
+    expect(wrapper.find('[data-edge-type="depends_on"]').exists()).toBe(true)
+    expect(wrapper.find('[data-edge-type="related"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="chart"]').attributes('data-node-count')).toBe('2')
+    expect(wrapper.find('[data-test="clear-filters"]').exists()).toBe(true)
+  })
+
+  it('关系类型筛选与图例同步：只剩矛盾边时才出现矛盾图例', async () => {
+    vi.mocked(getKnowledgeGraph).mockResolvedValue({
+      ...graph,
+      edges: [
+        ...graph.edges,
+        {
+          id: 12,
+          source_id: 1,
+          target_id: 2,
+          relation_type: 'contradicts' as const,
+          status: 'confirmed' as const,
+          source: 'manual' as const,
+          confidence: 1,
+        },
+      ],
+    })
+    const { wrapper } = await render()
+    await chooseFilter(wrapper, '筛选关系类型', '相关')
+
+    expect(wrapper.find('[data-test="graph-legend"]').text()).not.toContain('矛盾关系')
+    expect(wrapper.find('[data-edge-type="contradicts"]').exists()).toBe(false)
+  })
+
+  it('选中的关系类型没有边时给出提示并可清空', async () => {
+    const { wrapper } = await render()
+    await chooseFilter(wrapper, '筛选关系类型', '矛盾')
+
+    expect(wrapper.find('[data-test="chart"]').attributes('data-edge-count')).toBe('0')
+    expect(wrapper.find('[data-test="relation-filter-empty"]').text()).toContain('矛盾')
+    // 节点还在，不该退化成「还没有可展示的知识」。
+    expect(wrapper.text()).not.toContain('还没有可展示的知识')
+
+    await wrapper.find('[data-test="clear-filters"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="chart"]').attributes('data-edge-count')).toBe('1')
+    expect(wrapper.find('[data-test="relation-filter-empty"]').exists()).toBe(false)
+  })
+
   it('图例区分已确认、建议与 AI/手动关联', async () => {
     const { wrapper } = await render()
     const legend = wrapper.find('[data-test="graph-legend"]')
@@ -251,6 +337,33 @@ describe('KnowledgeGraph 页面', () => {
     expect(legend.text()).toContain('手动关联')
     expect(legend.find('.border-solid').exists()).toBe(true)
     expect(legend.find('.border-dashed').exists()).toBe(true)
+  })
+
+  it('图中有矛盾边时图例补一条矛盾关系', async () => {
+    vi.mocked(getKnowledgeGraph).mockResolvedValue({
+      ...graph,
+      edges: [
+        ...graph.edges,
+        {
+          id: 12,
+          source_id: 1,
+          target_id: 2,
+          relation_type: 'contradicts' as const,
+          status: 'confirmed' as const,
+          source: 'manual' as const,
+          confidence: 1,
+        },
+      ],
+    })
+    const { wrapper } = await render()
+    const legend = wrapper.find('[data-test="graph-legend"]')
+    expect(legend.text()).toContain('矛盾关系')
+    expect(legend.find('[data-test="legend-contradicts"]').exists()).toBe(true)
+  })
+
+  it('没有矛盾边时不显示矛盾关系图例项', async () => {
+    const { wrapper } = await render()
+    expect(wrapper.find('[data-test="graph-legend"]').text()).not.toContain('矛盾关系')
   })
 
   it('清空筛选后恢复默认请求与完整图', async () => {

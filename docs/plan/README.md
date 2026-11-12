@@ -42,8 +42,7 @@ last_reviewed: 2026-11-11
 
 **关键路径**：P1（标签/版本表）→ P3（整理/关联）→ P4（演化）→ P5（实验）。P2 独立于数据表依赖，可并行启动。
 
-**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 已完成（2026-11-11，W3.1~W3.5，AC-04 与 AC-07 闭环）；P4-W4.1 局部知识图谱已完成（2026-11-11，AC-10 待真机验收）；P4-W4.2 已完成（2026-11-12：GitHub #9 建表/content_hash 回填/evolve 任务/列表摘要裁决接口，#10 语义近重复与 `POST /evolve` 判定契约）；W4.3/W4.4/W4.5 未开始（#11~#13）；P5 未开始。
-
+**进度**：P1 已完成（2026-11-10，7 个工作项）；P2 已完成（2026-11-11，5 个工作项）；P3 已完成（2026-11-11，W3.1~W3.5，AC-04 与 AC-07 闭环）；P4-W4.1 局部知识图谱已完成（2026-11-11，AC-10 待真机验收）；P4-W4.2 已完成（2026-11-12：GitHub #9 建表/content_hash 回填/evolve 任务/列表摘要裁决接口，#10 语义近重复与 `POST /evolve` 判定契约）；P4-W4.3 已完成（2026-11-12，GitHub #11：过时识别放行与弱信号双侧证据门槛、`mark_outdated`/`mark_verified` 副作用与操作日志、详情页过时横幅与「重新检查」）；P4-W4.4 已完成（2026-11-12，GitHub #12：`contradicts` 第六种关系类型与 AI 推荐白名单排除、冲突提醒接入 evolve 管线与修订稿门槛、`accept_revision` 走版本链路写 `change_source=ai` 新版本、`create_relation` 写 `confirmed`+`manual` 矛盾关系、图谱与图例渲染矛盾边）；P4-W4.5 已完成（2026-11-12，GitHub #13：`/home/evolution` 演化中心两页签、类型与状态筛选、并排证据高亮、按类型裁剪的裁决动作与备注、首页「待处理提醒」卡片只取 summary）；**P4 全部工作项代码完成，PR #16 待合并，AC-10~AC-13 待真机验收**；P5 未开始。
 ## 数据库变更总表
 
 新增表（GORM AutoMigrate，全部带 `user_id` 或经知识条目归属隔离）：
@@ -62,7 +61,7 @@ last_reviewed: 2026-11-11
 
 | 表 | 变更 | 引入阶段 |
 |---|---|---|
-| `knowledge_items` | +`source_type`(manual/markdown/pdf/web)、+`source_url`、+`summary`、+`keywords`(JSON)、+`is_favorite`、+`version`(乐观锁) | P1（source_type/favorite/version）、P3（summary/keywords） |
+| `knowledge_items` | +`source_type`(manual/markdown/pdf/web)、+`source_url`、+`summary`、+`keywords`(JSON)、+`is_favorite`、+`version`(乐观锁)、+`change_source`(manual/ai，当前正文来源) | P1（source_type/favorite/version）、P3（summary/keywords）、P4-W4.4（change_source） |
 | `knowledge_chunks` | `content` 建 MySQL ngram 全文索引（`WITH PARSER ngram`） | P2-W2.1 |
 | `vectorize_tasks` | +`stale_chunk_ids`(TEXT)、+`cleanup_collection`（编辑后旧向量按点清理） | P1-W1.2 |
 
@@ -86,14 +85,14 @@ last_reviewed: 2026-11-11
 
 | 页面 | 状态 | 缺口 |
 |---|---|---|
-| 首页 Dashboard | ⚠️ 有基础统计 | 缺最近知识、待处理任务、演化提醒聚合（P4-W4.5、P5-W5.2） |
+| 首页 Dashboard | ⚠️ 有基础统计 | 已含「待处理提醒」卡片（P4-W4.5）；仍缺最近知识、待处理任务聚合（P5-W5.2） |
 | 知识列表 | ✅ 有 | 已支持来源类型/标签/收藏归档筛选与排序（P1-W1.6） |
 | 知识详情 | ✅ 有 | 已支持编辑、版本历史、标签、AI 整理面板（P3-W3.3）与「相关知识」面板（P3-W3.4/W3.5） |
 | 分块预览 | ✅ 有 | 已支持引用跳转与高亮定位（P2-W2.5） |
 | 导入页面 | ✅ 有 | 已支持“网页链接”入口（P1-W1.5）；仍并入文件管理 |
 | AI 问答 | ✅ 有 | grounding 双模式与引用高亮已就绪（P2） |
 | 知识图谱 | ✅ 有 | `/home/knowledge/graph`：ECharts 局部图谱、筛选、建议边、点击抽屉（P4-W4.1） |
-| 演化中心 | ❌ 无 | P4-W4.5 |
+| 演化中心 | ✅ 有 | `/home/evolution`：两页签（待处理/处理记录）、类型与状态筛选、并排证据高亮、按类型裁剪的裁决与备注（P4-W4.5） |
 | 系统设置 | ✅ 有 | 缺"测试连接"按钮（P5-W5.1） |
 
 ## 执行规则

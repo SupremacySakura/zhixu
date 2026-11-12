@@ -7,7 +7,7 @@ import KnowledgeGraphChart from '../components/knowledge/KnowledgeGraphChart.vue
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import type { RelationStatus } from '../services/apis/knowledge'
 import { KNOWLEDGE_FORMATS, knowledgeSourceLabel } from '../utils/knowledge'
-import { relationTypeLabel } from '../utils/relation'
+import { RELATION_TYPE_OPTIONS, relationTypeLabel } from '../utils/relation'
 import { springSnappy } from '../utils/motion'
 import { useKnowledgeGraph } from '../composables/useKnowledgeGraph'
 
@@ -25,6 +25,8 @@ const {
   tagId,
   sourceType,
   showSuggested,
+  relationType,
+  visibleEdges,
   nodeFiltersActive,
   filtersActive,
   selectedNode,
@@ -55,6 +57,31 @@ const tagFilter = computed({
     tagId.value = Number(value) || 0
   },
 })
+
+/**
+ * 关系类型筛选项：全部 + 六种类型，文案取自 utils/relation.ts，保证筛选与图例同源。
+ * 只做客户端裁剪——后端按类型过滤会连节点一起裁剪，与「图例说明线型」的语义不符。
+ */
+const relationTypeOptions = [
+  { key: '', label: '全部关系' },
+  ...RELATION_TYPE_OPTIONS.map(option => ({ key: option.value, label: option.label })),
+]
+/** FilterMenu 只收发字符串，这里做一次白名单转换，避免把任意字符串写进 RelationType。 */
+const relationFilter = computed({
+  get: () => relationType.value,
+  set: value => {
+    relationType.value = RELATION_TYPE_OPTIONS.find(option => option.value === value)?.value ?? ''
+  },
+})
+/** 空态文案要能说出当前选的关系类型名。 */
+const relationFilterLabel = computed(() =>
+  relationType.value === '' ? '全部关系' : relationTypeLabel(relationType.value),
+)
+
+/** 图例只在图里真的出现矛盾边时补一项，避免给不存在的样式留说明。 */
+const hasContradiction = computed(() =>
+  visibleEdges.value.some(edge => edge.relation_type === 'contradicts'),
+)
 
 const STATUS_LABELS: Record<RelationStatus, string> = {
   suggested: '建议',
@@ -126,6 +153,12 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           :options="sourceOptions"
           label="筛选来源类型"
           data-test="source-filter"
+        />
+        <FilterMenu
+          v-model="relationFilter"
+          :options="relationTypeOptions"
+          label="筛选关系类型"
+          data-test="relation-filter"
         />
         <button
           type="button"
@@ -231,10 +264,17 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
               : '这些知识之间还没有已确认关系。打开任意知识详情页，在「相关知识」面板中建立或确认关系后再回来查看。'
           }}
         </p>
+        <p
+          v-if="graph.edges.length > 0 && visibleEdges.length === 0"
+          class="mb-4 rounded-lg border border-hairline bg-surface p-4 text-subhead text-label-secondary"
+          data-test="relation-filter-empty"
+        >
+          当前图谱里没有「{{ relationFilterLabel }}」的边，换个关系类型或清空筛选看看。
+        </p>
         <section class="rounded-lg border border-hairline bg-surface p-2 shadow-card">
           <KnowledgeGraphChart
             :nodes="graph.nodes"
-            :edges="graph.edges"
+            :edges="visibleEdges"
             :selected-id="selectedId"
             @node-click="selectedId = $event"
           />
@@ -258,6 +298,14 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
             <span class="flex items-center gap-2">
               <span class="size-2 rounded-full bg-label-tertiary" />
               手动关联
+            </span>
+            <span
+              v-if="hasContradiction"
+              class="flex items-center gap-2"
+              data-test="legend-contradicts"
+            >
+              <span class="h-0 w-6 border-t-2 border-solid border-danger" />
+              矛盾关系
             </span>
           </div>
         </section>

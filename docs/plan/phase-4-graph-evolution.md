@@ -1,7 +1,7 @@
 ---
 last_reviewed: 2026-11-12
 phase: P4
-status: pending
+status: in-progress
 ---
 
 # P4 知识图谱与知识演化
@@ -66,11 +66,15 @@ status: pending
 - **Go**：接受建议后旧知识标记 `outdated`（详情页徽标，仍可检索但标注）。
 - **依赖**：W4.2（alerts 表与工作流骨架）。**验收**：更新某知识后，旧版本/旧知识出现过时提醒。
 
+**完成情况（2026-11-12，第三部分 / GitHub #11）**：过时识别与详情页标记已落地——`EvolveProcessor` 放行 `outdated` 结论（仍挡 `conflict` 留给 #12），候选取「`updates` 关系指向的目标」（强信号，单侧证据即可）与「向量相似度 ≥ 0.80 近邻」（弱信号，必须双侧各至少一条可定位引文，否则整条不落库）；相似度分派放宽为「≥0.90 收 duplicate、≥0.75 收 conflict、≥0.80 收 outdated」，因此 0.80~0.90 段同时接受冲突与过时两类结论。裁决侧 `mark_outdated` 写目标知识（`subject_ids[1]`）的 `outdated_at` 与 `outdated_reason`，`mark_verified` 只对过时提醒清除标记（重复提醒的核实不会误清别的判定），两者都记 `knowledge_outdated`/`knowledge_verified` 操作日志。编辑正文（版本 +1）会清除过时标记——标记针对被判定时的正文，用户改写即视为自行处理。详情页新增过时横幅（含判定理由与判定时间）与「重新检查」按钮（`POST /knowledge/:id/evolve/regenerate`，已有活跃任务时后端复用）。
+
 ### W4.4 冲突识别（FR-EVO-03）
 
 - **AI 服务**：同一 `evolve-workflow` 增加冲突判定——对高相关候选对（相似度阈值可配，低于重复检测阈值），LLM 判断观点/数据是否矛盾 → `{type: conflict, reason, evidence[两条知识的冲突引文], suggestedAction: create_relation(contradicts)}`。
 - **Go**：接受后自动建 `knowledge_relations(type=contradicts)`。
 - **依赖**：W4.3（复用同一工作流与回调）。**验收**：AC-13 冲突部分——导入观点矛盾的两篇文档，出现冲突提醒并展示双方引文。
+
+**完成情况（2026-11-12，第四部分 / GitHub #12）**：冲突识别、修订稿采纳与矛盾关系已落地——关系类型新增第六种 `contradicts`（对称，写入前 min/max 归一，唯一键 `(user_id, source_id, target_id, relation_type)` 不变），并新增 `RelationType.Recommendable()` 作为 AI 关联推荐的白名单（五值 true、`contradicts` false），`relate.go` 与 `relation_task.go` 两处清洗改用它——`Valid()` 是「所有合法类型」，直接当白名单用会让模型建议出矛盾关系，ADR-0002 明确要求排除；冲突提醒接入同一条 evolve 管线（删除 #11 留下的 `if conflict { continue }` 跳过分支），相似度 0.75~0.90 的候选只接受冲突结论，同一对同时给出重复与冲突时按 `evolveTypePriority` 只留重复；修订稿由同一次模型调用产出并存入提醒载荷，门槛在客户端清洗（`sanitizeEvolveJudgements`）与处理器（`buildAlert` 的 `evolveRevisionUsable`）两处各守一道：证据未全部定位或正文超 20000 字即整份丢弃（不截断），提醒严重度降级为 `review`，建议动作随之从 `accept_revision` 改回 `create_relation`；裁决侧 `accept_revision` 经 `EvolutionService.Reviser` 调到 `KnowledgeService.AcceptRevision`，走既有版本链路写为新版本（`change_source=ai`），原文进版本快照、不覆盖历史，无修订稿时 effectFor 直接返回 `ErrEvolutionInvalid` 由 handler 映射 400；`create_relation` 经 `EvolutionService.Relations` 以 `subject_ids[0]` 为源、`[1]` 为目标写一条 `confirmed`+`manual` 的 `contradicts`，同对已存在时由仓储 `findPair`/`confirm` 复用而不重复插入。版本来源语义随之补全：`knowledge_items` 新增 `change_source`(manual/ai) 记录**当前正文**的产生来源，版本快照行记录**被替换掉的旧正文**的来源，版本列表的「当前」条目据此标注（此前硬编码 manual，采纳修订只能错记在被替换的旧版本上）。图谱侧后端无需改动（`relation_type` 原样透出、不按类型过滤），前端补 `contradicts` 的「矛盾」标签与选项（仍是 `utils/relation.ts` 唯一文案源）、矛盾边改用 `--color-danger` 系而非按来源分色（类型比来源更需要一眼可辨），图例项仅在图中真的出现矛盾边时显示。测试覆盖：对称归一与幂等复用、AI 推荐不产出矛盾、修订稿门槛三分支（客户端清洗 + 处理器各一）、采纳修订生成新版本且原文入快照、无修订稿 400、矛盾关系不重复、图谱返回矛盾边。后端 `go build`/`go vet`/`go test ./...` 全绿；前端 `npm test` 与 `npm run typecheck` 全绿（本单范围内 47 文件 324 用例，合并 #13 后 52 文件 354 用例；本轮修正后 52 文件 364 用例）。
 
 ### W4.5 演化中心与人工审核（FR-EVO-05）
 
@@ -84,6 +88,8 @@ status: pending
 - **首页聚合**：Dashboard 增加"待处理任务 + 演化提醒"卡片（点击进入演化中心）。
 - **依赖**：W4.2/W4.3/W4.4。**验收**：AC-13 全部——提醒可筛选、证据可见、每种操作正确落库、处理记录可查。
 
+**完成情况（2026-11-12，第五部分 / GitHub #13）**：演化中心与首页待处理卡片已落地——新增 `/home/evolution` 页面（侧边栏「演化中心」入口），单页两页签：「待处理」走 `open=true` 后端一次取回 pending+deferred，「处理记录」用 `status=resolved,dismissed` 一次请求取回两个状态（排序与 `total` 都由服务端给，翻页沿用既有 `FilePagination`）；类型三选（重复/过时/冲突）与状态筛选都用既有 `FilterMenu`，任一筛选变化即复位到第一页重拉，且状态筛选存在时不传 `open`（后端 `open` 优先于 `status`，同传会静默覆盖）。点列表项从右侧滑出详情抽屉（与图谱节点抽屉同一套 `Motion` + `springSnappy` + `bg-scrim` 结构），左右并排两侧证据引文，并把两条引文的最长公共片段用 `<mark>` 高亮，标题可跳对应知识详情。动作按钮按提醒类型裁剪（duplicate 五个、outdated 四个、conflict 六个，含「暂不处理」的状态迁移），无修订稿时「采纳修订」置灰并给出原因，涉及知识已归档时卡片标注「涉及知识已归档」且只留「忽略」与「标记已核实」可点。备注随裁决一并提交，处理记录页签展示动作文案（复用 `evolutionActionLabel`）、备注与裁决时间。首页新增「待处理提醒」卡片，只调 `GET /api/evolution/alerts/summary` 拿总数与三类计数并链到演化中心，不拉列表、不引图表库。列表/筛选/裁决状态收在 `useEvolutionAlerts` 组合式函数里（AbortController 管理取消，scope 销毁时中断在途请求），页面只做渲染编排。前端新增 30 个用例（接口层 5、组合式函数 8、高亮工具 6、页面 8、首页卡片 3）。AC-13 的「每种操作正确落库」需真机验收——`accept_revision` 与 `create_relation` 两个动作已落地，待真机验收。本轮 code-review 修正（首页待处理只算 pending、处理记录改单次多状态请求、图谱补关系类型筛选、类型收紧与重复计算收敛）另加 10 个用例，全量 52 文件 364 用例通过。
+
 ## 里程碑验收（P4 Done）
 
 1. AC-10：图谱页可用，与详情页互跳。
@@ -91,3 +97,5 @@ status: pending
 3. AC-12：版本管理与演化联动（接受修订产生新版本，可回溯）。
 4. AC-13：过时/冲突提醒带证据，人工审核五种操作全部生效。
 5. 采纳/忽略行为落库，为 P5 演化实验（采纳率、误报率）提供数据。
+
+**验收状态（2026-11-12）**：W4.1~W4.5 代码、单测全部完成并合入 PR #16（堆叠在 #14、#15 之上），AC-10~AC-13 均**待真机验收**——需要真实模型与 Qdrant 环境跑通「导入 → 向量化 → 演化检查 → 提醒 → 裁决」全链路。因此本阶段状态标为 in-progress，真机验收通过后改为 done。

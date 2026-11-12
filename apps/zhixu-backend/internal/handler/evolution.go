@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"zhixu-backend/internal/model"
 	"zhixu-backend/internal/repository"
@@ -40,14 +41,43 @@ func (h *EvolutionHandler) List(c *gin.Context) {
 		h.fail(c, service.ErrEvolutionInvalid)
 		return
 	}
+	statuses, ok := evolutionStatusQuery(c.Query("status"))
+	if !ok {
+		h.fail(c, service.ErrEvolutionInvalid)
+		return
+	}
 	views, total, err := h.Service.List(c.Request.Context(), userID, page, size,
-		model.EvolutionAlertType(c.Query("type")), model.EvolutionAlertStatus(c.Query("status")),
-		open != nil && *open)
+		model.EvolutionAlertType(c.Query("type")), statuses, open != nil && *open)
 	if err != nil {
 		h.fail(c, err)
 		return
 	}
 	response.Success(c, gin.H{"items": views, "total": total, "page": page, "page_size": size})
+}
+
+// evolutionStatusQuery 解析逗号分隔的状态筛选：空串表示不筛选，
+// 单个值等价于等值匹配，多个值用于「处理记录」页签同时取已处理与已忽略。
+// 这里只做拆分与去空，合法性由服务层统一校验（未知状态返回 400）。
+func evolutionStatusQuery(raw string) ([]model.EvolutionAlertStatus, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, true
+	}
+	parts := strings.Split(raw, ",")
+	statuses := make([]model.EvolutionAlertStatus, 0, len(parts))
+	seen := make(map[model.EvolutionAlertStatus]bool, len(parts))
+	for _, part := range parts {
+		status := model.EvolutionAlertStatus(strings.TrimSpace(part))
+		if status == "" || seen[status] {
+			continue
+		}
+		seen[status] = true
+		statuses = append(statuses, status)
+	}
+	if len(statuses) == 0 {
+		return nil, false
+	}
+	return statuses, true
 }
 
 // Summary 返回待处理计数（GET /evolution/alerts/summary），首页卡片只调这一个接口。

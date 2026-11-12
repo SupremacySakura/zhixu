@@ -208,7 +208,7 @@ func sanitizeRelateRelations(relations []RelateRelation) []RelateRelation {
 		relation.Evidence.Reason = strings.TrimSpace(relation.Evidence.Reason)
 		relation.Evidence.SourceQuote = truncateRunes(strings.TrimSpace(relation.Evidence.SourceQuote), relationQuoteMaxRunes)
 		relation.Evidence.TargetQuote = truncateRunes(strings.TrimSpace(relation.Evidence.TargetQuote), relationQuoteMaxRunes)
-		if relation.TargetID == 0 || !relation.RelationType.Valid() ||
+		if relation.TargetID == 0 || !relation.RelationType.Recommendable() ||
 			math.IsNaN(relation.Confidence) || relation.Confidence < 0 || relation.Confidence > 1 ||
 			relation.Evidence.Reason == "" {
 			continue

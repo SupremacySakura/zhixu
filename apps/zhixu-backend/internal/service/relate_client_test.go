@@ -78,6 +78,24 @@ func TestRelateClientSendsContract(t *testing.T) {
 	require.False(t, leaked, "密钥不得出现在顶层")
 }
 
+// 矛盾关系只能由人建立：模型即便给出 contradicts 也必须被丢掉（ADR-0002）。
+func TestRelateClientDropsContradictsSuggestion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("{\"relations\":[" +
+			"{\"target_id\":21,\"relation_type\":\"contradicts\",\"confidence\":0.93,\"evidence\":{\"reason\":\"说法互斥\"}}," +
+			"{\"target_id\":21,\"relation_type\":\"related\",\"confidence\":0.66,\"evidence\":{\"reason\":\"主题相近\"}}]}"))
+	}))
+	defer server.Close()
+
+	relations, err := (&RelateClient{AIURL: server.URL, Secret: "s"}).Relate(
+		context.Background(), relateSnapshot(), 8, 12, "标题", "摘要", relateCandidates(),
+	)
+
+	require.NoError(t, err)
+	require.Len(t, relations, 1)
+	require.Equal(t, model.RelationTypeRelated, relations[0].RelationType)
+}
+
 // 422 表示模型输出不可用：调用方应终止任务而不是重试。
 func TestRelateClientMapsSchemaInvalid(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

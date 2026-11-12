@@ -6,6 +6,7 @@ import {
   archiveKnowledge,
   favoriteKnowledge,
   getKnowledge,
+  regenerateKnowledgeEvolve,
   unarchiveKnowledge,
 } from '../../services/apis/knowledge'
 
@@ -17,6 +18,7 @@ vi.mock('../../services/apis/knowledge', () => ({
   getKnowledgeOrganize: vi.fn(),
   acceptKnowledgeOrganize: vi.fn(),
   regenerateKnowledgeOrganize: vi.fn(),
+  regenerateKnowledgeEvolve: vi.fn(),
 }))
 vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
 
@@ -34,6 +36,8 @@ const baseItem = {
   version: 2,
   is_favorite: false,
   archived_at: null,
+  outdated_at: null,
+  outdated_reason: '',
   status: 'ready',
   error_code: '',
   error_message: '',
@@ -102,6 +106,43 @@ describe('KnowledgeDetail', () => {
     const organizePanel = html.indexOf('knowledge-organize-panel-stub')
     expect(relationsPanel).toBeGreaterThan(-1)
     expect(relationsPanel).toBeLessThan(organizePanel)
+  })
+
+  it('shows the outdated badge with its reason', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({
+      ...baseItem,
+      outdated_at: '2026-11-12T09:00:00+08:00',
+      outdated_reason: '新导入的《Vue 3.5 说明》覆盖了同样的 API 用法。',
+    } as never)
+    const wrapper = await render()
+    expect(wrapper.text()).toContain('这条知识可能已过时')
+    expect(wrapper.text()).toContain('新导入的《Vue 3.5 说明》覆盖了同样的 API 用法。')
+    expect(wrapper.text()).toContain('判定时间')
+  })
+
+  it('hides the outdated badge for verified knowledge', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({ ...baseItem } as never)
+    const wrapper = await render()
+    expect(wrapper.text()).not.toContain('这条知识可能已过时')
+  })
+
+  it('submits a recheck and reports the task state', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({ ...baseItem } as never)
+    vi.mocked(regenerateKnowledgeEvolve).mockResolvedValue({
+      id: 5,
+      task_type: 'evolve',
+      status: 'pending',
+      error_message: '',
+      retry_count: 0,
+      updated_at: '2026-11-12T09:00:00+08:00',
+    })
+    const wrapper = await render()
+    const button = wrapper.findAll('button').find(entry => entry.text().includes('重新检查'))
+    expect(button).toBeTruthy()
+    await button!.trigger('click')
+    await flushPromises()
+    expect(regenerateKnowledgeEvolve).toHaveBeenCalledWith(10)
+    expect(wrapper.text()).toContain('已提交演化检查')
   })
 
   it('archives and restores knowledge', async () => {

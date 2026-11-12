@@ -39,11 +39,13 @@ type EvolutionAlertTypeCount struct {
 
 // EvolutionAlertFilter 描述提醒列表的筛选条件；零值表示不筛选。
 type EvolutionAlertFilter struct {
-	Page   int
-	Size   int
-	Type   model.EvolutionAlertType
-	Status model.EvolutionAlertStatus
-	// Open 为真时只取待办（待处理 + 暂不处理），优先于 Status。
+	Page int
+	Size int
+	Type model.EvolutionAlertType
+	// Statuses 是允许的状态集合：空表示不筛选，单值按等值匹配，多值按 IN 匹配。
+	// 多值用于演化中心的「处理记录」页签——已处理与已忽略要同时展示。
+	Statuses []model.EvolutionAlertStatus
+	// Open 为真时只取待办（待处理 + 暂不处理），优先于 Statuses。
 	Open bool
 }
 
@@ -60,16 +62,23 @@ func (r *EvolutionAlertRepository) List(ctx context.Context, userID uint, filter
 	}
 	if filter.Open {
 		db = db.Where("status IN ?", []model.EvolutionAlertStatus{model.EvolutionAlertPending, model.EvolutionAlertDeferred})
-	} else if filter.Status != "" {
-		db = db.Where("status = ?", filter.Status)
+	} else if len(filter.Statuses) == 1 {
+		db = db.Where("status = ?", filter.Statuses[0])
+	} else if len(filter.Statuses) > 1 {
+		db = db.Where("status IN ?", filter.Statuses)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	// 默认按创建时间倒序：按严重度排会让旧的高严重度提醒永远压在顶部。
+	// 多状态筛选是「处理记录」视野，按裁决时间倒序才符合「最近处理过的在前」。
+	order := "created_at DESC, id DESC"
+	if !filter.Open && len(filter.Statuses) > 1 {
+		order = "resolved_at DESC, id DESC"
+	}
 	alerts := make([]model.EvolutionAlert, 0)
-	err := db.Order("created_at DESC, id DESC").
+	err := db.Order(order).
 		Offset((filter.Page - 1) * filter.Size).Limit(filter.Size).Find(&alerts).Error
 	return alerts, total, err
 }

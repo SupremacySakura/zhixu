@@ -31,6 +31,8 @@ const (
 	OperationLogActionKnowledgeWebImport   OperationLogAction = "knowledge_web_import"      // 从网页导入知识
 	OperationLogActionKnowledgeOrganize    OperationLogAction = "knowledge_organize_accept" // 采纳 AI 整理结果
 	OperationLogActionEvolutionResolve     OperationLogAction = "evolution_resolve"         // 裁决演化提醒
+	OperationLogActionKnowledgeOutdated    OperationLogAction = "knowledge_outdated"        // 标记知识可能过时
+	OperationLogActionKnowledgeVerified    OperationLogAction = "knowledge_verified"        // 标记知识已核实（清除过时）
 )
 
 // OperationLogTargetType 操作目标的实体类型

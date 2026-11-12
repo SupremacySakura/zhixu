@@ -34,6 +34,8 @@ type KnowledgeItem struct {
 	Title     string `gorm:"type:varchar(200);not null" json:"title"`
 	Content   string `gorm:"type:longtext;not null" json:"content"`
 	Version   uint   `gorm:"not null;default:1" json:"version"`
+	// ChangeSource 是当前正文的产生来源（manual 用户编辑 / ai 采纳修订），版本列表的「当前」条目据此标注。
+	ChangeSource KnowledgeChangeSource `gorm:"type:varchar(16);not null;default:'manual'" json:"change_source"`
 	// Summary 与 Keywords 由 AI 整理草稿被采纳后写入；未采纳前保持空串，列表与详情都不会展示 AI 未确认内容。
 	// 刻意用 varchar 而不是 JSON 列：给已有表追加 NOT NULL 的 JSON 列时 MySQL 会用空串回填历史行并报 ERROR 3140。
 	Summary  string `gorm:"type:varchar(1000);not null;default:''" json:"summary"`

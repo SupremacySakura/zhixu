@@ -195,12 +195,35 @@ type EvolutionArchiver interface {
 	Archive(context.Context, uint, uint) (*time.Time, error)
 }
 
+// EvolutionOutdatedMarker 是「标记过时 / 标记已核实」需要的知识过时标记能力（*KnowledgeService 满足）。
+// at 为 nil 表示清除标记。
+type EvolutionOutdatedMarker interface {
+	SetOutdated(context.Context, uint, uint, *time.Time, string) error
+}
+
+// EvolutionReviser 是「采纳修订」需要的知识改写能力（*KnowledgeService 满足）。
+// 修订稿走既有版本链路：生成新版本、变更来源记为 ai，历史版本不被覆盖。
+type EvolutionReviser interface {
+	AcceptRevision(context.Context, uint, uint, string, string) (*model.KnowledgeItem, error)
+}
+
+// EvolutionRelationWriter 是「建立矛盾关系」需要的关系写入能力（*RelationService 满足）。
+type EvolutionRelationWriter interface {
+	Create(context.Context, uint, uint, RelationCreateInput) (*RelationView, error)
+}
+
 // EvolutionService 负责提醒的读取、裁决与手动重跑；检测本身在 evolve 任务处理器里。
 type EvolutionService struct {
 	Alerts    EvolutionAlertStore
 	Knowledge EvolutionKnowledgeSource
 	// Archiver 为可选依赖：为 nil 时「归档其一」不可用（测试与未接知识服务的部署）。
 	Archiver EvolutionArchiver
+	// Outdated 为可选依赖：为 nil 时「标记过时 / 标记已核实」不可用。
+	Outdated EvolutionOutdatedMarker
+	// Reviser 为可选依赖：为 nil 时「采纳修订」不可用。
+	Reviser EvolutionReviser
+	// Relations 为可选依赖：为 nil 时「建立矛盾关系」不可用。
+	Relations EvolutionRelationWriter
 	// Logs 为可选依赖：为 nil 时跳过操作日志。
 	Logs OperationLogWriter
 	// Tasks 为可选依赖：为 nil 时「重新检查」不可用。
@@ -215,18 +238,21 @@ type EvolutionResolveInput struct {
 }
 
 // List 分页查询提醒，并把涉及知识补成可展示的标题与状态。
-func (s *EvolutionService) List(ctx context.Context, userID uint, page, size int, alertType model.EvolutionAlertType, status model.EvolutionAlertStatus, open bool) ([]EvolutionAlertView, int64, error) {
+// statuses 支持多值：「处理记录」页签要同时取已处理与已忽略，一次查询才能正确分页。
+func (s *EvolutionService) List(ctx context.Context, userID uint, page, size int, alertType model.EvolutionAlertType, statuses []model.EvolutionAlertStatus, open bool) ([]EvolutionAlertView, int64, error) {
 	if page < 1 || page > 1000000 || size < 1 || size > 100 {
 		return nil, 0, ErrEvolutionInvalid
 	}
 	if alertType != "" && !alertType.Valid() {
 		return nil, 0, ErrEvolutionInvalid
 	}
-	if status != "" && !status.Valid() {
-		return nil, 0, ErrEvolutionInvalid
+	for _, status := range statuses {
+		if !status.Valid() {
+			return nil, 0, ErrEvolutionInvalid
+		}
 	}
 	alerts, total, err := s.Alerts.List(ctx, userID, repository.EvolutionAlertFilter{
-		Page: page, Size: size, Type: alertType, Status: status, Open: open,
+		Page: page, Size: size, Type: alertType, Statuses: statuses, Open: open,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -305,9 +331,9 @@ func (s *EvolutionService) effectFor(ctx context.Context, action model.Evolution
 			return nil, fmt.Errorf("%w: 知识归档能力未配置", ErrEvolutionUnsupported)
 		}
 		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
-			ids := alert.SubjectIDList()
-			if len(ids) < 2 {
-				return fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+			ids, err := subjectPair(alert)
+			if err != nil {
+				return err
 			}
 			// 归档后创建的那一条，保留先入库的原件：原件通常已整理、已建关系，
 			// 而副本是刚导入的。按 ID 大小判定与触发方向无关，重复检查从任一侧发起结果一致。
@@ -320,13 +346,115 @@ func (s *EvolutionService) effectFor(ctx context.Context, action model.Evolution
 			}
 			return nil
 		}, nil
-	case model.EvolutionActionAcceptRevision, model.EvolutionActionMarkOutdated, model.EvolutionActionCreateRelation:
-		// 三种动作依赖后续迭代的能力：采纳修订要走 AI 版本链路，标记过时与矛盾关系分别随
-		// 过时识别、冲突识别落地。重复提醒不会出现这些动作，因此正常流程到不了这里。
-		return nil, ErrEvolutionUnsupported
+	case model.EvolutionActionMarkOutdated:
+		if s.Outdated == nil {
+			return nil, fmt.Errorf("%w: 知识过时标记能力未配置", ErrEvolutionUnsupported)
+		}
+		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
+			target, err := outdatedSubject(alert)
+			if err != nil {
+				return err
+			}
+			reason := ParseEvolutionPayload(alert.Payload).Reason
+			if reason == "" {
+				reason = "已被更新的一条知识取代。"
+			}
+			now := time.Now()
+			return s.Outdated.SetOutdated(ctx, alert.UserID, target, &now, reason)
+		}, nil
+	case model.EvolutionActionMarkVerified:
+		// 核实本身是「这条提醒我看过了」：没有标记能力时它仍然有意义，只是清不掉过时标记。
+		if s.Outdated == nil {
+			return nil, nil
+		}
+		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
+			// 只有过时提醒的「标记已核实」才意味着「我看过了，这条不过时」；
+			// 重复提醒的核实不该顺手抹掉别的判定留下的过时标记。
+			if alert.AlertType != model.EvolutionAlertTypeOutdated {
+				return nil
+			}
+			target, err := outdatedSubject(alert)
+			if err != nil {
+				return err
+			}
+			return s.Outdated.SetOutdated(ctx, alert.UserID, target, nil, "")
+		}, nil
+	case model.EvolutionActionAcceptRevision:
+		if s.Reviser == nil {
+			return nil, fmt.Errorf("%w: 修订采纳能力未配置", ErrEvolutionUnsupported)
+		}
+		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
+			ids, err := subjectPair(alert)
+			if err != nil {
+				return err
+			}
+			payload := ParseEvolutionPayload(alert.Payload)
+			// 修订稿只在证据全部校验通过时才留在载荷里；没有修订稿就没有可采纳的内容，
+			// 这里按「动作不可用」拒绝（handler 映射 400），而不是静默关掉提醒。
+			if strings.TrimSpace(payload.RevisedTitle) == "" || strings.TrimSpace(payload.RevisedContent) == "" {
+				return fmt.Errorf("%w: 该提醒没有可采纳的修订稿", ErrEvolutionInvalid)
+			}
+			// 修订稿写在触发侧的知识上：它是本次检查的对象，被比对的一条只是参照。
+			if _, err := s.Reviser.AcceptRevision(ctx, alert.UserID, ids[0], payload.RevisedTitle, payload.RevisedContent); err != nil {
+				return evolutionEffectError(err)
+			}
+			return nil
+		}, nil
+	case model.EvolutionActionCreateRelation:
+		if s.Relations == nil {
+			return nil, fmt.Errorf("%w: 关系写入能力未配置", ErrEvolutionUnsupported)
+		}
+		return func(_ *gorm.DB, alert *model.EvolutionAlert) error {
+			ids, err := subjectPair(alert)
+			if err != nil {
+				return err
+			}
+			// 冲突提醒的「建立矛盾关系」固定写 contradicts（对称，仓储按 min/max 归一），
+			// 来源为 manual、状态为已确认；同对已存在时仓储复用既有行，不会重复写入。
+			_, err = s.Relations.Create(ctx, alert.UserID, ids[0], RelationCreateInput{
+				TargetID: ids[1], RelationType: model.RelationTypeContradicts,
+			})
+			if err != nil {
+				return evolutionEffectError(err)
+			}
+			return nil
+		}, nil
 	default:
 		return nil, nil
 	}
+}
+
+// evolutionEffectError 把副作用里的知识/关系错误翻译成裁决接口能表达的错误：
+// 知识已被改动（版本不符、非就绪）属于「现在做不了」，按 400 拒绝并保留原文案；
+// 其余错误原样上抛，交给 handler 归为 500。
+func evolutionEffectError(err error) error {
+	if errors.Is(err, repository.ErrKnowledgeConflict) {
+		return fmt.Errorf("%w: 知识状态已变化，请刷新后重试", ErrEvolutionInvalid)
+	}
+	if errors.Is(err, ErrRelationInvalid) {
+		return fmt.Errorf("%w: %s", ErrEvolutionInvalid, err.Error())
+	}
+	return err
+}
+
+// subjectPair 取提醒涉及的两条知识：subject_ids[0] 是本次触发检查的知识，[1] 是被比对的。
+// 裁决的副作用都建立在这一对上，缺一条就没法落地，因此统一按「动作不可用」拒绝（400）。
+func subjectPair(alert *model.EvolutionAlert) ([]uint, error) {
+	ids := alert.SubjectIDList()
+	if len(ids) < 2 {
+		return nil, fmt.Errorf("%w: 提醒缺少涉及知识", ErrEvolutionInvalid)
+	}
+	return ids, nil
+}
+
+// outdatedSubject 取过时提醒里被判定过时的那条知识：subject_ids[1] 是被比对的知识，
+// 本次触发的知识（[0]）是新的一方。过时只做跨条目判定，因此这里必须落在 [1] 上。
+func outdatedSubject(alert *model.EvolutionAlert) (uint, error) {
+	ids, err := subjectPair(alert)
+	if err != nil {
+		return 0, err
+	}
+	return ids[1], nil
 }
 
 // recordResolve 写一条裁决操作日志；日志失败不影响裁决结果。

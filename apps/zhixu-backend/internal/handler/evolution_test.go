@@ -21,9 +21,28 @@ type evolutionHandlerStore struct {
 	resolved bool
 	// stale 模拟两个标签页并发裁决：期望状态校验失败，仓储返回 ErrEvolutionConflict。
 	stale bool
+	// alertType 与 payload 覆盖默认的重复提醒，用于冲突提醒的裁决用例。
+	alertType model.EvolutionAlertType
+	payload   string
+	// lastFilter 记录最近一次列表请求的筛选条件，用于断言参数解析。
+	lastFilter repository.EvolutionAlertFilter
+}
+
+// 默认是一条重复提醒；用例需要冲突提醒时显式覆盖 alertType 与 payload。
+func (s *evolutionHandlerStore) defaults() (model.EvolutionAlertType, string) {
+	alertType := s.alertType
+	if alertType == "" {
+		alertType = model.EvolutionAlertTypeDuplicate
+	}
+	payload := s.payload
+	if payload == "" {
+		payload = "{}"
+	}
+	return alertType, payload
 }
 
 func (s *evolutionHandlerStore) List(_ context.Context, _ uint, filter repository.EvolutionAlertFilter) ([]model.EvolutionAlert, int64, error) {
+	s.lastFilter = filter
 	if filter.Type == model.EvolutionAlertType("dupe") {
 		return nil, 0, nil
 	}
@@ -44,9 +63,10 @@ func (s *evolutionHandlerStore) Get(_ context.Context, userID, id uint) (*model.
 	if s.resolved {
 		status = model.EvolutionAlertResolved
 	}
+	alertType, payload := s.defaults()
 	return &model.EvolutionAlert{
-		ID: 5, UserID: 2, AlertType: model.EvolutionAlertTypeDuplicate, Status: status,
-		Severity: model.EvolutionSeverityReview, SubjectIDs: "[10,11]", Payload: `{}`,
+		ID: 5, UserID: 2, AlertType: alertType, Status: status,
+		Severity: model.EvolutionSeverityReview, SubjectIDs: "[10,11]", Payload: payload,
 	}, nil
 }
 
@@ -62,9 +82,11 @@ func (s *evolutionHandlerStore) Resolve(_ context.Context, _ uint, _ uint, actio
 		return nil, false, repository.ErrEvolutionConflict
 	}
 	if s.resolved {
-		return &model.EvolutionAlert{ID: 5, UserID: 2, AlertType: model.EvolutionAlertTypeDuplicate, Status: model.EvolutionAlertResolved, SubjectIDs: "[10,11]", Payload: `{}`}, false, nil
+		alertType, payload := s.defaults()
+		return &model.EvolutionAlert{ID: 5, UserID: 2, AlertType: alertType, Status: model.EvolutionAlertResolved, SubjectIDs: "[10,11]", Payload: payload}, false, nil
 	}
-	alert := &model.EvolutionAlert{ID: 5, UserID: 2, AlertType: model.EvolutionAlertTypeDuplicate, SubjectIDs: "[10,11]", Payload: `{}`}
+	alertType, payload := s.defaults()
+	alert := &model.EvolutionAlert{ID: 5, UserID: 2, AlertType: alertType, SubjectIDs: "[10,11]", Payload: payload}
 	if apply != nil {
 		if err := apply(nil, alert); err != nil {
 			return nil, false, err
@@ -126,6 +148,24 @@ func (s *evolutionHandlerTaskStore) Enqueue(_ context.Context, task model.AiTask
 	return &task, nil
 }
 
+type evolutionHandlerReviser struct {
+	calls []string
+}
+
+func (r *evolutionHandlerReviser) AcceptRevision(_ context.Context, userID, id uint, title, content string) (*model.KnowledgeItem, error) {
+	r.calls = append(r.calls, title)
+	return &model.KnowledgeItem{ID: id, UserID: userID, Title: title, Content: content, Status: model.KnowledgeReady, Version: 3}, nil
+}
+
+type evolutionHandlerRelations struct {
+	created []model.RelationType
+}
+
+func (r *evolutionHandlerRelations) Create(_ context.Context, _, _ uint, input service.RelationCreateInput) (*service.RelationView, error) {
+	r.created = append(r.created, input.RelationType)
+	return &service.RelationView{ID: 1, RelationType: input.RelationType}, nil
+}
+
 func serveEvolution(t *testing.T, user uint, method, path, body string, resolved, withTasks bool) *httptest.ResponseRecorder {
 	return serveEvolutionWith(t, user, method, path, body, &evolutionHandlerStore{resolved: resolved}, withTasks)
 }
@@ -145,6 +185,16 @@ func serveEvolutionWith(t *testing.T, user uint, method, path, body string, stor
 	if withTasks {
 		svc.Tasks = service.NewAiTaskService(&evolutionHandlerTaskStore{})
 	}
+	return serveEvolutionService(t, user, method, path, body, svc)
+}
+
+func serveEvolutionService(t *testing.T, user uint, method, path, body string, svc *service.EvolutionService) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	if user != 0 {
+		r.Use(func(c *gin.Context) { c.Set("user_id", user) })
+	}
 	h := &EvolutionHandler{Service: svc}
 	r.GET("/evolution/alerts", h.List)
 	r.GET("/evolution/alerts/summary", h.Summary)
@@ -153,6 +203,57 @@ func serveEvolutionWith(t *testing.T, user uint, method, path, body string, stor
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(body)))
 	return w
+}
+
+// 冲突提醒的两种新动作：有修订稿时采纳并回 200，没有修订稿时 400 并说明原因。
+func TestEvolutionHandlerConflictActions(t *testing.T) {
+	withRevision := `{"type":"conflict","reason":"两处结论互斥","suggested_action":"accept_revision","revised_title":"HNSW 的召回率","revised_content":"HNSW 的分层图结构在召回率上优于 IVF。"}`
+	withoutRevision := `{"type":"conflict","reason":"两处结论互斥","suggested_action":"create_relation"}`
+
+	t.Run("accept revision writes a new version", func(t *testing.T) {
+		store := &evolutionHandlerStore{alertType: model.EvolutionAlertTypeConflict, payload: withRevision}
+		svc := &service.EvolutionService{
+			Alerts: store, Knowledge: evolutionHandlerKnowledge{}, Archiver: &evolutionHandlerArchiver{},
+			Reviser: &evolutionHandlerReviser{}, Relations: &evolutionHandlerRelations{},
+		}
+		w := serveEvolutionService(t, 2, "POST", "/evolution/alerts/5/resolve", `{"action":"accept_revision"}`, svc)
+		require.Equal(t, 200, w.Code, w.Body.String())
+		require.Contains(t, w.Body.String(), "resolved")
+	})
+
+	t.Run("accept revision without a draft is rejected", func(t *testing.T) {
+		store := &evolutionHandlerStore{alertType: model.EvolutionAlertTypeConflict, payload: withoutRevision}
+		svc := &service.EvolutionService{
+			Alerts: store, Knowledge: evolutionHandlerKnowledge{}, Archiver: &evolutionHandlerArchiver{},
+			Reviser: &evolutionHandlerReviser{}, Relations: &evolutionHandlerRelations{},
+		}
+		w := serveEvolutionService(t, 2, "POST", "/evolution/alerts/5/resolve", `{"action":"accept_revision"}`, svc)
+		require.Equal(t, 400, w.Code, w.Body.String())
+		require.Contains(t, w.Body.String(), "没有可采纳的修订稿")
+	})
+
+	t.Run("create relation writes a contradicts edge", func(t *testing.T) {
+		store := &evolutionHandlerStore{alertType: model.EvolutionAlertTypeConflict, payload: withoutRevision}
+		relations := &evolutionHandlerRelations{}
+		svc := &service.EvolutionService{
+			Alerts: store, Knowledge: evolutionHandlerKnowledge{}, Archiver: &evolutionHandlerArchiver{},
+			Reviser: &evolutionHandlerReviser{}, Relations: relations,
+		}
+		w := serveEvolutionService(t, 2, "POST", "/evolution/alerts/5/resolve", `{"action":"create_relation"}`, svc)
+		require.Equal(t, 200, w.Code, w.Body.String())
+		require.Equal(t, []model.RelationType{model.RelationTypeContradicts}, relations.created)
+	})
+}
+
+// 逗号分隔的状态解析：去空、去重后原样交给服务层，服务层只做合法性校验。
+func TestEvolutionHandlerListParsesStatuses(t *testing.T) {
+	store := &evolutionHandlerStore{}
+	w := serveEvolutionWith(t, 2, "GET", "/evolution/alerts?status=resolved,%20dismissed,resolved", "", store, false)
+
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Equal(t, []model.EvolutionAlertStatus{model.EvolutionAlertResolved, model.EvolutionAlertDismissed},
+		store.lastFilter.Statuses)
+	require.False(t, store.lastFilter.Open)
 }
 
 // 期望状态对不上说明另一个标签页已经裁决过：必须回 409 让前端刷新，而不是 500。
@@ -179,6 +280,11 @@ func TestEvolutionHandlerRoutes(t *testing.T) {
 		{"list alerts", "GET", "/evolution/alerts?open=true", "", 2, 200, "副本", false},
 		{"list keeps payload reason", "GET", "/evolution/alerts", "", 2, 200, "正文完全一致", false},
 		{"list rejects bad type", "GET", "/evolution/alerts?type=dupe", "", 2, 400, "", false},
+		{"list accepts multiple statuses", "GET", "/evolution/alerts?status=resolved,dismissed", "", 2, 200, "副本", false},
+		{"list accepts single status", "GET", "/evolution/alerts?status=resolved", "", 2, 200, "副本", false},
+		{"list rejects bad status", "GET", "/evolution/alerts?status=done", "", 2, 400, "", false},
+		{"list rejects partially bad status", "GET", "/evolution/alerts?status=resolved,done", "", 2, 400, "", false},
+		{"list rejects empty status list", "GET", "/evolution/alerts?status=,", "", 2, 400, "", false},
 		{"list rejects bad open", "GET", "/evolution/alerts?open=maybe", "", 2, 400, "", false},
 		{"list rejects bad page", "GET", "/evolution/alerts?page=x", "", 2, 400, "", false},
 		{"summary", "GET", "/evolution/alerts/summary", "", 2, 200, "\"pending\":3", false},

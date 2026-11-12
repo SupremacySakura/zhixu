@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -246,7 +247,67 @@ func TestEvolveProcessorRecordsSemanticDuplicate(t *testing.T) {
 	require.Contains(t, string(payload), "\"alert_count\":1")
 }
 
-// 相似度分派：0.75~0.90 只接受冲突结论，本迭代不消费冲突，因此重复结论被丢弃。
+// 冲突结论接入同一条管线：0.75~0.90 的中等相似落一条冲突提醒，并带上模型给出的修订稿。
+func TestEvolveProcessorRecordsConflictWithRevision(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一种说法", "HNSW 用分层图做近似最近邻检索。", 0.82)
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeConflict,
+		Reason:   "两条知识对召回率给出互斥结论。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 21, Quote: "近似最近邻检索"},
+		},
+		Severity:       model.EvolutionSeverityStrong,
+		RevisedTitle:   "HNSW 的召回率",
+		RevisedContent: "HNSW 的分层图结构在召回率上优于 IVF。",
+	}}
+
+	payload, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	alert := f.alerts.upserted[0]
+	require.Equal(t, model.EvolutionAlertTypeConflict, alert.AlertType)
+	require.Equal(t, []uint{10, 21}, alert.SubjectIDList())
+	parsed := ParseEvolutionPayload(alert.Payload)
+	require.Equal(t, "HNSW 的召回率", parsed.RevisedTitle)
+	require.Equal(t, "HNSW 的分层图结构在召回率上优于 IVF。", parsed.RevisedContent)
+	require.Equal(t, model.EvolutionActionAcceptRevision, parsed.SuggestedAction)
+	require.Contains(t, string(payload), "\"alert_count\":1")
+}
+
+// 证据校验没过时修订稿整份丢弃：没有原文支撑的修订稿不能拿去覆盖正文。
+func TestEvolveProcessorDropsRevisionWithoutFullEvidence(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一种说法", "HNSW 用分层图做近似最近邻检索。", 0.82)
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeConflict,
+		Reason:   "两条知识对召回率给出互斥结论。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 21, Quote: "正文里没有这句"},
+		},
+		Severity:       model.EvolutionSeverityStrong,
+		RevisedTitle:   "HNSW 的召回率",
+		RevisedContent: "HNSW 的分层图结构在召回率上优于 IVF。",
+	}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	alert := f.alerts.upserted[0]
+	require.Equal(t, model.EvolutionSeverityReview, alert.Severity, "证据不全时降级为复核")
+	parsed := ParseEvolutionPayload(alert.Payload)
+	require.Empty(t, parsed.RevisedTitle)
+	require.Empty(t, parsed.RevisedContent)
+	require.Equal(t, model.EvolutionActionCreateRelation, parsed.SuggestedAction, "没有修订稿时只能建矛盾关系")
+}
+
+// 相似度分派：0.75~0.90 只接受冲突结论，因此重复结论被丢弃。
 func TestEvolveProcessorDropsConclusionOutsideBand(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "中等相似", "HNSW 与 IVF 的取舍。", 0.82)
@@ -289,6 +350,94 @@ func TestEvolveProcessorTreatsUpdateRelationAsOutdatedOnly(t *testing.T) {
 	require.Len(t, f.client.candidates, 1)
 	require.Equal(t, EvolveOriginUpdateRelation, f.client.candidates[0].Origin)
 	require.Empty(t, f.alerts.upserted, "强候选只接受过时结论")
+}
+
+// 强候选给出过时结论时落一条过时提醒，建议动作是「标记过时」。
+func TestEvolveProcessorRecordsOutdatedFromUpdateRelation(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "被更新的旧文", "旧版本的结论。", 0.95)
+	f.relations.rows = []repository.RelationRecord{{
+		KnowledgeRelation: model.KnowledgeRelation{
+			SourceID: 10, TargetID: 21, RelationType: model.RelationTypeUpdates, Status: model.RelationConfirmed,
+		},
+		CounterpartID: 21,
+	}}
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeOutdated,
+		Reason:   "本次知识给出了更晚的结论。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 21, Quote: "旧版本的结论"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	alert := f.alerts.upserted[0]
+	require.Equal(t, model.EvolutionAlertTypeOutdated, alert.AlertType)
+	require.Equal(t, model.EvolutionSeverityStrong, alert.Severity)
+	require.Equal(t, []uint{10, 21}, alert.SubjectIDList(), "触发知识在前，被比对的在后")
+	payload := ParseEvolutionPayload(alert.Payload)
+	require.Equal(t, model.EvolutionActionMarkOutdated, payload.SuggestedAction)
+	require.Len(t, payload.Evidence, 2)
+}
+
+// 弱信号（向量近邻）判过时必须有双方原文对照：只有一侧引文就不落库。
+func TestEvolveProcessorDropsWeakOutdatedWithoutTwoSidedEvidence(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一篇", "旧版本的结论。", 0.85)
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeOutdated,
+		Reason:   "候选的结论已被取代。",
+		Evidence: []EvolutionEvidence{{KnowledgeID: 21, Quote: "旧版本的结论"}},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Empty(t, f.alerts.upserted, "弱信号缺一侧证据不足以判定过时")
+}
+
+// 弱信号两侧证据都在时正常落库。
+func TestEvolveProcessorRecordsWeakOutdatedWithTwoSidedEvidence(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一篇", "旧版本的结论。", 0.85)
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeOutdated,
+		Reason:   "候选的结论已被取代。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 21, Quote: "旧版本的结论"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	require.Equal(t, model.EvolutionAlertTypeOutdated, f.alerts.upserted[0].AlertType)
+}
+
+// 同一知识的不同版本之间永不提醒：检查只针对别的条目，自身 ID 不参与候选。
+func TestEvolveProcessorNeverAlertsOnOwnVersions(t *testing.T) {
+	f := newEvolveFixture()
+	// 向量召回返回本条知识自己（同一 knowledge_id 的历史版本共用同一行），必须被过滤。
+	f.searcher.matches = []VectorMatch{{KnowledgeID: 10, Score: 0.99}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Empty(t, f.client.candidates)
+	require.Equal(t, 0, f.client.calls)
+	require.Empty(t, f.alerts.upserted)
 }
 
 // 反方向的 updates（本条是被更新的旧文）不构成强候选，否则会产出方向相反的提醒。
@@ -348,6 +497,35 @@ func TestEvolveProcessorKeepsPartialEvidenceAndDowngrades(t *testing.T) {
 	require.Equal(t, uint(10), parsed.Evidence[0].KnowledgeID)
 }
 
+// 超长修订稿即便绕过客户端清洗也不能落进提醒载荷：处理器自己再守一道长度门槛。
+func TestEvolveProcessorDropsOversizedRevision(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一篇", "HNSW 用分层图做近似最近邻检索。", 0.82)
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeConflict,
+		Reason:   "两条知识对召回率给出互斥结论。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 21, Quote: "近似最近邻检索"},
+		},
+		Severity:       model.EvolutionSeverityStrong,
+		RevisedTitle:   "HNSW 的召回率",
+		RevisedContent: strings.Repeat("长", EvolveRevisedContentMaxRunes+1),
+	}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	alert := f.alerts.upserted[0]
+	parsed := ParseEvolutionPayload(alert.Payload)
+	require.Empty(t, parsed.RevisedTitle)
+	require.Empty(t, parsed.RevisedContent)
+	require.Equal(t, model.EvolutionSeverityReview, alert.Severity, "无修订稿时降级为仅提示")
+	require.Equal(t, model.EvolutionActionCreateRelation, parsed.SuggestedAction)
+}
+
 // 同一对知识只留一条提醒：模型重复给出同一目标的结论时不会落两条。
 func TestEvolveProcessorDeduplicatesSameTarget(t *testing.T) {
 	f := newEvolveFixture()
@@ -361,6 +539,33 @@ func TestEvolveProcessorDeduplicatesSameTarget(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, f.alerts.upserted, 1)
+}
+
+// 同一对同时给出重复与冲突时只留重复：重复的处置（归档其一）比冲突更明确。
+func TestEvolveProcessorPrefersDuplicateOverConflict(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一篇", "HNSW 用分层图做近似最近邻检索。", 0.95)
+	f.client.judgements = []EvolveJudgement{
+		{
+			TargetID: 21,
+			Type:     model.EvolutionAlertTypeConflict,
+			Reason:   "两条知识对召回率给出互斥结论。",
+			Evidence: []EvolutionEvidence{
+				{KnowledgeID: 10, Quote: "同一段正文"},
+				{KnowledgeID: 21, Quote: "近似最近邻检索"},
+			},
+			Severity:       model.EvolutionSeverityStrong,
+			RevisedTitle:   "修订标题",
+			RevisedContent: "修订正文",
+		},
+		f.duplicateJudgement(21, "近似最近邻检索"),
+	}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	require.Equal(t, model.EvolutionAlertTypeDuplicate, f.alerts.upserted[0].AlertType)
 }
 
 // 候选上限：向量召回按相似度降序，只取前八条送模型。

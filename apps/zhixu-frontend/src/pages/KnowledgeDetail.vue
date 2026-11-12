@@ -6,6 +6,7 @@ import {
   archiveKnowledge,
   favoriteKnowledge,
   getKnowledge,
+  regenerateKnowledgeEvolve,
   unarchiveKnowledge,
   type KnowledgeItem,
 } from '../services/apis/knowledge'
@@ -29,6 +30,9 @@ const error = ref('')
 const loading = ref(false)
 const showHistory = ref(false)
 const actionBusy = ref('')
+// 演化检查是异步任务：提交后只给一句提示，结果由列表页/下次刷新体现。
+const evolveBusy = ref(false)
+const evolveHint = ref('')
 // 采纳 AI 整理结果会追加标签，用 key 重挂标签面板让它重新拉取。
 const tagVersion = ref(0)
 let controller: AbortController | null = null
@@ -93,6 +97,22 @@ async function toggleArchive() {
     error.value = knowledgeError(e)
   } finally {
     actionBusy.value = ''
+  }
+}
+async function recheckEvolution() {
+  if (!item.value || evolveBusy.value) return
+  evolveBusy.value = true
+  evolveHint.value = ''
+  try {
+    const task = await regenerateKnowledgeEvolve(item.value.id)
+    evolveHint.value =
+      task.status === 'failed'
+        ? task.error_message || '演化检查失败，请稍后重试'
+        : '已提交演化检查，结果稍后可在演化中心查看。'
+  } catch (e) {
+    evolveHint.value = knowledgeError(e)
+  } finally {
+    evolveBusy.value = false
   }
 }
 function onRestored(restored: KnowledgeItem) {
@@ -186,6 +206,24 @@ function onOrganized(updated: KnowledgeItem) {
               class="knowledge-button-secondary"
               >查看来源目录 →</RouterLink
             >
+            <button
+              v-if="item.status === 'ready' && !item.archived_at"
+              type="button"
+              class="knowledge-button-secondary"
+              :disabled="evolveBusy"
+              @click="recheckEvolution"
+            >
+              <Icon
+                :icon="
+                  evolveBusy
+                    ? 'material-symbols:progress-activity'
+                    : 'material-symbols:refresh-rounded'
+                "
+                class="text-lg"
+                :class="{ 'animate-spin': evolveBusy }"
+                aria-hidden="true"
+              />{{ evolveBusy ? '检查中…' : '重新检查' }}
+            </button>
           </div>
         </header>
         <div
@@ -195,6 +233,27 @@ function onOrganized(updated: KnowledgeItem) {
         >
           该知识已归档，不会出现在默认列表与问答检索中。恢复后重新生效。
         </div>
+        <div
+          v-if="item.outdated_at"
+          class="mb-5 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
+          role="status"
+        >
+          <p class="flex items-center gap-2 font-semibold">
+            <Icon icon="material-symbols:history-rounded" class="text-lg" aria-hidden="true" />
+            这条知识可能已过时
+          </p>
+          <p class="mt-2 leading-6">
+            {{ item.outdated_reason || '已被后续导入的一条知识取代，建议核对后更新。' }}
+          </p>
+          <p class="mt-2 text-caption">
+            判定时间：{{
+              knowledgeDate(item.outdated_at)
+            }}。内容仍可正常阅读与检索，改写正文或标记已核实后该提示消失。
+          </p>
+        </div>
+        <p v-if="evolveHint" class="mb-5 text-subhead text-label-secondary" role="status">
+          {{ evolveHint }}
+        </p>
         <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_15rem]">
           <article
             class="min-w-0 rounded-lg border border-hairline bg-surface p-6 sm:p-9"

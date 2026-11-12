@@ -48,6 +48,7 @@
 ## Markdown 知识模块
 
 - `internal/model/knowledge.go` 定义独立知识与导入任务表；启动迁移自动补建。
+- 变更来源列 `knowledge_items.change_source`：记录**当前正文**的产生来源，取值 `manual`（用户编辑）或 `ai`（采纳演化中心的 AI 修订稿）。`knowledge_versions` 里的快照行记录的是**被替换掉的旧正文**的来源，因此采纳修订时当前行的 `change_source` 变为 `ai`，同一事务里写下的快照行仍是旧正文的 `manual`；恢复历史版本同理，快照记的是被覆盖的那一版。
 - `internal/repository/knowledge_repo.go` 管理用户隔离、事务、唯一约束与任务租约。
 - `internal/service/knowledge.go` 处理 Markdown 读取校验与后台队列，`cmd/server/main.go` 接入启动和退出生命周期。
 - 接口由 `internal/router/knowledge.go` 注册 JWT 鉴权。数据库字段、接口及边界见 [Markdown 知识后端](./markdown-knowledge-backend.md)。
@@ -61,7 +62,7 @@
 
 ## 知识关系与图谱模块
 
-- `internal/model/relation.go` 定义 `knowledge_relations`（有向行、5 种类型、status: suggested/confirmed/rejected、source: ai/manual、confidence、evidence JSON、confirmed_at）；唯一键 `(user_id, source_id, target_id, relation_type)`，对称类型（related/contrasts）写入前按 min/max id 归一。
+- `internal/model/relation.go` 定义 `knowledge_relations`（有向行、6 种类型、status: suggested/confirmed/rejected、source: ai/manual、confidence、evidence JSON、confirmed_at）；唯一键 `(user_id, source_id, target_id, relation_type)`，对称类型（related/contrasts/contradicts）写入前按 min/max id 归一。`Valid()` 是「所有合法类型」，AI 关联推荐的白名单另由 `Recommendable()` 给出（排除 `contradicts`，见 ADR-0002）。
 - `internal/repository/relation.go` 负责用户隔离、唯一键去重、rejected 行复用与手动/建议关系查询；`internal/repository/graph.go` 负责局部图谱的节点/边查询（默认排除归档、按 tag/source_type 先筛节点再取两端均在集合内的边）。
 - `internal/service/relation.go` 编排手动关系增删改查、确认/拒绝、改类型与对端标题归一；`internal/service/relate.go` 是与 AI 服务 `POST /relate` 的同步客户端（100 秒超时、422/504/502 分类、不回显上游响应）；`internal/service/relation_task.go` 是 `ai_tasks` 的 relation 处理器（嵌入召回候选 → 送 AI 判定 → 落建议行）。
 - `internal/service/graph.go` 负责中心/最近两种子图、节点上限 100 按度数截断（中心不裁）、degree 重算与 truncated 标记。

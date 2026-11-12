@@ -38,9 +38,10 @@ type KnowledgeStore interface {
 	FindByContentHash(context.Context, uint, string, uint) (*model.KnowledgeItem, error)
 	Create(context.Context, *model.KnowledgeItem) (*model.KnowledgeItem, bool, error)
 	CreateManual(context.Context, *model.KnowledgeItem) error
-	Update(context.Context, uint, uint, string, string, string, uint) (*model.KnowledgeItem, error)
+	Update(context.Context, uint, uint, string, string, string, model.KnowledgeChangeSource, uint) (*model.KnowledgeItem, error)
 	SetFavorite(context.Context, uint, uint, bool) error
 	SetArchived(context.Context, uint, uint, bool) (*time.Time, error)
+	SetOutdated(context.Context, uint, uint, *time.Time, string) error
 	ListVersions(context.Context, uint, uint) ([]model.KnowledgeVersion, error)
 	GetVersion(context.Context, uint, uint, uint) (*model.KnowledgeVersion, error)
 	List(context.Context, uint, int, int, string, model.KnowledgeStatus) ([]model.KnowledgeItem, int64, error)
@@ -529,7 +530,7 @@ func (s *KnowledgeService) Update(ctx context.Context, userID, id uint, title, c
 		return nil, err
 	}
 	sum := sha256.Sum256([]byte(content))
-	item, err := s.store.Update(ctx, userID, id, title, content, hex.EncodeToString(sum[:]), baseVersion)
+	item, err := s.store.Update(ctx, userID, id, title, content, hex.EncodeToString(sum[:]), model.KnowledgeChangeSourceManual, baseVersion)
 	if err != nil {
 		return nil, knowledgeError(err)
 	}
@@ -587,6 +588,26 @@ func (s *KnowledgeService) setArchived(ctx context.Context, userID, id uint, arc
 	return at, nil
 }
 
+// SetOutdated 写入或清除「可能过时」判定并记操作日志；幂等，重复标记同一状态不产生新日志。
+func (s *KnowledgeService) SetOutdated(ctx context.Context, userID, id uint, at *time.Time, reason string) error {
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if (at == nil) == (item.OutdatedAt == nil) && (at == nil || item.OutdatedReason == reason) {
+		return nil
+	}
+	if err := s.store.SetOutdated(ctx, userID, id, at, reason); err != nil {
+		return knowledgeError(err)
+	}
+	action := model.OperationLogActionKnowledgeOutdated
+	if at == nil {
+		action = model.OperationLogActionKnowledgeVerified
+	}
+	s.recordOperation(userID, action, item.ID, item.Title, item.SourceFolderName, nil)
+	return nil
+}
+
 // KnowledgeVersionSummary 版本列表项：当前版本由 knowledge_items 实时合成，便于前端标出「当前」。
 type KnowledgeVersionSummary struct {
 	VersionNumber uint      `json:"version_number"`
@@ -615,7 +636,7 @@ func (s *KnowledgeService) Versions(ctx context.Context, userID, id uint) ([]Kno
 	summaries := make([]KnowledgeVersionSummary, 0, len(versions)+1)
 	summaries = append(summaries, KnowledgeVersionSummary{
 		VersionNumber: item.Version, Title: item.Title,
-		ChangeSource: string(model.KnowledgeChangeSourceManual), CreatedAt: item.UpdatedAt, Current: true,
+		ChangeSource: string(currentChangeSource(item)), CreatedAt: item.UpdatedAt, Current: true,
 	})
 	for _, version := range versions {
 		summaries = append(summaries, KnowledgeVersionSummary{
@@ -642,7 +663,7 @@ func (s *KnowledgeService) VersionDetail(ctx context.Context, userID, id, versio
 		return &KnowledgeVersionDetail{
 			KnowledgeVersionSummary: KnowledgeVersionSummary{
 				VersionNumber: item.Version, Title: item.Title,
-				ChangeSource: string(model.KnowledgeChangeSourceManual), CreatedAt: item.UpdatedAt, Current: true,
+				ChangeSource: string(currentChangeSource(item)), CreatedAt: item.UpdatedAt, Current: true,
 			},
 			Content: item.Content,
 		}, nil
@@ -658,6 +679,47 @@ func (s *KnowledgeService) VersionDetail(ctx context.Context, userID, id, versio
 		},
 		Content: version.Content,
 	}, nil
+}
+
+// currentChangeSource 取当前正文的来源；历史行没有该列时按手动编辑处理。
+func currentChangeSource(item *model.KnowledgeItem) model.KnowledgeChangeSource {
+	if item.ChangeSource == "" {
+		return model.KnowledgeChangeSourceManual
+	}
+	return item.ChangeSource
+}
+
+// AcceptRevision 采纳 AI 修订稿：以修订稿内容生成新版本（当前正文先写入快照），
+// 变更来源记为 ai，历史版本不被覆盖；采纳后仍走既有编辑链路（重新分块与向量化）。
+func (s *KnowledgeService) AcceptRevision(ctx context.Context, userID, id uint, title, content string) (*model.KnowledgeItem, error) {
+	title = strings.TrimSpace(title)
+	if err := validateKnowledgeTitle(title); err != nil {
+		return nil, err
+	}
+	content = strings.TrimSpace(content)
+	if err := validateKnowledgeContent(content); err != nil {
+		return nil, err
+	}
+	item, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	// 归档是终态：归档知识不再参与检索与提醒，采纳修订会把它悄悄改活，并绕过用户
+	// 在演化中心对「已归档」的判断。涉及知识已归档时只允许忽略与标记已核实（规格 #8）。
+	if item.Status != model.KnowledgeReady || item.ArchivedAt != nil {
+		return nil, repository.ErrKnowledgeConflict
+	}
+	sum := sha256.Sum256([]byte(content))
+	baseVersion := item.Version
+	updated, err := s.store.Update(ctx, userID, id, title, content, hex.EncodeToString(sum[:]), model.KnowledgeChangeSourceAI, baseVersion)
+	if err != nil {
+		return nil, knowledgeError(err)
+	}
+	if updated.Version > baseVersion {
+		s.recordOperation(userID, model.OperationLogActionKnowledgeUpdate, updated.ID, updated.Title, updated.SourceFolderName,
+			map[string]any{"version": updated.Version, "change_source": string(model.KnowledgeChangeSourceAI)})
+	}
+	return updated, nil
 }
 
 // Restore 恢复历史版本：以目标版本内容生成新版本（当前正文先写入快照），历史记录不被篡改。
@@ -685,7 +747,7 @@ func (s *KnowledgeService) Restore(ctx context.Context, userID, id, versionNumbe
 	}
 	sum := sha256.Sum256([]byte(target.Content))
 	baseVersion := item.Version
-	updated, err := s.store.Update(ctx, userID, id, target.Title, target.Content, hex.EncodeToString(sum[:]), baseVersion)
+	updated, err := s.store.Update(ctx, userID, id, target.Title, target.Content, hex.EncodeToString(sum[:]), model.KnowledgeChangeSourceManual, baseVersion)
 	if err != nil {
 		return nil, knowledgeError(err)
 	}

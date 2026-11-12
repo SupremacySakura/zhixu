@@ -21,6 +21,10 @@ export interface KnowledgeItem {
   keywords: string[]
   is_favorite: boolean
   archived_at: string | null
+  /** 可能过时的判定时间：只有演化检测判定过时并由用户采纳后才写入。 */
+  outdated_at: string | null
+  /** 过时判定理由：与 outdated_at 同时出现，详情页直接展示。 */
+  outdated_reason: string
   status: KnowledgeStatus
   error_code: string
   error_message: string
@@ -337,7 +341,14 @@ export async function retryKnowledgeVectorize(id: number, signal?: AbortSignal) 
   )
 }
 
-export type RelationType = 'related' | 'depends_on' | 'supplements' | 'contrasts' | 'updates'
+export type RelationType =
+  | 'related'
+  | 'depends_on'
+  | 'supplements'
+  | 'contrasts'
+  | 'updates'
+  /** 矛盾：对称关系，只能由用户手动或冲突提醒建立，AI 关联推荐不会产出。 */
+  | 'contradicts'
 export type RelationStatus = 'suggested' | 'confirmed' | 'rejected'
 export type RelationSource = 'ai' | 'manual'
 export interface KnowledgeRelation {
@@ -438,6 +449,28 @@ export async function regenerateKnowledgeRelations(id: number, signal?: AbortSig
     (
       await request.post<ResponseData<{ task: RelationTask }>>(
         `/api/knowledge/${id}/relations/regenerate`,
+        undefined,
+        { signal },
+      )
+    ).data,
+  )
+}
+
+/** 演化检查任务：后端直接返回任务快照，形状与其它 AI 任务一致。 */
+export interface EvolveTask {
+  id: number
+  task_type: string
+  status: 'pending' | 'running' | 'succeeded' | 'failed'
+  error_message: string
+  retry_count: number
+  updated_at: string
+}
+/** 手动重跑一次演化检查；活跃任务由后端复用，返回当前任务状态。 */
+export async function regenerateKnowledgeEvolve(id: number, signal?: AbortSignal) {
+  return unwrap(
+    (
+      await request.post<ResponseData<EvolveTask>>(
+        `/api/knowledge/${id}/evolve/regenerate`,
         undefined,
         { signal },
       )
