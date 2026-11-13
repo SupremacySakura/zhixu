@@ -162,7 +162,21 @@ function buildOption(): EChartsCoreOption {
         },
         // 高亮只提不透明度，不改线宽 —— 改线宽会把「四轴编码」里的宽度轴抹掉。
         emphasis: { focus: 'adjacency', lineStyle: { opacity: 1 } },
-        labelLayout: { hideOverlap: true },
+        /**
+         * 标签避让必须**按 dataType 分流**，不能用固定的 { hideOverlap: true }。
+         *
+         * 固定值的实测后果（19 条边 / 32 个节点）：边标签只剩 1 条可见，另外 18 条
+         * 被 hideOverlap 判为重叠而整个隐藏。而 hideOverlap 的判定结果**随缩放变化**
+         * —— 缩放后幸存的那一条从 di=3 跳到 di=9。用户看到的现象就是「关系文字不
+         * 跟着线走」：其实位置一直是对的（距曲线恒 5–10px，缩放前后不变），是**可见
+         * 的那一条换成了别的边**，所以文字看起来从一条线跳到了另一条线上。
+         *
+         * 分流后：边标签恒 19/19 全显（它们本来就贴着各自的线，不构成重叠困扰），
+         * 节点标签仍走 hideOverlap 防止标题互相压住。
+         */
+        labelLayout: (params: { dataType?: string }) => ({
+          hideOverlap: params.dataType !== 'edge',
+        }),
       },
     ],
   }

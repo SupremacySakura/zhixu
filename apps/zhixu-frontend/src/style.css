@@ -533,9 +533,21 @@
   scrollbar-gutter: stable;
 }
 
-/* 工具栏 48px：搜索 + 筛选 + 右端命中计数。吸顶，z-toolbar，下沿一条 hairline。 */
+/* 工具栏 48px：搜索 + 筛选 + 右端命中计数。吸顶，z-toolbar，下沿一条 hairline。
+   水平内边距必须给：本类只负责「吸顶 + 横排 + 下沿线」，居中由外层 shell-wide
+   负责，而 shell-wide 只管宽度不管内边距。不补这一层，第一个输入框会紧贴容器
+   左缘（实测 padding-left: 0，gap 0）。
+   这里**不做**滚动条补偿：工具栏在滚动容器内部，已经天然让开了 12px 槽位；
+   需要补偿的是与滚动容器并列的 shell-toolbar-gutter。 */
 @utility shell-toolbar {
-  @apply sticky top-0 z-toolbar flex min-h-12 flex-wrap items-center gap-2 border-b border-hairline bg-surface py-2;
+  @apply sticky top-0 z-toolbar flex min-h-12 flex-wrap items-center gap-2 border-b border-hairline bg-surface;
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 3);
+  @media (width >= 40rem) {
+    padding-inline: calc(var(--spacing) * 5);
+  }
+  @media (width >= 64rem) {
+    padding-inline: calc(var(--spacing) * 6);
+  }
 }
 
 /* 页头带里的动作按钮：主操作实心蓝 32px、次操作描边 32px。
