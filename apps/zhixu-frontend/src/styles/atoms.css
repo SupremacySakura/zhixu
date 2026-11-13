@@ -190,6 +190,8 @@
 
 /* 图标按钮形态：正方形，宽度跟着高度走 */
 @utility atom-btn-square {
+  @apply tap-target;
+
   padding-inline: 0;
   width: var(--atom-control-height, 32px);
   min-width: var(--atom-control-height, 32px);
@@ -198,6 +200,57 @@
   @media (pointer: coarse) {
     width: max(var(--atom-control-height, 32px), 44px);
     min-width: max(var(--atom-control-height, 32px), 44px);
+  }
+}
+
+/* ============================================================
+   触控热区（不可见覆盖层）
+
+   票面要求方形图标按钮的可点区域 ≥44×44，且**视觉尺寸不变**。
+   所以这里不能用 padding 或 min-height —— 那会把盒子撑大，
+   图标与相邻元素跟着移位，三视口截图就全变了。
+
+   改用 ::after 铺一层透明覆盖层：盒子仍在文档流里保持原尺寸，
+   覆盖层以元素中心为锚点向外扩到至少 2.75rem（44px）。
+   只在粗指针上生效，鼠标端点击判定完全不变。
+
+   为什么 width/height 用 max() 而不是直接 44px：
+   44px 是地板不是目标值，本身已经超过 44px 的按钮不该被缩回去。
+
+   为什么分成两个名字：覆盖层要锚定在按钮自己身上，所以按钮必须先有
+   定位上下文。绝大多数按钮是静态定位的，`tap-target` 顺手给一个
+   `position: relative` 就够；但少数按钮自己就是 `absolute`（搜索框里的
+   清除键、密码框里的眼睛），再叠一个 `position: relative` 会和
+   `absolute` 抢同一个属性、胜负取决于产物顺序。这类改用
+   `tap-target-anchored`：只铺覆盖层，不碰 position。
+   ============================================================ */
+@utility tap-target {
+  position: relative;
+
+  @media (pointer: coarse) {
+    &::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 2.75rem);
+      height: max(100%, 2.75rem);
+      translate: -50% -50%;
+    }
+  }
+}
+
+@utility tap-target-anchored {
+  @media (pointer: coarse) {
+    &::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 2.75rem);
+      height: max(100%, 2.75rem);
+      translate: -50% -50%;
+    }
   }
 }
 
@@ -473,6 +526,8 @@
 }
 
 @utility atom-dialog-close {
+  @apply tap-target;
+
   display: inline-flex;
   flex: none;
   align-items: center;

@@ -2,6 +2,7 @@
 import { nextTick, onMounted, onBeforeUnmount, ref, useId } from 'vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import type { FileDisplayItem } from '../../types/file'
 import { formatBytes } from '../../utils/file'
 import { fadeTransition, springSnappy } from '../../utils/motion'
@@ -40,7 +41,7 @@ function close() {
             :initial="{ opacity: 0, scale: 0.96 }"
             :animate="{ opacity: 1, scale: 1 }"
             :transition="springSnappy"
-            class="rounded-xl bg-surface shadow-popover"
+            class="bg-surface shadow-popover"
           >
             <form @submit.prevent="emit('submit')">
               <div class="p-6 sm:p-7">
@@ -56,9 +57,9 @@ function close() {
                     <AppIcon icon="material-symbols:close-rounded" />
                   </button>
                 </div>
-                <div class="mb-5 flex items-center gap-3 rounded-lg border border-hairline p-4">
+                <div class="mb-5 flex items-center gap-3 border border-hairline p-4">
                   <span
-                    class="flex h-11 w-10 shrink-0 items-center justify-center rounded-sm bg-primary-tint text-caption font-bold text-primary-pressed"
+                    class="flex h-11 w-10 shrink-0 items-center justify-center bg-primary-tint text-caption font-bold text-primary-pressed"
                     >MD</span
                   >
                   <div class="min-w-0">
@@ -106,11 +107,7 @@ function close() {
                   class="knowledge-button-primary"
                   :disabled="busy || !title.trim()"
                 >
-                  <AppIcon
-                    v-if="busy"
-                    class="animate-spin"
-                    icon="material-symbols:progress-activity"
-                  />{{ busy ? '提交中…' : '加入知识库' }}
+                  <AppLoading v-if="busy" size="sm" />{{ busy ? '提交中…' : '加入知识库' }}
                 </button>
               </div>
             </form>

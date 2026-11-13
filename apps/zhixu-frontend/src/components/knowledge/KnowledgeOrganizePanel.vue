@@ -201,12 +201,10 @@ onScopeDispose(() => {
 </script>
 
 <template>
-  <section v-if="visible" class="rounded-lg border border-hairline bg-surface p-5">
+  <section v-if="visible" class="border border-hairline bg-surface p-5">
     <div class="mb-3 flex items-center justify-between gap-2">
       <h2 class="text-body font-semibold">AI 整理</h2>
-      <span
-        class="rounded-full bg-surface-secondary px-2.5 py-0.5 text-caption text-label-secondary"
-      >
+      <span class="bg-surface-secondary px-2.5 py-0.5 text-caption text-label-secondary">
         {{ statusLabel }}
       </span>
     </div>
@@ -216,7 +214,7 @@ onScopeDispose(() => {
     <template v-else>
       <p
         v-if="running"
-        class="rounded-sm bg-surface-secondary px-3 py-2.5 text-caption leading-5 text-label-secondary"
+        class="bg-surface-secondary px-3 py-2.5 text-caption leading-5 text-label-secondary"
         role="status"
       >
         {{
@@ -230,7 +228,7 @@ onScopeDispose(() => {
       </p>
       <p
         v-else-if="task.status === 'failed'"
-        class="rounded-sm bg-danger-tint px-3 py-2.5 text-caption leading-5 text-danger"
+        class="bg-danger-tint px-3 py-2.5 text-caption leading-5 text-danger"
         role="alert"
       >
         {{ task.error_message || 'AI 整理失败，请重试。' }}
@@ -239,7 +237,7 @@ onScopeDispose(() => {
       <template v-if="draft && !running">
         <p
           v-if="draft.stale"
-          class="mt-3 rounded-sm bg-warning-tint px-3 py-2.5 text-caption leading-5 text-warning-strong"
+          class="mt-3 bg-warning-tint px-3 py-2.5 text-caption leading-5 text-warning-strong"
           role="status"
         >
           正文在草稿生成后已更新，建议重新生成后再采纳。
@@ -268,7 +266,7 @@ onScopeDispose(() => {
             <span
               v-for="word in keywords"
               :key="word"
-              class="inline-flex items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1 text-caption"
+              class="inline-flex items-center gap-1.5 bg-surface-secondary px-3 py-1 text-caption"
             >
               {{ word }}
               <button
@@ -303,7 +301,7 @@ onScopeDispose(() => {
               v-for="tag in draft.suggested_tags"
               :key="tag.name"
               type="button"
-              class="rounded-full border px-3 py-1 text-caption transition-colors"
+              class="border px-3 py-1 text-caption transition-colors"
               :class="
                 selectedTags.includes(tag.name)
                   ? 'border-primary bg-primary-tint text-primary-pressed'

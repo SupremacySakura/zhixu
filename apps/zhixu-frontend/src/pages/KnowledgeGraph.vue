@@ -119,7 +119,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           />
           <div
             v-if="searchOpen && (searchResults.length || searching || searchHint)"
-            class="absolute z-20 mt-2 w-full overflow-hidden rounded-lg border border-hairline bg-surface shadow-popover"
+            class="absolute z-20 mt-2 w-full overflow-hidden border border-hairline bg-surface shadow-popover"
           >
             <p v-if="searching" class="px-3 py-2 text-subhead text-label-secondary">正在搜索…</p>
             <p v-else-if="searchHint" class="px-3 py-2 text-subhead text-label-secondary">
@@ -165,7 +165,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           role="switch"
           :aria-checked="showSuggested"
           data-test="suggested-toggle"
-          class="flex min-h-11 items-center gap-2.5 rounded-full px-[13px] text-[13px] font-semibold transition-all active:scale-[0.97]"
+          class="flex min-h-11 items-center gap-2.5 px-[13px] text-body font-semibold transition-colors"
           :class="
             showSuggested
               ? 'bg-primary-tint text-primary-pressed'
@@ -176,11 +176,11 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           显示建议边
           <span
             aria-hidden="true"
-            class="relative h-5 w-9 shrink-0 rounded-full transition-colors"
+            class="relative h-5 w-9 shrink-0 transition-colors"
             :class="showSuggested ? 'bg-primary' : 'bg-label-tertiary'"
           >
             <span
-              class="absolute left-0.5 top-0.5 size-4 rounded-full bg-surface transition-transform"
+              class="absolute left-0.5 top-0.5 size-4 bg-surface transition-transform"
               :class="showSuggested ? 'translate-x-[16px]' : 'translate-x-0'"
             />
           </span>
@@ -198,27 +198,27 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
 
       <p
         v-if="graph.truncated"
-        class="mb-4 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
+        class="mb-4 bg-warning-tint p-4 text-subhead text-warning-strong"
         role="status"
       >
         节点较多，已截断为连接度最高的 100 个节点。可以缩小范围，以某条知识为中心查看局部图谱。
       </p>
       <p
         v-if="error"
-        class="mb-4 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
+        class="mb-4 bg-warning-tint p-4 text-subhead text-warning-strong"
         role="alert"
       >
         {{ error }}
       </p>
       <p
         v-if="loading && graph.nodes.length === 0"
-        class="rounded-lg border border-hairline bg-surface p-6 text-subhead text-label-secondary"
+        class="border border-hairline bg-surface p-6 text-subhead text-label-secondary"
       >
         正在装载图谱…
       </p>
       <p
         v-else-if="loading"
-        class="mb-4 rounded-lg border border-hairline bg-surface p-4 text-subhead text-label-secondary"
+        class="mb-4 border border-hairline bg-surface p-4 text-subhead text-label-secondary"
         role="status"
       >
         正在更新图谱…
@@ -226,7 +226,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
 
       <div
         v-if="!loading && !error && graph.nodes.length === 0"
-        class="rounded-lg border border-hairline bg-surface px-6 py-16 text-center"
+        class="border border-hairline bg-surface px-6 py-16 text-center"
       >
         <template v-if="nodeFiltersActive">
           <h2 class="text-title-3">没有符合筛选条件的知识</h2>
@@ -256,7 +256,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
       <template v-if="!error && graph.nodes.length">
         <p
           v-if="graph.edges.length === 0"
-          class="mb-4 rounded-lg border border-hairline bg-surface p-4 text-subhead text-label-secondary"
+          class="mb-4 border border-hairline bg-surface p-4 text-subhead text-label-secondary"
         >
           {{
             showSuggested
@@ -266,12 +266,12 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
         </p>
         <p
           v-if="graph.edges.length > 0 && visibleEdges.length === 0"
-          class="mb-4 rounded-lg border border-hairline bg-surface p-4 text-subhead text-label-secondary"
+          class="mb-4 border border-hairline bg-surface p-4 text-subhead text-label-secondary"
           data-test="relation-filter-empty"
         >
           当前图谱里没有「{{ relationFilterLabel }}」的边，换个关系类型或清空筛选看看。
         </p>
-        <section class="rounded-lg border border-hairline bg-surface p-2 shadow-card">
+        <section class="border border-hairline bg-surface p-2 shadow-card">
           <KnowledgeGraphChart
             :nodes="graph.nodes"
             :edges="visibleEdges"
@@ -292,11 +292,11 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
               建议关系
             </span>
             <span class="flex items-center gap-2">
-              <span class="size-2 rounded-full bg-info" />
+              <span class="size-2 bg-info" />
               AI 关联
             </span>
             <span class="flex items-center gap-2">
-              <span class="size-2 rounded-full bg-label-tertiary" />
+              <span class="size-2 bg-label-tertiary" />
               手动关联
             </span>
             <span
@@ -367,7 +367,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
             <li
               v-for="relation in oneHopRelations"
               :key="relation.edge.id"
-              class="rounded-md border border-hairline p-3"
+              class="border border-hairline p-3"
             >
               <div
                 class="flex items-center justify-between gap-2 text-caption text-label-secondary"

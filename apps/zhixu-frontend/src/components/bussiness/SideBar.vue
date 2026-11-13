@@ -76,7 +76,7 @@ const avatarInitial = computed(() => (props.userName.trim()[0] || '?').toUpperCa
 
 const linkClass = (to: string) => {
   const base =
-    'flex h-10 items-center gap-3 rounded-sm px-3 text-[15px] font-medium transition-colors duration-150 focus:outline-none active:bg-primary/20 active:text-primary-pressed'
+    'flex h-10 items-center gap-3 px-3 text-lead font-medium transition-colors active:bg-primary/20 active:text-primary-pressed'
   return isActive(to)
     ? `${base} bg-primary-tint font-semibold text-primary`
     : `${base} text-label-secondary hover:bg-surface-secondary hover:text-label`
@@ -88,7 +88,7 @@ const linkClass = (to: string) => {
     :class="
       props.compact
         ? 'flex h-full w-full flex-col p-4'
-        : 'material flex h-full w-64 shrink-0 flex-col border-r border-hairline p-6 backdrop-blur-[20px] backdrop-saturate-[180%]'
+        : 'material flex h-full w-64 shrink-0 flex-col border-r border-hairline p-6'
     "
   >
     <div class="flex items-center gap-2.5 px-2 py-0.5">
@@ -111,13 +111,13 @@ const linkClass = (to: string) => {
           fill-rule="evenodd"
         />
       </svg>
-      <h1 class="text-[17px] font-bold tracking-[-0.01em] text-label">
+      <h1 class="text-title font-bold tracking-[-0.01em] text-label">
         {{ brandTitle }}
       </h1>
     </div>
     <p
       v-if="brandSubtitle"
-      class="mt-0.5 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary"
+      class="mt-0.5 px-2 text-note font-semibold uppercase tracking-[0.08em] text-primary"
     >
       {{ brandSubtitle }}
     </p>
@@ -131,7 +131,11 @@ const linkClass = (to: string) => {
         role="link"
         :aria-current="isActive(item.to) ? 'page' : undefined"
       >
-        <AppIcon :icon="item.icon" class="flex-none text-[20px]" />
+        <AppIcon
+          :icon="item.icon"
+          class="flex-none atom-glyph"
+          :style="{ '--atom-glyph-size': '20px' }"
+        />
         <span class="whitespace-nowrap">{{ item.label }}</span>
       </RouterLink>
     </nav>
@@ -142,15 +146,15 @@ const linkClass = (to: string) => {
         <div class="mb-2 flex items-baseline justify-between">
           <span class="text-subhead text-label-secondary">存储空间</span>
           <span
-            class="text-[15px] font-semibold"
+            class="text-lead font-semibold"
             :class="isStorageWarning ? 'text-danger' : 'text-label'"
           >
             {{ storagePercentClamped }}%
           </span>
         </div>
-        <div class="h-1.5 overflow-hidden rounded-full bg-surface-tertiary">
+        <div class="h-1.5 overflow-hidden bg-surface-tertiary">
           <div
-            class="h-full rounded-full transition-[width] duration-500 ease-out"
+            class="h-full transition-[width] duration-standard"
             :class="isStorageWarning ? 'bg-warning' : 'bg-primary'"
             :style="{ width: `${storagePercentClamped}%` }"
           />
@@ -159,7 +163,7 @@ const linkClass = (to: string) => {
           <p class="text-caption text-label-tertiary">{{ storageDetail }}</p>
           <span
             v-if="isStorageWarning"
-            class="inline-flex h-[22px] flex-none items-center rounded-full bg-warning-tint px-2.5 text-caption font-semibold text-warning-strong"
+            class="inline-flex h-[22px] flex-none items-center bg-warning-tint px-2.5 text-caption font-semibold text-warning-strong"
           >
             空间不足
           </span>
@@ -175,11 +179,11 @@ const linkClass = (to: string) => {
           v-if="userAvatar"
           :src="userAvatar"
           :alt="`${userName} 的头像`"
-          class="h-9 w-9 flex-none rounded-full object-cover"
+          class="h-9 w-9 flex-none object-cover"
         />
         <span
           v-else
-          class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary-tint text-[15px] font-semibold text-primary-pressed"
+          class="flex h-9 w-9 flex-none items-center justify-center bg-primary-tint text-lead font-semibold text-primary-pressed"
           aria-hidden="true"
           >{{ avatarInitial }}</span
         >
@@ -191,10 +195,15 @@ const linkClass = (to: string) => {
           type="button"
           aria-label="退出登录"
           title="退出登录"
-          class="flex h-9 w-9 flex-none items-center justify-center rounded-sm text-label-secondary transition-[background-color,color,transform] duration-150 hover:bg-surface-secondary hover:text-label focus-visible:outline-2 focus-visible:outline-primary active:scale-[0.95]"
+          class="flex h-9 w-9 flex-none items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-secondary hover:text-label"
           @click="emit('logout')"
         >
-          <AppIcon icon="material-symbols:logout-rounded" class="text-[18px]" aria-hidden="true" />
+          <AppIcon
+            icon="material-symbols:logout-rounded"
+            class="atom-glyph"
+            aria-hidden="true"
+            :style="{ '--atom-glyph-size': '18px' }"
+          />
         </button>
       </div>
     </div>

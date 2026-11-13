@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/ui/AppIcon.vue'
+import AppLoading from '../components/ui/AppLoading.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../utils/motion'
 import { getPickupCodeList, getPickupCodeCount, deletePickupCode } from '../services/apis/file'
@@ -248,25 +249,31 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
             <button
-              class="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97] sm:w-auto"
+              class="flex h-10 w-full items-center justify-center gap-2 bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary sm:w-auto"
               type="button"
               aria-label="去取件页面"
               @click="goToFilePickup"
             >
               <AppIcon
                 icon="material-symbols:download-rounded"
-                class="text-[18px]"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />
               <span>去取件</span>
             </button>
             <button
-              class="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed sm:w-auto"
+              class="flex h-10 w-full items-center justify-center gap-2 px-5 text-sm font-semibold transition-colors sm:w-auto knowledge-button-primary"
               type="button"
               aria-label="创建新取件码"
               @click="openCreateModal"
             >
-              <AppIcon icon="material-symbols:add-rounded" class="text-[18px]" aria-hidden="true" />
+              <AppIcon
+                icon="material-symbols:add-rounded"
+                class="atom-glyph"
+                aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
+              />
               <span>创建新取件码</span>
             </button>
           </div>
@@ -274,64 +281,68 @@ onBeforeUnmount(() => {
 
         <!-- 统计卡 -->
         <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
-          <div class="flex flex-col gap-3.5 rounded-md bg-surface p-5 shadow-card">
+          <div class="flex flex-col gap-3.5 bg-surface p-5 shadow-card">
             <div class="flex items-center justify-between">
               <span
                 class="text-caption font-semibold uppercase tracking-[0.06em] text-label-secondary"
                 >活跃取件码</span
               >
-              <span
-                class="flex h-8 w-8 items-center justify-center rounded-sm bg-primary-tint text-primary"
-              >
-                <AppIcon icon="material-symbols:lock-open-outline-rounded" class="text-[18px]" />
+              <span class="flex h-8 w-8 items-center justify-center bg-primary-tint text-primary">
+                <AppIcon
+                  icon="material-symbols:lock-open-outline-rounded"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '18px' }"
+                />
               </span>
             </div>
             <div class="flex items-baseline gap-2">
               <p class="text-title-1 text-label">{{ stats.activeCount }}</p>
-              <span
-                class="rounded-full bg-primary-tint px-2.5 py-0.5 text-caption font-semibold text-primary"
+              <span class="bg-primary-tint px-2.5 py-0.5 text-caption font-semibold text-primary"
                 >↑ 12%</span
               >
             </div>
           </div>
 
-          <div class="flex flex-col gap-3.5 rounded-md bg-surface p-5 shadow-card">
+          <div class="flex flex-col gap-3.5 bg-surface p-5 shadow-card">
             <div class="flex items-center justify-between">
               <span
                 class="text-caption font-semibold uppercase tracking-[0.06em] text-label-secondary"
                 >总下载量</span
               >
-              <span
-                class="flex h-8 w-8 items-center justify-center rounded-sm bg-info-tint text-info"
-              >
-                <AppIcon icon="material-symbols:download-rounded" class="text-[18px]" />
+              <span class="flex h-8 w-8 items-center justify-center bg-info-tint text-info">
+                <AppIcon
+                  icon="material-symbols:download-rounded"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '18px' }"
+                />
               </span>
             </div>
             <div class="flex items-baseline gap-2">
               <p class="text-title-1 text-label">{{ stats.totalDownloads.toLocaleString() }}</p>
-              <span
-                class="rounded-full bg-info-tint px-2.5 py-0.5 text-caption font-semibold text-info"
+              <span class="bg-info-tint px-2.5 py-0.5 text-caption font-semibold text-info"
                 >↑ 5%</span
               >
             </div>
           </div>
 
-          <div class="flex flex-col gap-3.5 rounded-md bg-surface p-5 shadow-card">
+          <div class="flex flex-col gap-3.5 bg-surface p-5 shadow-card">
             <div class="flex items-center justify-between">
               <span
                 class="text-caption font-semibold uppercase tracking-[0.06em] text-label-secondary"
                 >即将过期取件码</span
               >
-              <span
-                class="flex h-8 w-8 items-center justify-center rounded-sm bg-warning-tint text-warning"
-              >
-                <AppIcon icon="material-symbols:timer-outline-rounded" class="text-[18px]" />
+              <span class="flex h-8 w-8 items-center justify-center bg-warning-tint text-warning">
+                <AppIcon
+                  icon="material-symbols:timer-outline-rounded"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '18px' }"
+                />
               </span>
             </div>
             <div class="flex items-baseline gap-2">
               <p class="text-title-1 text-label">{{ stats.expiringSoon }}</p>
               <span
-                class="rounded-full bg-surface-tertiary px-2.5 py-0.5 text-caption font-medium text-label-secondary"
+                class="bg-surface-tertiary px-2.5 py-0.5 text-caption font-medium text-label-secondary"
                 >未来 7 天</span
               >
             </div>
@@ -339,32 +350,34 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- 取件码仓库表 -->
-        <div class="overflow-hidden rounded-md bg-surface shadow-card">
+        <div class="overflow-hidden bg-surface shadow-card">
           <div
             class="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3.5 sm:px-5"
           >
             <h3 class="text-headline text-label">活跃取件码仓库</h3>
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1 pointer-coarse:gap-3">
               <button
-                class="flex h-9 w-9 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-label"
+                class="flex h-9 w-9 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
                 type="button"
                 aria-label="筛选"
               >
                 <AppIcon
                   icon="material-symbols:filter-list-rounded"
-                  class="text-[20px]"
+                  class="atom-glyph"
                   aria-hidden="true"
+                  :style="{ '--atom-glyph-size': '20px' }"
                 />
               </button>
               <button
-                class="flex h-9 w-9 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-label"
+                class="flex h-9 w-9 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
                 type="button"
                 aria-label="排序"
               >
                 <AppIcon
                   icon="material-symbols:sort-rounded"
-                  class="text-[20px]"
+                  class="atom-glyph"
                   aria-hidden="true"
+                  :style="{ '--atom-glyph-size': '20px' }"
                 />
               </button>
             </div>
@@ -423,10 +436,7 @@ onBeforeUnmount(() => {
                 <tr v-if="loading">
                   <td colspan="7" class="px-6 py-10">
                     <div class="flex flex-col items-center justify-center gap-2.5">
-                      <AppIcon
-                        icon="material-symbols:progress-activity"
-                        class="animate-spin text-[24px] text-primary"
-                      />
+                      <AppLoading :size="24" class="text-primary" />
                       <p class="text-subhead text-label-tertiary">加载中…</p>
                     </div>
                   </td>
@@ -440,11 +450,11 @@ onBeforeUnmount(() => {
                   v-else
                   v-for="item in pickupList"
                   :key="item.code"
-                  class="border-b border-hairline transition-colors duration-150 last:border-b-0 hover:bg-surface-secondary"
+                  class="border-b border-hairline transition-colors last:border-b-0 hover:bg-surface-secondary"
                 >
                   <td class="px-4 py-3.5">
                     <div
-                      class="inline-block rounded-sm border border-hairline bg-surface-secondary px-2.5 py-1 font-mono text-[15px] font-bold tracking-[0.14em] text-label"
+                      class="inline-block border border-hairline bg-surface-secondary px-2.5 py-1 font-mono text-lead font-bold tracking-[0.14em] text-label"
                     >
                       {{ item.code }}
                     </div>
@@ -452,17 +462,21 @@ onBeforeUnmount(() => {
                   <td class="px-4 py-3.5">
                     <div class="flex min-w-0 items-center gap-3">
                       <span
-                        class="flex h-8 w-8 flex-none items-center justify-center rounded-sm"
+                        class="flex h-8 w-8 flex-none items-center justify-center"
                         :class="
                           item.type === 'folder'
                             ? 'bg-primary-tint text-primary'
                             : 'bg-warning-tint text-warning'
                         "
                       >
-                        <AppIcon :icon="typeIcon(item.type)" class="text-[16px]" />
+                        <AppIcon
+                          :icon="typeIcon(item.type)"
+                          class="atom-glyph"
+                          :style="{ '--atom-glyph-size': '16px' }"
+                        />
                       </span>
                       <div class="min-w-0">
-                        <p class="max-w-[180px] truncate text-[15px] font-semibold text-label">
+                        <p class="max-w-[180px] truncate text-lead font-semibold text-label">
                           {{ item.name }}
                         </p>
                         <p class="truncate text-caption text-label-secondary">
@@ -472,9 +486,9 @@ onBeforeUnmount(() => {
                     </div>
                   </td>
                   <td class="hidden px-4 py-3.5 sm:table-cell">
-                    <div class="h-1.5 w-32 overflow-hidden rounded-full bg-surface-tertiary">
+                    <div class="h-1.5 w-32 overflow-hidden bg-surface-tertiary">
                       <div
-                        class="h-full rounded-full"
+                        class="h-full"
                         :class="item.status === 'Active' ? 'bg-primary' : 'bg-danger'"
                         :style="{ width: `${progressPercent(item)}%` }"
                       ></div>
@@ -492,20 +506,20 @@ onBeforeUnmount(() => {
                   </td>
                   <td class="px-4 py-3.5">
                     <span
-                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-semibold"
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1 text-caption font-semibold"
                       :class="
                         item.status === 'Active'
                           ? 'bg-primary-tint text-primary'
                           : 'bg-danger-tint text-danger'
                       "
                     >
-                      <span class="size-1.5 rounded-full bg-current"></span>
+                      <span class="size-1.5 bg-current"></span>
                       {{ statusLabel(item.status) }}
                     </span>
                   </td>
                   <td class="px-4 py-3.5 text-right" @click="onStopPropagation">
                     <button
-                      class="flex h-9 w-9 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-label"
+                      class="flex h-9 w-9 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
                       type="button"
                       aria-label="取件码操作菜单"
                       @click="e => openPickupMenu(item, e)"
@@ -529,24 +543,25 @@ onBeforeUnmount(() => {
               <span class="font-bold text-label">{{ totalCount }}</span>
               项
             </p>
-            <div class="flex flex-wrap items-center gap-1">
+            <div class="flex flex-wrap items-center gap-1 pointer-coarse:gap-3">
               <button
-                class="flex h-8 min-w-8 items-center justify-center rounded-full px-1.5 text-[13px] font-semibold text-label-secondary transition-[background-color,color] duration-150 hover:bg-surface-secondary hover:text-label disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+                class="flex h-8 min-w-8 items-center justify-center px-1.5 text-body font-semibold text-label-secondary transition-[background-color,color] tap-target hover:bg-surface-secondary hover:text-label disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
                 type="button"
                 aria-label="上一页"
                 :disabled="currentPage <= 1 || loading"
                 @click="handlePageChange(currentPage - 1)"
               >
                 <AppIcon
-                  class="text-[16px]"
+                  class="atom-glyph"
                   icon="material-symbols:chevron-left"
                   aria-hidden="true"
+                  :style="{ '--atom-glyph-size': '16px' }"
                 />
               </button>
               <button
                 v-for="p in pageNumbers"
                 :key="p"
-                class="flex h-8 min-w-8 items-center justify-center rounded-full px-1.5 text-[13px] font-semibold transition-[background-color,color] duration-150 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+                class="flex h-8 min-w-8 items-center justify-center px-1.5 text-body font-semibold transition-[background-color,color] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
                 :class="
                   p === currentPage
                     ? 'bg-primary-tint text-primary'
@@ -560,18 +575,19 @@ onBeforeUnmount(() => {
               >
                 {{ p }}
               </button>
-              <span v-if="totalPages > 3" class="px-1 text-[13px] text-label-tertiary">…</span>
+              <span v-if="totalPages > 3" class="px-1 text-body text-label-tertiary">…</span>
               <button
-                class="flex h-8 min-w-8 items-center justify-center rounded-full px-1.5 text-[13px] font-semibold text-label-secondary transition-[background-color,color] duration-150 hover:bg-surface-secondary hover:text-label disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+                class="flex h-8 min-w-8 items-center justify-center px-1.5 text-body font-semibold text-label-secondary transition-[background-color,color] tap-target hover:bg-surface-secondary hover:text-label disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
                 type="button"
                 aria-label="下一页"
                 :disabled="currentPage >= totalPages || loading"
                 @click="handlePageChange(currentPage + 1)"
               >
                 <AppIcon
-                  class="text-[16px]"
+                  class="atom-glyph"
                   icon="material-symbols:chevron-right"
                   aria-hidden="true"
+                  :style="{ '--atom-glyph-size': '16px' }"
                 />
               </button>
             </div>
@@ -590,7 +606,7 @@ onBeforeUnmount(() => {
           :animate="{ opacity: 1 }"
           :exit="{ opacity: 0 }"
           :transition="fadeTransition"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
           @click.self="closeCreateModal"
         >
           <!-- 面板 Motion 内联（与 ConfirmDialog 等弹窗同构；子组件保持纯内容） -->
@@ -617,7 +633,7 @@ onBeforeUnmount(() => {
           :animate="{ opacity: 1 }"
           :exit="{ opacity: 0 }"
           :transition="fadeTransition"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
           role="dialog"
           aria-modal="true"
           @click.self="handleCloseDetail"
@@ -627,20 +643,21 @@ onBeforeUnmount(() => {
             :animate="{ opacity: 1, scale: 1 }"
             :exit="{ opacity: 0, scale: 0.98 }"
             :transition="springSnappy"
-            class="w-full max-w-md overflow-hidden rounded-lg bg-surface shadow-popover"
+            class="w-full max-w-md overflow-hidden bg-surface shadow-popover"
           >
             <div class="flex items-center justify-between border-b border-hairline px-5 py-4">
               <h3 class="text-title-3">取件码详情</h3>
               <button
-                class="flex h-9 w-9 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-label"
+                class="flex h-9 w-9 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
                 type="button"
                 aria-label="关闭详情"
                 @click="handleCloseDetail"
               >
                 <AppIcon
                   icon="material-symbols:close-rounded"
-                  class="text-[20px]"
+                  class="atom-glyph"
                   aria-hidden="true"
+                  :style="{ '--atom-glyph-size': '20px' }"
                 />
               </button>
             </div>
@@ -648,7 +665,7 @@ onBeforeUnmount(() => {
             <div class="space-y-5 p-5">
               <div class="flex justify-center">
                 <div
-                  class="rounded-sm border border-hairline bg-surface-secondary px-5 py-3 font-mono text-[20px] font-bold tracking-[0.3em] text-label"
+                  class="border border-hairline bg-surface-secondary px-5 py-3 font-mono text-title font-bold tracking-[0.3em] text-label"
                 >
                   {{ selectedItem.code }}
                 </div>
@@ -657,39 +674,39 @@ onBeforeUnmount(() => {
               <div class="space-y-3">
                 <div class="flex items-center justify-between gap-3">
                   <span class="text-subhead text-label-secondary">文件名</span>
-                  <span class="truncate text-[15px] font-medium text-label">{{
+                  <span class="truncate text-lead font-medium text-label">{{
                     selectedItem.name
                   }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-3">
                   <span class="text-subhead text-label-secondary">类型</span>
-                  <span class="text-[15px] font-medium text-label">{{
+                  <span class="text-lead font-medium text-label">{{
                     typeLabel(selectedItem.type)
                   }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-3">
                   <span class="text-subhead text-label-secondary">下载次数</span>
-                  <span class="text-[15px] font-medium text-label"
+                  <span class="text-lead font-medium text-label"
                     >{{ selectedItem.download }} / {{ selectedItem.max_download }}</span
                   >
                 </div>
                 <div class="flex items-center justify-between gap-3">
                   <span class="text-subhead text-label-secondary">过期时间</span>
-                  <span class="text-[15px] font-medium text-label">{{
+                  <span class="text-lead font-medium text-label">{{
                     formatDate(selectedItem.expire_time)
                   }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-3">
                   <span class="text-subhead text-label-secondary">状态</span>
                   <span
-                    class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-semibold"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 text-caption font-semibold"
                     :class="
                       selectedItem.status === 'Active'
                         ? 'bg-primary-tint text-primary'
                         : 'bg-danger-tint text-danger'
                     "
                   >
-                    <span class="size-1.5 rounded-full bg-current"></span>
+                    <span class="size-1.5 bg-current"></span>
                     {{ statusLabel(selectedItem.status) }}
                   </span>
                 </div>
@@ -699,7 +716,7 @@ onBeforeUnmount(() => {
             <div class="flex justify-end gap-3 border-t border-hairline px-5 py-4">
               <button
                 type="button"
-                class="h-10 rounded-full bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97]"
+                class="h-10 bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary"
                 aria-label="关闭详情"
                 @click="handleCloseDetail"
               >
@@ -707,14 +724,15 @@ onBeforeUnmount(() => {
               </button>
               <button
                 type="button"
-                class="flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed"
+                class="flex h-10 items-center gap-2 px-5 text-sm font-semibold transition-colors knowledge-button-primary"
                 aria-label="复制取件码"
                 @click="handleCopyCode(selectedItem.code)"
               >
                 <AppIcon
-                  class="text-[16px]"
+                  class="atom-glyph"
                   icon="material-symbols:content-copy"
                   aria-hidden="true"
+                  :style="{ '--atom-glyph-size': '16px' }"
                 />
                 复制取件码
               </button>
@@ -736,11 +754,7 @@ onBeforeUnmount(() => {
       @confirm="confirmDeletePickupCode"
     >
       <template #confirm-icon>
-        <AppIcon
-          v-if="deletingCodeId !== null"
-          icon="material-symbols:progress-activity"
-          class="animate-spin"
-        />
+        <AppLoading v-if="deletingCodeId !== null" size="sm" />
       </template>
     </ConfirmDialog>
 
@@ -754,53 +768,53 @@ onBeforeUnmount(() => {
           :animate="{ opacity: 1, scale: 1 }"
           :exit="{ opacity: 0, scale: 0.95 }"
           :transition="springSnappy"
-          class="fixed z-50 w-48 origin-top-right rounded-md bg-surface p-1.5 shadow-popover"
+          class="fixed z-50 w-48 origin-top-right bg-surface p-1.5 shadow-popover"
           :style="{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }"
           @click="onStopPropagation"
         >
           <button
-            class="flex h-10 w-full items-center gap-2.5 rounded-sm px-3 text-left text-[15px] text-label transition-colors duration-150 hover:bg-surface-secondary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex h-10 w-full items-center gap-2.5 px-3 text-left text-lead font-normal text-label transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-50"
             type="button"
             aria-label="复制取件码"
             @click="handleCopyCode(menuTargetItem?.code || '')"
           >
             <AppIcon
-              class="text-[18px] text-label-secondary"
+              class="atom-glyph text-label-secondary"
               icon="material-symbols:content-copy"
               aria-hidden="true"
+              :style="{ '--atom-glyph-size': '18px' }"
             />
             复制取件码
           </button>
           <button
-            class="flex h-10 w-full items-center gap-2.5 rounded-sm px-3 text-left text-[15px] text-label transition-colors duration-150 hover:bg-surface-secondary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex h-10 w-full items-center gap-2.5 px-3 text-left text-lead font-normal text-label transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-50"
             type="button"
             aria-label="查看取件码详情"
             @click="handleViewDetailFromMenu"
           >
             <AppIcon
-              class="text-[18px] text-label-secondary"
+              class="atom-glyph text-label-secondary"
               icon="material-symbols:visibility"
               aria-hidden="true"
+              :style="{ '--atom-glyph-size': '18px' }"
             />
             查看详情
           </button>
           <div class="mx-2.5 my-1 h-px bg-hairline"></div>
           <button
-            class="flex h-10 w-full items-center gap-2.5 rounded-sm px-3 text-left text-[15px] text-danger transition-colors duration-150 hover:bg-danger-tint focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex h-10 w-full items-center gap-2.5 px-3 text-left text-lead font-normal text-danger transition-colors hover:bg-danger-tint disabled:cursor-not-allowed disabled:opacity-50"
             type="button"
             aria-label="删除取件码"
             :disabled="deletingCodeId !== null"
             @click="handleDeleteFromMenu"
           >
+            <AppLoading v-if="deletingCodeId !== null" :size="18" />
             <AppIcon
-              class="text-[18px]"
-              :icon="
-                deletingCodeId !== null
-                  ? 'material-symbols:progress-activity'
-                  : 'material-symbols:delete'
-              "
-              :class="deletingCodeId !== null ? 'animate-spin' : ''"
+              v-else
+              class="atom-glyph"
+              icon="material-symbols:delete"
               aria-hidden="true"
+              :style="{ '--atom-glyph-size': '18px' }"
             />
             删除
           </button>

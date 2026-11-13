@@ -165,7 +165,7 @@ function reloadConfirmation() {
 </script>
 <template>
   <main class="overflow-y-auto p-4 sm:p-6 lg:p-8">
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto max-w-wide">
       <p class="mb-4 text-subhead text-label-secondary">工作空间 / 设置</p>
       <header class="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -174,7 +174,7 @@ function reloadConfirmation() {
             连接你信任的模型服务，为知识整理与语义检索做好准备。
           </p>
         </div>
-        <span class="rounded-full bg-surface-tertiary px-3 py-1 text-caption text-label-secondary"
+        <span class="bg-surface-tertiary px-3 py-1 text-caption text-label-secondary"
           >仅本人可见</span
         >
       </header>
@@ -213,7 +213,7 @@ function reloadConfirmation() {
         <div
           v-if="error"
           role="alert"
-          class="mb-5 rounded-md bg-warning-tint p-4 text-subhead text-warning-strong"
+          class="mb-5 bg-warning-tint p-4 text-subhead text-warning-strong"
         >
           {{ error }}
           <button type="button" class="knowledge-text-action" @click="load">重新加载</button>
@@ -231,7 +231,7 @@ function reloadConfirmation() {
                 dirty ? '有未保存的选择' : '配置版本 ' + configuration.settings.config_version
               }}</span>
             </div>
-            <div class="rounded-lg bg-surface shadow-card">
+            <div class="bg-surface shadow-card">
               <div class="grid md:grid-cols-2">
                 <div class="min-w-0 border-b border-hairline p-6 md:border-b-0 md:border-r">
                   <h3 class="text-headline">对话与整理</h3>
@@ -316,7 +316,7 @@ function reloadConfirmation() {
             <p
               v-if="configuration.settings.needs_reindex"
               role="status"
-              class="mt-4 rounded-md bg-warning-tint p-4 text-subhead text-warning-strong"
+              class="mt-4 bg-warning-tint p-4 text-subhead text-warning-strong"
             >
               Embedding 配置已变更，关联向量需要重建。向量化与重建功能尚未接入，知识正文不受影响。
             </p>
@@ -341,7 +341,7 @@ function reloadConfirmation() {
             </div>
             <div
               v-if="!configuration.providers.length"
-              class="rounded-lg bg-surface p-10 text-center shadow-card"
+              class="bg-surface p-10 text-center shadow-card"
             >
               <h3 class="text-title-3">连接你的第一个模型服务</h3>
               <p class="mt-3 text-subhead text-label-secondary">
@@ -352,18 +352,18 @@ function reloadConfirmation() {
               <article
                 v-for="provider in configuration.providers"
                 :key="provider.id"
-                class="rounded-lg bg-surface p-5 shadow-card sm:p-6"
+                class="bg-surface p-5 shadow-card sm:p-6"
               >
                 <div class="flex flex-wrap items-center gap-4">
                   <span
-                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-surface-secondary text-headline font-bold"
+                    class="flex h-11 w-11 shrink-0 items-center justify-center bg-surface-secondary text-headline font-bold"
                     >{{ provider.catalog_id ? provider.name.charAt(0) : '&lt;/&gt;' }}</span
                   >
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
                       <h3 class="text-headline">{{ provider.name }}</h3>
                       <span
-                        class="rounded-full px-3 py-1 text-caption"
+                        class="px-3 py-1 text-caption"
                         :class="
                           provider.auth_type === 'none' || provider.credential_configured
                             ? 'bg-primary-tint text-primary-pressed'
@@ -406,7 +406,7 @@ function reloadConfirmation() {
                   <span
                     v-for="model in provider.models"
                     :key="model.id"
-                    class="break-all rounded-sm bg-surface-secondary px-3 py-1.5 text-caption"
+                    class="break-all bg-surface-secondary px-3 py-1.5 text-caption"
                     ><span class="mr-2 text-label-secondary">{{
                       model.kind === 'chat' ? '对话' : '向量'
                     }}</span
@@ -455,7 +455,7 @@ function reloadConfirmation() {
           v-for="preset in catalog"
           :key="preset.provider_id"
           type="button"
-          class="flex w-full items-center justify-between rounded-md border border-hairline p-4 text-left hover:bg-surface-secondary disabled:opacity-50"
+          class="flex w-full items-center justify-between border border-hairline p-4 text-left hover:bg-surface-secondary disabled:opacity-50"
           :disabled="configuration?.providers.some(p => p.provider_id === preset.provider_id)"
           @click="openEditor(null, preset)"
         >

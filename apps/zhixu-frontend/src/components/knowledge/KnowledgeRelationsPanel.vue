@@ -2,6 +2,7 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import FilterMenu from '../ui/FilterMenu.vue'
 import {
   confirmKnowledgeRelation,
@@ -307,15 +308,13 @@ onScopeDispose(() => {
 </script>
 
 <template>
-  <section class="rounded-lg border border-hairline bg-surface p-5">
+  <section class="border border-hairline bg-surface p-5">
     <div class="mb-3 flex items-start justify-between gap-2">
       <div class="min-w-0">
         <h2 class="text-body font-semibold">相关知识</h2>
         <p class="mt-0.5 flex items-center gap-2 text-caption text-label-tertiary">
           <span>AI 推荐与手动维护</span>
-          <span
-            v-if="total"
-            class="rounded-full bg-surface-secondary px-2 py-0.5 text-label-secondary"
+          <span v-if="total" class="bg-surface-secondary px-2 py-0.5 text-label-secondary"
             >{{ total }} 条</span
           >
         </p>
@@ -327,12 +326,14 @@ onScopeDispose(() => {
       >
     </div>
 
-    <div class="rounded-md border border-hairline bg-surface-secondary p-3">
+    <div class="border border-hairline bg-surface-secondary p-3">
       <div class="flex items-center gap-2">
-        <span
-          class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary"
-        >
-          <AppIcon icon="material-symbols:auto-awesome" class="text-[14px]" />
+        <span class="flex size-6 shrink-0 items-center justify-center bg-primary-tint text-primary">
+          <AppIcon
+            icon="material-symbols:auto-awesome"
+            class="atom-glyph"
+            :style="{ '--atom-glyph-size': '14px' }"
+          />
         </span>
         <p class="min-w-0 flex-1 text-caption font-semibold text-label">让 AI 找相关知识</p>
       </div>
@@ -345,16 +346,12 @@ onScopeDispose(() => {
         :disabled="running || busy === 'regenerate'"
         @click="regenerate"
       >
+        <AppLoading v-if="running" size="md" />
         <AppIcon
-          :icon="
-            running
-              ? 'material-symbols:progress-activity'
-              : hasSuggestions
-                ? 'material-symbols:refresh'
-                : 'material-symbols:search'
-          "
-          class="text-[16px]"
-          :class="running ? 'animate-spin' : ''"
+          v-else
+          :icon="hasSuggestions ? 'material-symbols:refresh' : 'material-symbols:search'"
+          class="atom-glyph"
+          :style="{ '--atom-glyph-size': '16px' }"
         />
         {{
           running
@@ -369,11 +366,7 @@ onScopeDispose(() => {
       <p v-if="running" class="mt-2 text-caption leading-5 text-label-tertiary" role="status">
         AI 正在比对知识库，通常需要 10–30 秒，结果会自动刷新。
       </p>
-      <div
-        v-if="task?.status === 'failed'"
-        class="mt-2.5 rounded-sm bg-danger-tint p-2.5"
-        role="alert"
-      >
+      <div v-if="task?.status === 'failed'" class="mt-2.5 bg-danger-tint p-2.5" role="alert">
         <p class="break-words text-caption leading-5 text-danger">
           {{ task.error_message || '查找失败，请稍后重试。' }}
         </p>
@@ -395,13 +388,13 @@ onScopeDispose(() => {
           <h3 class="text-caption font-semibold text-label">待确认建议</h3>
           <span
             v-if="suggested.length"
-            class="rounded-full bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
+            class="bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
             >{{ suggested.length }} 条</span
           >
         </div>
         <p
           v-if="!suggested.length"
-          class="rounded-md border border-dashed border-hairline px-3 py-3 text-caption leading-5 text-label-secondary"
+          class="border border-dashed border-hairline px-3 py-3 text-caption leading-5 text-label-secondary"
         >
           暂无待确认建议。点上方「查找相关知识」，AI 找到的建议会出现在这里。
         </p>
@@ -409,14 +402,13 @@ onScopeDispose(() => {
           <li
             v-for="relation in suggested"
             :key="relation.id"
-            class="rounded-md border border-hairline p-3"
+            class="border border-hairline p-3"
             :data-suggestion-id="relation.id"
           >
             <div class="flex items-center justify-between gap-2">
-              <span
-                class="rounded-full bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
-                >{{ relationTypeLabel(relation.relation_type) }}</span
-              >
+              <span class="bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary">{{
+                relationTypeLabel(relation.relation_type)
+              }}</span>
               <span v-if="relation.confidence > 0" class="text-caption text-label-tertiary"
                 >置信度 {{ confidencePercent(relation) }}</span
               >
@@ -439,14 +431,12 @@ onScopeDispose(() => {
                       ? 'material-symbols:expand-less'
                       : 'material-symbols:expand-more'
                   "
-                  class="text-[14px]"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '14px' }"
                 />
                 {{ expandedId === relation.id ? '收起理由' : '查看理由' }}
               </button>
-              <div
-                v-if="expandedId === relation.id"
-                class="space-y-2 rounded-sm bg-surface-secondary p-2.5"
-              >
+              <div v-if="expandedId === relation.id" class="space-y-2 bg-surface-secondary p-2.5">
                 <p v-if="evidenceOf(relation)!.reason" class="break-words text-caption leading-5">
                   {{ evidenceOf(relation)!.reason }}
                 </p>
@@ -492,7 +482,7 @@ onScopeDispose(() => {
           <h3 class="text-caption font-semibold text-label">已确认</h3>
           <span
             v-if="confirmed.length"
-            class="rounded-full bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
+            class="bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
             >{{ confirmed.length }} 条</span
           >
         </div>
@@ -506,11 +496,7 @@ onScopeDispose(() => {
           还没有已确认的关系。确认上面的建议，或手动添加一条。
         </p>
         <ul v-else class="space-y-2">
-          <li
-            v-for="relation in confirmed"
-            :key="relation.id"
-            class="rounded-md border border-hairline p-2.5"
-          >
+          <li v-for="relation in confirmed" :key="relation.id" class="border border-hairline p-2.5">
             <div class="flex items-start justify-between gap-2">
               <RouterLink
                 :to="`/home/knowledge/${relation.counterpart_id}`"
@@ -524,7 +510,11 @@ onScopeDispose(() => {
                 :aria-label="`删除与${relation.counterpart_title}的关系`"
                 @click="pendingDelete = relation.id"
               >
-                <AppIcon icon="material-symbols:delete-outline" class="text-[16px]" />
+                <AppIcon
+                  icon="material-symbols:delete-outline"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '16px' }"
+                />
               </button>
             </div>
             <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -592,7 +582,7 @@ onScopeDispose(() => {
         </div>
         <div
           v-if="results.length"
-          class="mt-2 overflow-hidden rounded-md border border-hairline bg-surface shadow-card"
+          class="mt-2 overflow-hidden border border-hairline bg-surface shadow-card"
         >
           <button
             v-for="candidate in results"
@@ -605,20 +595,21 @@ onScopeDispose(() => {
           </button>
         </div>
         <p v-if="searchHint" class="mt-2 text-caption text-label-secondary">{{ searchHint }}</p>
-        <div
-          v-if="target"
-          class="mt-2 flex items-center gap-2 rounded-md bg-surface-secondary px-2.5 py-2"
-        >
+        <div v-if="target" class="mt-2 flex items-center gap-2 bg-surface-secondary px-2.5 py-2">
           <span class="min-w-0 flex-1 truncate text-caption text-label"
             >已选：{{ target.title }}</span
           >
           <button
             type="button"
-            class="text-label-secondary transition-colors hover:text-label"
+            class="text-label-secondary transition-colors tap-target hover:text-label"
             aria-label="清除已选知识"
             @click="resetForm"
           >
-            <AppIcon icon="material-symbols:close" class="text-[14px]" />
+            <AppIcon
+              icon="material-symbols:close"
+              class="atom-glyph"
+              :style="{ '--atom-glyph-size': '14px' }"
+            />
           </button>
         </div>
         <FilterMenu

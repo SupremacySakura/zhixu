@@ -166,10 +166,14 @@ onMounted(() => {
           <button
             type="button"
             aria-label="打开会话历史"
-            class="flex h-10 w-10 items-center justify-center rounded-sm border border-hairline bg-surface text-label transition-[transform,background-color] duration-150 hover:bg-surface-secondary active:scale-[0.92] lg:hidden"
+            class="flex h-10 w-10 items-center justify-center border border-hairline bg-surface text-label transition-colors tap-target hover:bg-surface-secondary lg:hidden"
             @click="historyOpen = true"
           >
-            <AppIcon icon="material-symbols:history-rounded" class="text-[20px]" />
+            <AppIcon
+              icon="material-symbols:history-rounded"
+              class="atom-glyph"
+              :style="{ '--atom-glyph-size': '20px' }"
+            />
           </button>
           <div>
             <p class="mb-1 hidden text-caption text-label-secondary lg:block">工作空间 / 对话</p>
@@ -219,7 +223,7 @@ onMounted(() => {
         </div>
         <div v-else-if="!messages.length" class="mx-auto max-w-3xl px-6 py-12 sm:px-10">
           <p class="mb-5 text-caption tracking-widest text-primary-pressed">从一句话开始</p>
-          <h2 class="text-[32px] font-semibold leading-snug tracking-tight sm:text-[42px]">
+          <h2 class="text-display font-semibold leading-snug tracking-tight sm:text-display">
             先聊聊，<br />看看模型是否回应。
           </h2>
           <p class="mt-5 text-subhead leading-7 text-label-secondary">
@@ -256,11 +260,7 @@ onMounted(() => {
             </p>
             <div
               class="whitespace-pre-wrap break-words text-body leading-8"
-              :class="
-                message.role === 'user'
-                  ? 'max-w-[90%] rounded-lg bg-surface-secondary px-5 py-3'
-                  : ''
-              "
+              :class="message.role === 'user' ? 'max-w-[90%] bg-surface-secondary px-5 py-3' : ''"
             >
               {{
                 message.content ||
@@ -298,7 +298,7 @@ onMounted(() => {
             </div>
             <details
               v-if="message.sources?.length"
-              class="mt-3 rounded-md border border-hairline bg-surface-secondary px-4 py-3 text-caption"
+              class="mt-3 border border-hairline bg-surface-secondary px-4 py-3 text-caption"
             >
               <summary class="cursor-pointer text-label-primary">
                 参考来源（{{ message.sources.length }}）<span
@@ -323,7 +323,7 @@ onMounted(() => {
             <p
               v-if="message.error"
               role="alert"
-              class="mt-3 rounded-sm border-l-2 border-danger bg-danger-tint p-4 text-subhead leading-7 text-danger"
+              class="mt-3 border-l-2 border-danger bg-danger-tint p-4 text-subhead leading-7 text-danger"
             >
               {{ message.error
               }}<RouterLink to="/home/settings" class="ml-3 underline">检查模型设置</RouterLink>
@@ -344,7 +344,7 @@ onMounted(() => {
           }}
         </p>
         <form
-          class="rounded-xl border border-hairline bg-canvas p-4 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary-tint"
+          class="border border-hairline bg-canvas p-4 focus-within:border-primary"
           @submit.prevent="submit"
         >
           <label for="chat-prompt" class="sr-only">发送给模型的消息</label
@@ -376,7 +376,7 @@ onMounted(() => {
                 v-else
                 type="submit"
                 aria-label="发送消息"
-                class="flex h-9 w-9 items-center justify-center rounded-full bg-primary-pressed text-xl text-white disabled:opacity-40"
+                class="flex h-9 w-9 items-center justify-center bg-primary-pressed text-xl text-white tap-target disabled:opacity-40"
                 :disabled="!selected || !prompt.trim() || loadingHistory || incomplete"
               >
                 ↑
@@ -384,7 +384,7 @@ onMounted(() => {
             </div>
           </div>
         </form>
-        <p class="mt-3 text-center text-[10px] leading-5 text-label-secondary">
+        <p class="mt-3 text-center text-note leading-5 text-label-secondary">
           文字将发送至当前模型供应商；请勿输入敏感信息。模型回复可能不准确。
         </p>
       </div>
@@ -400,7 +400,7 @@ onMounted(() => {
           class="fixed inset-0 z-40 flex lg:hidden"
           @click="historyOpen = false"
         >
-          <div class="absolute inset-0 bg-scrim backdrop-blur-[6px]"></div>
+          <div class="absolute inset-0 bg-scrim"></div>
           <Motion
             :ref="setDrawerPanelRef"
             :initial="{ x: '-100%' }"
@@ -424,10 +424,14 @@ onMounted(() => {
               <button
                 type="button"
                 aria-label="关闭会话历史"
-                class="flex h-10 w-10 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-secondary hover:text-label"
+                class="flex h-10 w-10 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-secondary hover:text-label"
                 @click="historyOpen = false"
               >
-                <AppIcon icon="material-symbols:close-rounded" class="text-[20px]" />
+                <AppIcon
+                  icon="material-symbols:close-rounded"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '20px' }"
+                />
               </button>
             </div>
             <div class="min-h-0 flex-1">

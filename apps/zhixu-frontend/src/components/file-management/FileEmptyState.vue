@@ -29,25 +29,31 @@ const description = computed(() =>
   <div class="flex flex-col items-center justify-center text-center">
     <!-- 双层圆环插画（FileEmptyState.html 规格） -->
     <div class="relative mb-5">
-      <div class="flex h-28 w-28 items-center justify-center rounded-full bg-primary-tint">
-        <div
-          class="flex h-20 w-20 items-center justify-center rounded-full bg-primary/20 text-primary"
-        >
-          <AppIcon class="text-[34px]" :icon="illustrationIcon" />
+      <div class="flex h-28 w-28 items-center justify-center bg-primary-tint">
+        <div class="flex h-20 w-20 items-center justify-center bg-primary/20 text-primary">
+          <AppIcon
+            class="atom-glyph"
+            :icon="illustrationIcon"
+            :style="{ '--atom-glyph-size': '34px' }"
+          />
         </div>
       </div>
-      <div class="absolute right-2 top-1.5 h-3 w-3 rounded-full bg-primary/20"></div>
-      <div class="absolute bottom-3 left-0 h-2 w-2 rounded-full bg-primary/15"></div>
+      <div class="absolute right-2 top-1.5 h-3 w-3 bg-primary/20"></div>
+      <div class="absolute bottom-3 left-0 h-2 w-2 bg-primary/15"></div>
     </div>
     <p class="text-title-3 mb-1">{{ title }}</p>
     <p class="text-subhead text-label-secondary mb-5">{{ description }}</p>
     <button
       v-if="!hasSearchQuery"
-      class="flex h-10 items-center gap-1.5 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed"
+      class="flex h-10 items-center gap-1.5 px-5 text-sm font-semibold transition-colors knowledge-button-primary"
       type="button"
       @click="emit('upload')"
     >
-      <AppIcon class="text-[16px]" icon="material-symbols:upload" />
+      <AppIcon
+        class="atom-glyph"
+        icon="material-symbols:upload"
+        :style="{ '--atom-glyph-size': '16px' }"
+      />
       上传文件
     </button>
   </div>

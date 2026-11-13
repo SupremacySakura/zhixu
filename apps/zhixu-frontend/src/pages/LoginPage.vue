@@ -72,7 +72,7 @@ const onSubmit = async () => {
   <div class="flex min-h-screen flex-col">
     <!-- 顶部品牌栏：半透明材质，内容滚动时从底下穿过 -->
     <header
-      class="material sticky top-0 z-20 flex h-[60px] items-center justify-between border-b border-hairline px-6 backdrop-blur-[20px] backdrop-saturate-[180%] lg:px-10"
+      class="material sticky top-0 z-20 flex h-[60px] items-center justify-between border-b border-hairline px-6 lg:px-10"
     >
       <div class="flex items-center gap-2.5">
         <svg
@@ -92,18 +92,18 @@ const onSubmit = async () => {
             fill-rule="evenodd"
           />
         </svg>
-        <span class="text-[17px] font-bold tracking-[-0.01em]">知序</span>
+        <span class="text-title font-bold tracking-[-0.01em]">知序</span>
       </div>
       <RouterLink
         to="/register"
-        class="flex h-9 items-center rounded-full px-3 text-sm font-semibold text-primary transition-colors duration-150 hover:bg-primary-tint"
+        class="flex h-9 items-center px-3 text-sm font-semibold text-primary transition-colors hover:bg-primary-tint"
       >
         注册
       </RouterLink>
     </header>
 
     <main class="flex flex-1 items-center justify-center px-4 py-12">
-      <div class="w-full max-w-[400px] overflow-hidden rounded-xl bg-surface shadow-card">
+      <div class="w-full max-w-[400px] overflow-hidden bg-surface shadow-card">
         <div class="px-8 pb-0 pt-9">
           <div class="mb-7">
             <h1 class="text-display mb-2">欢迎回来</h1>
@@ -112,7 +112,7 @@ const onSubmit = async () => {
 
           <div
             v-if="errorMessage"
-            class="mb-5 flex items-center gap-2 rounded-lg bg-danger-tint px-3.5 py-2.5 text-[13px] font-medium text-danger"
+            class="mb-5 flex items-center gap-2 bg-danger-tint px-3.5 py-2.5 text-body font-medium text-danger"
             role="alert"
           >
             <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -124,7 +124,7 @@ const onSubmit = async () => {
           </div>
           <div
             v-if="successMessage"
-            class="mb-5 flex items-center gap-2 rounded-lg bg-primary-tint px-3.5 py-2.5 text-[13px] font-medium text-primary-pressed"
+            class="mb-5 flex items-center gap-2 bg-primary-tint px-3.5 py-2.5 text-body font-medium text-primary-pressed"
             role="status"
           >
             <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -142,7 +142,7 @@ const onSubmit = async () => {
 
           <form class="flex flex-col gap-4.5" @submit.prevent="onSubmit">
             <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-label-secondary" for="username">
+              <label class="text-body font-semibold text-label-secondary" for="username">
                 用户名
               </label>
               <input
@@ -152,12 +152,12 @@ const onSubmit = async () => {
                 type="text"
                 placeholder="请输入用户名"
                 autocomplete="username"
-                class="h-11 w-full rounded-sm border border-hairline bg-surface-secondary px-3.5 text-[15px] text-label transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-label-tertiary focus:border-primary focus:bg-surface focus:outline-none focus:ring-[3px] focus:ring-primary-tint"
+                class="h-11 w-full border border-hairline bg-surface-secondary px-3.5 text-lead font-normal text-label transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary focus:border-primary focus:bg-surface"
               />
             </div>
 
             <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-label-secondary" for="password">
+              <label class="text-body font-semibold text-label-secondary" for="password">
                 密码
               </label>
               <div class="relative flex items-center">
@@ -168,12 +168,12 @@ const onSubmit = async () => {
                   :type="passwordInputType"
                   placeholder="请输入密码"
                   autocomplete="current-password"
-                  class="h-11 w-full rounded-sm border border-hairline bg-surface-secondary px-3.5 pr-11 text-[15px] text-label transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-label-tertiary focus:border-primary focus:bg-surface focus:outline-none focus:ring-[3px] focus:ring-primary-tint"
+                  class="h-11 w-full border border-hairline bg-surface-secondary px-3.5 pr-11 text-lead font-normal text-label transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary focus:border-primary focus:bg-surface"
                 />
                 <button
                   type="button"
                   :aria-label="showPassword ? '隐藏密码' : '显示密码'"
-                  class="absolute right-1.5 flex h-8 w-8 items-center justify-center rounded-sm text-label-tertiary transition-colors duration-150 hover:bg-primary-tint hover:text-primary"
+                  class="absolute right-1.5 flex h-8 w-8 items-center justify-center text-label-tertiary transition-colors tap-target-anchored hover:bg-primary-tint hover:text-primary"
                   @click="showPassword = !showPassword"
                 >
                   <svg
@@ -229,7 +229,7 @@ const onSubmit = async () => {
             </div>
 
             <button
-              class="mt-1.5 flex h-12 w-full items-center justify-center rounded-full bg-primary text-[16px] font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed disabled:opacity-60"
+              class="mt-1.5 flex h-12 w-full items-center justify-center text-read font-semibold transition-colors disabled:opacity-60 knowledge-button-primary"
               type="submit"
               :disabled="isSubmitting"
             >
@@ -238,7 +238,7 @@ const onSubmit = async () => {
           </form>
 
           <div
-            class="-mx-8 mt-7 border-t border-hairline bg-surface-secondary px-8 py-4.5 text-center text-[14px] text-label-secondary"
+            class="-mx-8 mt-7 border-t border-hairline bg-surface-secondary px-8 py-4.5 text-center text-body text-label-secondary"
           >
             还没有账号？
             <RouterLink class="font-semibold text-primary hover:underline" to="/register">

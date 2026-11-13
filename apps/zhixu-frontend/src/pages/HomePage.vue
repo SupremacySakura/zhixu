@@ -93,7 +93,7 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
     <!-- Skip to content link for accessibility -->
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:font-medium focus:text-white"
+      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-primary focus:px-4 focus:py-2 focus:font-medium focus:text-white"
     >
       跳转到主要内容
     </a>
@@ -112,19 +112,23 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
     <div class="flex min-h-screen min-w-0 flex-1 flex-col lg:min-h-0">
       <!-- 移动端顶栏：sticky + 半透明材质（DESIGN.md §3） -->
       <header
-        class="material sticky top-0 z-20 flex h-[60px] items-center justify-between border-b border-hairline px-4 backdrop-blur-[20px] backdrop-saturate-[180%] lg:hidden"
+        class="material sticky top-0 z-20 flex h-[60px] items-center justify-between border-b border-hairline px-4 lg:hidden"
       >
         <div class="min-w-0">
-          <p class="text-[16px] font-bold tracking-[-0.01em] text-label">知序</p>
+          <p class="text-read font-bold tracking-[-0.01em] text-label">知序</p>
           <p class="truncate text-caption text-label-secondary">{{ currentNavLabel }}</p>
         </div>
         <button
-          class="flex h-10 w-10 flex-none items-center justify-center rounded-sm border border-hairline bg-surface text-label transition-[transform,background-color] duration-150 hover:bg-surface-secondary active:scale-[0.92]"
+          class="flex h-10 w-10 flex-none items-center justify-center border border-hairline bg-surface text-label transition-colors tap-target hover:bg-surface-secondary"
           type="button"
           aria-label="打开导航菜单"
           @click="isMobileMenuOpen = true"
         >
-          <AppIcon icon="material-symbols:menu-rounded" class="text-[20px]" />
+          <AppIcon
+            icon="material-symbols:menu-rounded"
+            class="atom-glyph"
+            :style="{ '--atom-glyph-size': '20px' }"
+          />
         </button>
       </header>
 
@@ -143,7 +147,7 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
         class="fixed inset-0 z-40 flex lg:hidden"
         @click="isMobileMenuOpen = false"
       >
-        <div class="absolute inset-0 bg-scrim backdrop-blur-[6px]"></div>
+        <div class="absolute inset-0 bg-scrim"></div>
         <Motion
           :ref="setPanelRef"
           :initial="{ x: '-100%' }"
@@ -160,12 +164,16 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
         >
           <div class="flex flex-none items-center justify-end border-b border-hairline px-3 py-2.5">
             <button
-              class="flex h-10 w-10 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-secondary hover:text-label"
+              class="flex h-10 w-10 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-secondary hover:text-label"
               type="button"
               aria-label="关闭导航菜单"
               @click="isMobileMenuOpen = false"
             >
-              <AppIcon icon="material-symbols:close-rounded" class="text-[20px]" />
+              <AppIcon
+                icon="material-symbols:close-rounded"
+                class="atom-glyph"
+                :style="{ '--atom-glyph-size': '20px' }"
+              />
             </button>
           </div>
           <div class="min-h-0 flex-1">

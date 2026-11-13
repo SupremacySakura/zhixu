@@ -37,8 +37,7 @@ const submitJump = () => {
   requestPage(target)
 }
 
-const pageButtonClass =
-  'min-w-8 rounded-full text-[13px] font-semibold tracking-[0.01em] transition-[transform,background-color,color] duration-100'
+const pageButtonClass = 'min-w-8 text-body font-semibold tracking-[0.01em] transition-colors'
 </script>
 
 <template>
@@ -53,7 +52,7 @@ const pageButtonClass =
       <button
         :class="[
           pageButtonClass,
-          'flex h-8 items-center justify-center px-1.5 text-label-secondary hover:bg-surface-secondary hover:text-label active:scale-[0.94] disabled:cursor-default disabled:opacity-55 disabled:hover:bg-transparent',
+          'flex h-8 items-center justify-center px-1.5 text-label-secondary tap-target hover:bg-surface-secondary hover:text-label disabled:cursor-default disabled:opacity-55 disabled:hover:bg-transparent',
           loading && 'pointer-events-none opacity-45',
         ]"
         type="button"
@@ -61,7 +60,11 @@ const pageButtonClass =
         :disabled="page <= 1 || loading"
         @click="requestPage(page - 1)"
       >
-        <AppIcon class="text-[16px]" icon="material-symbols:chevron-left" />
+        <AppIcon
+          class="atom-glyph"
+          icon="material-symbols:chevron-left"
+          :style="{ '--atom-glyph-size': '16px' }"
+        />
       </button>
       <button
         v-for="pageNumber in pageNumbers"
@@ -71,7 +74,7 @@ const pageButtonClass =
           'h-8 px-1.5',
           pageNumber === page
             ? 'cursor-default bg-primary-tint font-bold text-primary'
-            : 'text-label-secondary hover:bg-surface-secondary hover:text-label active:scale-[0.94] disabled:cursor-default disabled:opacity-45 disabled:hover:bg-transparent',
+            : 'text-label-secondary hover:bg-surface-secondary hover:text-label disabled:cursor-default disabled:opacity-45 disabled:hover:bg-transparent',
           loading && pageNumber !== page && 'pointer-events-none opacity-45',
         ]"
         type="button"
@@ -82,11 +85,11 @@ const pageButtonClass =
       >
         {{ pageNumber }}
       </button>
-      <span v-if="safeTotalPages > 3" class="px-1.5 text-[13px] text-label-tertiary">…</span>
+      <span v-if="safeTotalPages > 3" class="px-1.5 text-body text-label-tertiary">…</span>
       <button
         :class="[
           pageButtonClass,
-          'flex h-8 items-center justify-center px-1.5 text-label-secondary hover:bg-surface-secondary hover:text-label active:scale-[0.94] disabled:cursor-default disabled:opacity-55 disabled:hover:bg-transparent',
+          'flex h-8 items-center justify-center px-1.5 text-label-secondary tap-target hover:bg-surface-secondary hover:text-label disabled:cursor-default disabled:opacity-55 disabled:hover:bg-transparent',
           loading && 'pointer-events-none opacity-45',
         ]"
         type="button"
@@ -94,7 +97,11 @@ const pageButtonClass =
         :disabled="page >= safeTotalPages || loading"
         @click="requestPage(page + 1)"
       >
-        <AppIcon class="text-[16px]" icon="material-symbols:chevron-right" />
+        <AppIcon
+          class="atom-glyph"
+          icon="material-symbols:chevron-right"
+          :style="{ '--atom-glyph-size': '16px' }"
+        />
       </button>
       <div v-if="safeTotalPages > 1" class="ml-2.5 flex items-center gap-1.5">
         <span class="text-caption text-label-tertiary">跳至</span>
@@ -106,7 +113,7 @@ const pageButtonClass =
           :disabled="loading"
           aria-label="跳转页码"
           placeholder="页码"
-          class="h-8 w-14 rounded-sm border border-hairline bg-surface-secondary px-2 text-center text-[13px] text-label transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-label-tertiary focus:border-primary focus:bg-surface focus:outline-none focus:ring-[3px] focus:ring-primary-tint disabled:opacity-45"
+          class="h-8 w-14 border border-hairline bg-surface-secondary px-2 text-center text-body text-label transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary focus:border-primary focus:bg-surface disabled:opacity-45"
           @keyup.enter="submitJump"
         />
         <span class="text-caption text-label-tertiary">页</span>

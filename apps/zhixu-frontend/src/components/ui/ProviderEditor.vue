@@ -269,7 +269,7 @@ defineExpose({ acceptVersion })
         <div
           v-for="(entry, index) in models"
           :key="entry.key"
-          class="grid gap-3 rounded-md bg-surface-secondary p-4 sm:grid-cols-[minmax(0,1fr)_auto_100px_40px]"
+          class="grid gap-3 bg-surface-secondary p-4 sm:grid-cols-[minmax(0,1fr)_auto_100px_40px]"
         >
           <div>
             <label :for="`model-${entry.key}`" class="mb-2 block text-caption font-semibold"
@@ -335,7 +335,7 @@ defineExpose({ acceptVersion })
       </fieldset>
       <label
         v-if="needsConfirmation"
-        class="mt-5 flex items-start gap-3 rounded-md bg-warning-tint p-4 text-subhead text-warning-strong"
+        class="mt-5 flex items-start gap-3 bg-warning-tint p-4 text-subhead text-warning-strong"
         ><input
           v-model="reindexConfirmed"
           type="checkbox"

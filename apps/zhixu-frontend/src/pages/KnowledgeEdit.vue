@@ -83,7 +83,7 @@ onScopeDispose(() => controller?.abort())
 </script>
 <template>
   <main class="overflow-y-auto p-4 sm:p-6 lg:p-8">
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto max-w-wide">
       <div class="mb-5 flex gap-3 text-subhead text-label-secondary">
         <RouterLink to="/home/knowledge" class="text-primary-pressed">知识库</RouterLink
         ><span>/</span><span>{{ editing ? '编辑知识' : '新建知识' }}</span>
@@ -101,7 +101,7 @@ onScopeDispose(() => controller?.abort())
       <p
         v-if="error"
         role="alert"
-        class="mb-5 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
+        class="mb-5 bg-warning-tint p-4 text-subhead text-warning-strong"
       >
         {{ error }}
       </p>
@@ -135,7 +135,7 @@ onScopeDispose(() => controller?.abort())
               placeholder="粘贴或输入知识正文，支持 Markdown 语法。"
             />
           </div>
-          <section class="rounded-lg border border-hairline bg-surface p-6" aria-label="正文预览">
+          <section class="border border-hairline bg-surface p-6" aria-label="正文预览">
             <p class="mb-4 text-caption text-label-secondary">预览</p>
             <!-- Parser disables HTML, unsafe protocols, and all image requests. -->
             <div v-if="content.trim()" class="knowledge-markdown" v-html="previewHtml" />

@@ -9,6 +9,7 @@
     "typecheck": "vue-tsc -b --pretty false",
     "preview": "vite preview",
     "lint": "eslint . --ignore-pattern 'data/**' --ignore-pattern '**/data/**'",
+    "lint:guard": "node scripts/check-world-drift.mjs",
     "lint:fix": "eslint . --ignore-pattern 'data/**' --ignore-pattern '**/data/**' --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

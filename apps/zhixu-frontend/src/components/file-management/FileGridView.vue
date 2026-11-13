@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import type { FileDisplayItem, FileItemKey } from '../../types/file'
 import { formatBytes } from '../../utils/file'
 import { ownerInitials } from '../../utils/file-management'
@@ -49,7 +50,7 @@ const isSelected = (key: FileItemKey) => props.selectedIds.has(key)
 
 const cardClass = (key: FileItemKey) =>
   [
-    'relative cursor-pointer select-none rounded-md bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-popover',
+    'relative cursor-pointer select-none bg-surface p-4 shadow-card transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-popover',
     isSelected(key) ? 'ring-2 ring-primary' : '',
   ].join(' ')
 </script>
@@ -60,7 +61,7 @@ const cardClass = (key: FileItemKey) =>
       <!-- 「..」返回上一级目录卡 -->
       <div
         v-if="hasParentFolder"
-        class="relative cursor-pointer select-none rounded-md bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-popover"
+        class="relative cursor-pointer select-none bg-surface p-4 shadow-card transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-popover"
         role="button"
         tabindex="0"
         @click="emit('go-parent')"
@@ -68,13 +69,17 @@ const cardClass = (key: FileItemKey) =>
       >
         <div class="flex items-start gap-3">
           <span
-            class="flex h-11 w-11 flex-none items-center justify-center rounded-sm bg-warning-tint text-warning"
+            class="flex h-11 w-11 flex-none items-center justify-center bg-warning-tint text-warning"
           >
-            <AppIcon class="text-[22px]" icon="material-symbols:folder" />
+            <AppIcon
+              class="atom-glyph"
+              icon="material-symbols:folder"
+              :style="{ '--atom-glyph-size': '22px' }"
+            />
           </span>
           <div class="min-w-0">
-            <p class="truncate text-[15px] font-semibold leading-5 text-label">..</p>
-            <p class="mt-0.5 text-[13px] text-label-secondary">返回上一级目录</p>
+            <p class="truncate text-lead font-semibold leading-5 text-label">..</p>
+            <p class="mt-0.5 text-body text-label-secondary">返回上一级目录</p>
           </div>
         </div>
       </div>
@@ -90,16 +95,20 @@ const cardClass = (key: FileItemKey) =>
       >
         <div class="flex items-start gap-3">
           <span
-            class="flex h-11 w-11 flex-none items-center justify-center rounded-sm"
+            class="flex h-11 w-11 flex-none items-center justify-center"
             :class="`${file.iconBg} ${file.iconFg}`"
           >
-            <AppIcon class="text-[22px]" :icon="file.icon" />
+            <AppIcon
+              class="atom-glyph"
+              :icon="file.icon"
+              :style="{ '--atom-glyph-size': '22px' }"
+            />
           </span>
           <div class="min-w-0 flex-1">
-            <p class="line-clamp-2 text-[15px] font-semibold leading-5 text-label">
+            <p class="line-clamp-2 text-lead font-semibold leading-5 text-label">
               {{ file.name }}
             </p>
-            <p class="mt-0.5 truncate text-[13px] text-label-secondary">{{ file.typeLabel }}</p>
+            <p class="mt-0.5 truncate text-body text-label-secondary">{{ file.typeLabel }}</p>
           </div>
           <label class="inline-flex flex-none cursor-pointer pt-0.5" @click.stop>
             <input
@@ -110,7 +119,7 @@ const cardClass = (key: FileItemKey) =>
               @change="handleToggleSelect(file, $event)"
             />
             <span
-              class="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-label-tertiary bg-surface transition-all duration-100 hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 active:scale-[0.88]"
+              class="flex h-[18px] w-[18px] items-center justify-center border-[1.5px] border-label-tertiary bg-surface transition-[background-color,border-color] hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50"
             >
               <svg
                 v-if="isSelected(file.key)"
@@ -147,29 +156,30 @@ const cardClass = (key: FileItemKey) =>
         <div class="mt-3 flex items-center justify-between gap-2">
           <div class="flex min-w-0 items-center gap-2">
             <span
-              class="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-surface-tertiary text-[10px] font-bold tracking-[0.02em] text-label-secondary"
+              class="flex h-6 w-6 flex-none items-center justify-center bg-surface-tertiary text-note font-bold tracking-[0.02em] text-label-secondary"
             >
               {{ ownerBadge }}
             </span>
             <span class="truncate text-caption text-label-secondary">{{ ownerName }}</span>
           </div>
           <button
-            class="flex h-8 w-8 flex-none items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-label"
+            class="flex h-8 w-8 flex-none items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
             type="button"
             :aria-label="`${file.name} 操作菜单`"
             @click.stop="handleOpenMenu(file, $event)"
           >
-            <AppIcon class="text-[18px]" icon="material-symbols:more-vert" />
+            <AppIcon
+              class="atom-glyph"
+              icon="material-symbols:more-vert"
+              :style="{ '--atom-glyph-size': '18px' }"
+            />
           </button>
         </div>
       </div>
 
       <div v-if="loading" class="col-span-full py-20">
         <div class="flex flex-col items-center justify-center text-center">
-          <AppIcon
-            icon="material-symbols:progress-activity"
-            class="mb-3 animate-spin text-[28px] text-primary"
-          />
+          <AppLoading :size="28" class="mb-3 text-primary" />
           <p class="text-subhead text-label-tertiary">加载中...</p>
         </div>
       </div>

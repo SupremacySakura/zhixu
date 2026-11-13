@@ -9,7 +9,7 @@ const redirectPath = typeof route.query.redirect === 'string' ? route.query.redi
   <div class="flex min-h-screen flex-col">
     <!-- 顶部品牌栏：半透明材质 -->
     <header
-      class="material sticky top-0 z-20 flex h-[60px] items-center border-b border-hairline px-6 backdrop-blur-[20px] backdrop-saturate-[180%] lg:px-10"
+      class="material sticky top-0 z-20 flex h-[60px] items-center border-b border-hairline px-6 lg:px-10"
     >
       <div class="flex items-center gap-2.5">
         <svg
@@ -29,15 +29,15 @@ const redirectPath = typeof route.query.redirect === 'string' ? route.query.redi
             fill-rule="evenodd"
           />
         </svg>
-        <span class="text-[17px] font-bold tracking-[-0.01em]">知序</span>
+        <span class="text-title font-bold tracking-[-0.01em]">知序</span>
       </div>
     </header>
 
     <main class="flex flex-1 items-center justify-center px-4 py-12">
-      <div class="w-full max-w-[400px] overflow-hidden rounded-xl bg-surface shadow-card">
+      <div class="w-full max-w-[400px] overflow-hidden bg-surface shadow-card">
         <div class="flex flex-col items-center px-8 pb-7 pt-10 text-center">
           <div
-            class="mb-4.5 flex h-16 w-16 items-center justify-center rounded-full bg-primary-tint text-primary"
+            class="mb-4.5 flex h-16 w-16 items-center justify-center bg-primary-tint text-primary"
           >
             <svg class="h-[30px] w-[30px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <rect
@@ -67,13 +67,13 @@ const redirectPath = typeof route.query.redirect === 'string' ? route.query.redi
           <div class="flex w-full flex-col gap-3">
             <RouterLink
               :to="{ path: '/login', query: { redirect: redirectPath } }"
-              class="flex h-12 w-full items-center justify-center rounded-full bg-primary text-[16px] font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed"
+              class="flex h-12 w-full items-center justify-center text-read font-semibold transition-colors knowledge-button-primary"
             >
               立即登录
             </RouterLink>
             <RouterLink
               to="/register"
-              class="flex h-12 w-full items-center justify-center rounded-full bg-surface text-[16px] font-semibold text-primary ring-1 ring-primary transition-[background-color,scale] duration-150 hover:bg-primary-tint active:scale-[0.97]"
+              class="flex h-12 w-full items-center justify-center bg-surface text-read font-semibold text-primary ring-1 ring-primary transition-colors hover:bg-primary-tint"
             >
               注册新账号
             </RouterLink>
@@ -81,7 +81,7 @@ const redirectPath = typeof route.query.redirect === 'string' ? route.query.redi
         </div>
 
         <div
-          class="border-t border-hairline bg-surface-secondary px-8 py-4.5 text-center text-[14px] text-label-secondary"
+          class="border-t border-hairline bg-surface-secondary px-8 py-4.5 text-center text-body text-label-secondary"
         >
           没有账号？注册后即可访问所有功能。
         </div>

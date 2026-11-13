@@ -64,7 +64,7 @@ const danger = computed(() => state.value === 'partial')
 const showChunksLink = computed(() => props.item.chunks_total > 0)
 </script>
 <template>
-  <section v-if="visible" class="rounded-lg border border-hairline bg-surface p-5">
+  <section v-if="visible" class="border border-hairline bg-surface p-5">
     <div class="mb-5 flex items-center justify-between gap-3">
       <h2 class="text-body font-semibold">向量化</h2>
       <KnowledgeVectorBadge v-if="state" :state="state" />
@@ -77,7 +77,7 @@ const showChunksLink = computed(() => props.item.chunks_total > 0)
     </dl>
     <p
       v-if="message"
-      class="mt-5 rounded-sm px-3 py-2.5 text-caption leading-5"
+      class="mt-5 px-3 py-2.5 text-caption leading-5"
       :class="danger ? 'bg-danger-tint text-danger' : 'bg-surface-secondary text-label-secondary'"
       role="status"
     >
