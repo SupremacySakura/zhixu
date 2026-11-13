@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import AppIcon from '../components/ui/AppIcon.vue'
 import { getKnowledge, type KnowledgeItem } from '../services/apis/knowledge'
 import { useKnowledgeChunks } from '../composables/useKnowledgeChunks'
 import { isKnowledgeVectorActive, knowledgeError } from '../utils/knowledge'
@@ -36,6 +37,7 @@ const sections = computed(() => {
   }
   return groups
 })
+const failedCount = computed(() => items.value.filter(chunk => chunk.state === 'failed').length)
 function leading(content: string, overlap: number) {
   return Array.from(content).slice(0, overlap).join('')
 }
@@ -93,31 +95,39 @@ onScopeDispose(() => {
 
 <template>
   <main class="shell-page">
-    <!-- 容器档是 panel（896）而不是 measure：这是 DESIGN 唯一授权的长文破例——
-         分块结构是双列变体，左侧 15rem 大纲 + 右侧正文列，896 - 240 - 24 = 632，
-         正文列天然落在 measure（640）以内，不需要再手写一次 max-w-measure。 -->
+    <!-- 原型 ②「长文阅读」的双列变体：**没有页头带**（DESIGN.md:244）。
+         容器档是 panel（896）而不是 measure：DESIGN.md:250 明确这是唯一被授权
+         突破 measure 的长文场景 —— 主列 reading measure，右列分块列表可用到 panel。
+         左右顺序按规范：**主列在左、分块列表在右**（旧版是左目录右正文，反了）。 -->
     <div class="shell-panel">
       <nav
         data-test="breadcrumb"
         aria-label="面包屑"
-        class="mb-5 flex flex-wrap gap-3 text-subhead text-label-secondary"
+        class="mb-5 flex flex-wrap gap-3 text-body text-label-secondary"
       >
         <RouterLink to="/home/knowledge" class="text-primary-pressed">知识库</RouterLink>
         <span>/</span>
         <RouterLink :to="`/home/knowledge/${id}`" class="text-primary-pressed">知识详情</RouterLink>
         <span>/ 分块结构</span>
       </nav>
-      <header class="mb-7 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 class="break-all text-title-1">{{ item?.title || '分块结构' }}</h1>
-          <p class="mt-2 text-subhead leading-6 text-label-secondary">
-            按写入顺序查看文档切分。每块最多 512 字符，同章节相邻块最多重叠 64 字符。
+      <header class="mb-6">
+        <!-- 计数与筛选放同一行：筛选管的是整张列表，不是右侧大纲的一部分。
+             放进大纲卡会让窄屏用户必须先滚到列表底部才能摸到它（大纲在 DOM 里排第二）。 -->
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <p class="font-type text-micro text-label-tertiary">
+            共 {{ items.length }} 块<template v-if="failedCount">
+              · {{ failedCount }} 块失败</template
+            >
           </p>
+          <label class="flex cursor-pointer items-center gap-1.5 text-note text-label-secondary">
+            <input v-model="failedOnly" type="checkbox" class="accent-primary" />
+            只看失败
+          </label>
         </div>
-        <label class="flex cursor-pointer items-center gap-2 text-subhead">
-          <input v-model="failedOnly" type="checkbox" class="accent-primary" />
-          只看失败
-        </label>
+        <h1 class="mt-2 break-all text-display">{{ item?.title || '分块结构' }}</h1>
+        <p class="mt-3 text-body leading-6 text-label-secondary">
+          按写入顺序查看文档切分。每块最多 512 字符，同章节相邻块最多重叠 64 字符。
+        </p>
       </header>
       <p
         v-if="error || detailError"
@@ -127,30 +137,7 @@ onScopeDispose(() => {
         {{ error || detailError }}
         <button class="knowledge-text-action" type="button" @click="refresh">重新加载</button>
       </p>
-      <div class="grid items-start gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <aside class="space-y-5 lg:sticky lg:top-4">
-          <section class="border border-hairline bg-surface p-5">
-            <h2 class="text-body font-semibold">章节大纲</h2>
-            <p class="mt-2 text-caption text-label-secondary">
-              字符范围从 0 开始，结束位置不包含在块内。
-            </p>
-            <nav aria-label="章节大纲" class="mt-4 space-y-1">
-              <button
-                v-for="section in sections"
-                :key="section.key"
-                type="button"
-                class="w-full px-2 py-2 text-left text-subhead hover:bg-primary-tint"
-                @click="locate(section.first)"
-              >
-                <span class="block break-words">{{ section.title }}</span>
-                <span class="text-caption text-label-secondary"
-                  >#{{ section.first }} - #{{ section.last }}</span
-                >
-              </button>
-            </nav>
-          </section>
-          <KnowledgeVectorPanel v-if="item" :item="item" />
-        </aside>
+      <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_15rem]">
         <section aria-label="文档分块" class="min-w-0 space-y-4">
           <p
             v-if="loading && !items.length"
@@ -161,31 +148,31 @@ onScopeDispose(() => {
           </p>
           <p
             v-else-if="!visible.length && !error"
-            class="border border-hairline bg-surface p-8 text-subhead text-label-secondary"
+            class="border border-hairline bg-surface p-8 text-body text-label-secondary"
           >
             {{ failedOnly ? '没有失败分块。' : '尚未生成分块，任务开始后会自动展示。' }}
           </p>
+          <!-- 分块是长文的最小单位，同样不套行框：块与块之间只靠一条规则线分节。 -->
           <article
             v-for="chunk in visible"
             :id="`chunk-${chunk.seq}`"
             :key="chunk.id"
-            class="scroll-mt-4 border bg-surface p-5 sm:p-6"
-            :class="[
-              chunk.state === 'failed' ? 'border-danger' : 'border-hairline',
-              chunk.seq === highlightSeq ? 'border-primary ring-2 ring-primary' : '',
-            ]"
+            class="scroll-mt-4 border-t border-rule pt-4"
+            :class="chunk.seq === highlightSeq ? 'border-primary ring-2 ring-primary' : ''"
           >
-            <header class="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <header class="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0">
-                <h2 class="break-words text-headline">
-                  #{{ String(chunk.seq).padStart(2, '0') }} · {{ chunk.section }}
+                <h2 class="break-words text-title">
+                  <span class="font-type">#{{ String(chunk.seq).padStart(2, '0') }}</span>
+                  · {{ chunk.section }}
                 </h2>
-                <p class="mt-1 text-caption text-label-secondary">
-                  {{ chunk.chars }} 字符 · [{{ chunk.start_char }}, {{ chunk.end_char }})
+                <p class="mt-1 text-note text-label-secondary">
+                  <span class="font-type">{{ chunk.chars }}</span> 字符 ·
+                  <span class="font-type">[{{ chunk.start_char }}, {{ chunk.end_char }})</span>
                 </p>
               </div>
               <span
-                class="px-3 py-1 text-caption"
+                class="px-2 py-1 text-note"
                 :class="
                   chunk.state === 'failed'
                     ? 'bg-danger-tint text-danger'
@@ -203,21 +190,54 @@ onScopeDispose(() => {
                 }}
               </span>
             </header>
-            <p v-if="chunk.overlap_chars" class="mb-3 text-caption text-primary-pressed">
+            <p v-if="chunk.overlap_chars" class="mb-3 text-note text-primary-pressed">
               与上一块重叠 {{ chunk.overlap_chars }} 字符，以下高亮为重复上下文。
             </p>
+            <!-- text-read（16px）是长文正文唯一合法档位（R5：measure 按元素自身字号算，
+                 13px 下 40em 只有 520px，一行读不到 40 个汉字）。 -->
             <pre
-              class="whitespace-pre-wrap break-words font-sans text-subhead leading-7"
+              class="whitespace-pre-wrap break-words font-sans text-read"
             ><mark v-if="chunk.overlap_chars" class="bg-primary-tint text-primary-pressed">{{ leading(chunk.content, chunk.overlap_chars) }}</mark>{{ remainder(chunk.content, chunk.overlap_chars) }}</pre>
             <p
               v-if="chunk.error_message"
               role="status"
-              class="mt-4 bg-danger-tint p-3 text-subhead text-danger"
+              class="mt-4 bg-danger-tint p-3 text-body text-danger"
             >
               {{ chunk.error_message }}
             </p>
           </article>
         </section>
+        <aside class="space-y-5 lg:sticky lg:top-4">
+          <section class="border-t border-rule pt-3">
+            <h2 class="text-body font-semibold">章节大纲</h2>
+            <p class="mt-2 text-note leading-5 text-label-secondary">
+              字符范围从 0 开始，结束位置不包含在块内。
+            </p>
+            <nav aria-label="章节大纲" class="mt-3 space-y-px">
+              <button
+                v-for="section in sections"
+                :key="section.key"
+                type="button"
+                class="w-full px-2 py-1.5 text-left text-note leading-5 hover:bg-primary-tint"
+                @click="locate(section.first)"
+              >
+                <span class="block break-words">{{ section.title }}</span>
+                <span class="font-type text-label-tertiary"
+                  >#{{ section.first }} - #{{ section.last }}</span
+                >
+              </button>
+            </nav>
+          </section>
+          <KnowledgeVectorPanel v-if="item" :item="item" />
+          <p class="border-t border-rule pt-3 text-note leading-5 text-label-secondary">
+            <AppIcon
+              icon="material-symbols:info-outline-rounded"
+              class="atom-glyph mr-1"
+              aria-hidden="true"
+              :style="{ '--atom-glyph-size': '14px' }"
+            />引用链接带 <span class="font-type">?chunk=N</span>，打开时自动定位到对应分块。
+          </p>
+        </aside>
       </div>
     </div>
   </main>

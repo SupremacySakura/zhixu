@@ -6,6 +6,7 @@ import {
   archiveKnowledge,
   favoriteKnowledge,
   getKnowledge,
+  listKnowledgeRelations,
   regenerateKnowledgeEvolve,
   unarchiveKnowledge,
 } from '../../services/apis/knowledge'
@@ -19,6 +20,7 @@ vi.mock('../../services/apis/knowledge', () => ({
   acceptKnowledgeOrganize: vi.fn(),
   regenerateKnowledgeOrganize: vi.fn(),
   regenerateKnowledgeEvolve: vi.fn(),
+  listKnowledgeRelations: vi.fn(),
 }))
 vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 
@@ -106,6 +108,68 @@ describe('KnowledgeDetail', () => {
     const organizePanel = html.indexOf('knowledge-organize-panel-stub')
     expect(relationsPanel).toBeGreaterThan(-1)
     expect(relationsPanel).toBeLessThan(organizePanel)
+  })
+
+  it('drops a leading heading that repeats the page title', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({
+      ...baseItem,
+      content: '# 手写笔记\n\n正文段落',
+    } as never)
+    const wrapper = await render()
+    const headings = wrapper.findAll('h1')
+    expect(headings).toHaveLength(1)
+    expect(headings[0]!.text()).toBe('手写笔记')
+    expect(wrapper.find('.knowledge-markdown').html()).not.toContain('<h1>')
+  })
+
+  it('keeps a leading heading that differs from the page title', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({
+      ...baseItem,
+      content: '# 另一节\n\n正文段落',
+    } as never)
+    const wrapper = await render()
+    expect(wrapper.findAll('h1')).toHaveLength(2)
+  })
+
+  it('summarizes cross references and card meta in the margin note', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({ ...baseItem, chunks_total: 4 } as never)
+    vi.mocked(listKnowledgeRelations).mockResolvedValue({
+      confirmed: [
+        {
+          id: 1,
+          target_id: 12,
+          relation_type: 'related',
+          status: 'confirmed',
+          source: 'manual',
+          confidence: 1,
+          evidence: '',
+          counterpart_id: 12,
+          counterpart_title: '另一条知识',
+          created_at: '2026-11-10T10:00:00+08:00',
+          confirmed_at: '2026-11-10T10:00:00+08:00',
+        },
+      ],
+      suggested: [],
+      task: null,
+    } as never)
+    const wrapper = await render()
+    const note = wrapper.get('[aria-label="页边注"]')
+    expect(note.text()).toContain('另一条知识')
+    expect(note.text()).toContain('相关')
+    expect(note.text()).toContain('分块')
+    expect(note.text()).toContain('向量')
+    expect(note.text()).toContain('来源')
+  })
+
+  it('explains an empty margin note instead of showing a blank column', async () => {
+    vi.mocked(getKnowledge).mockResolvedValue({ ...baseItem } as never)
+    vi.mocked(listKnowledgeRelations).mockResolvedValue({
+      confirmed: [],
+      suggested: [],
+      task: null,
+    } as never)
+    const wrapper = await render()
+    expect(wrapper.get('[aria-label="页边注"]').text()).toContain('这篇还没有交叉引用。')
   })
 
   it('shows the outdated badge with its reason', async () => {
