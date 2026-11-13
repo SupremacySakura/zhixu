@@ -85,19 +85,19 @@ onMounted(load)
       <button
         v-if="dirty && !saving"
         type="button"
-        class="knowledge-text-action text-caption"
+        class="atom-text-action text-note"
         @click="reset"
       >
         重置
       </button>
     </div>
-    <p v-if="loading" class="text-caption text-label-secondary" role="status">正在读取标签…</p>
+    <p v-if="loading" class="text-note text-label-secondary" role="status">正在读取标签…</p>
     <template v-else>
       <div class="flex flex-wrap gap-2">
         <span
           v-for="tag in draft"
           :key="tag.name"
-          class="inline-flex items-center gap-1.5 bg-surface-secondary px-3 py-1 text-caption"
+          class="inline-flex items-center gap-1.5 bg-surface-secondary px-3 py-1 text-note"
         >
           {{ tag.name }}
           <button
@@ -109,12 +109,12 @@ onMounted(load)
             ×
           </button>
         </span>
-        <span v-if="!draft.length" class="text-caption text-label-secondary">还没有标签</span>
+        <span v-if="!draft.length" class="text-note text-label-secondary">还没有标签</span>
       </div>
       <div class="mt-3">
         <input
           v-model="input"
-          class="knowledge-input w-full"
+          class="atom-field min-h-9 w-full"
           placeholder="输入标签后回车添加"
           maxlength="30"
           @keydown.enter.prevent="addTag(input)"
@@ -124,7 +124,7 @@ onMounted(load)
             v-for="suggestion in suggestions"
             :key="suggestion.name"
             type="button"
-            class="border border-hairline px-3 py-1 text-caption text-label-secondary transition-colors hover:border-primary hover:text-primary"
+            class="border border-hairline px-3 py-1 text-note text-label-secondary transition-colors hover:border-primary hover:text-primary"
             @click="addTag(suggestion.name)"
           >
             {{ suggestion.name
@@ -134,11 +134,11 @@ onMounted(load)
           </button>
         </div>
       </div>
-      <p v-if="error" class="mt-3 text-caption text-warning-strong" role="alert">{{ error }}</p>
+      <p v-if="error" class="mt-3 text-note text-warning-strong" role="alert">{{ error }}</p>
       <button
         v-if="dirty"
         type="button"
-        class="knowledge-button-primary mt-4 min-h-9 px-4 text-caption"
+        class="atom-btn atom-tone-primary atom-btn-lg mt-4 min-h-9 px-4 text-note"
         :disabled="saving"
         @click="save"
       >

@@ -135,7 +135,7 @@ onScopeDispose(() => {
         class="mb-5 bg-warning-tint p-4 text-warning-strong"
       >
         {{ error || detailError }}
-        <button class="knowledge-text-action" type="button" @click="refresh">重新加载</button>
+        <button class="atom-text-action" type="button" @click="refresh">重新加载</button>
       </p>
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_15rem]">
         <section aria-label="文档分块" class="min-w-0 space-y-4">

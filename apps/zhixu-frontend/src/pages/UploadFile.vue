@@ -249,8 +249,8 @@ const badgeTone = (item: QueueItem): 'primary' | 'danger' | 'neutral' | 'info' =
           <!-- 上传目录信息条 -->
           <section class="cabinet-card flex items-center justify-between gap-4 px-[18px] py-3.5">
             <div class="min-w-0">
-              <p class="text-caption text-label-secondary">上传目录</p>
-              <p class="text-headline truncate text-label">{{ selectedUploadFolderPath }}</p>
+              <p class="text-note text-label-secondary">上传目录</p>
+              <p class="text-lead truncate text-label">{{ selectedUploadFolderPath }}</p>
             </div>
             <AppButton
               tone="secondary"
@@ -290,8 +290,8 @@ const badgeTone = (item: QueueItem): 'primary' | 'danger' | 'neutral' | 'info' =
                 :style="{ '--atom-glyph-size': '28px' }"
               />
             </div>
-            <h3 class="text-title-3 mb-1.5">拖拽文件到此处上传</h3>
-            <p class="text-subhead mb-5 max-w-sm text-label-secondary">
+            <h3 class="text-title mb-1.5">拖拽文件到此处上传</h3>
+            <p class="text-body mb-5 max-w-sm text-label-secondary">
               支持图片、视频、文档与压缩包等常见格式。
             </p>
             <AppButton tone="secondary" size="lg" aria-label="选择文件">选择文件</AppButton>
@@ -306,9 +306,7 @@ const badgeTone = (item: QueueItem): 'primary' | 'danger' | 'neutral' | 'info' =
             @close="closeFolderPicker"
           >
             <div class="mb-3 flex items-center justify-between gap-3">
-              <nav
-                class="flex items-center gap-1.5 overflow-x-auto text-caption text-label-secondary"
-              >
+              <nav class="flex items-center gap-1.5 overflow-x-auto text-note text-label-secondary">
                 <template v-for="(bc, idx) in folderPickerBreadcrumbs" :key="`${bc.id}-${idx}`">
                   <button
                     v-if="idx < folderPickerBreadcrumbs.length - 1"
@@ -340,14 +338,11 @@ const badgeTone = (item: QueueItem): 'primary' | 'danger' | 'neutral' | 'info' =
                 <!-- 加载态：三页统一用 AppLoading（不传 label，见 R13） -->
                 <div
                   v-if="isFolderPickerLoading"
-                  class="flex items-center gap-2.5 px-3.5 py-3 text-subhead text-label-secondary"
+                  class="flex items-center gap-2.5 px-3.5 py-3 text-body text-label-secondary"
                 >
                   <AppLoading size="sm" />正在加载目录...
                 </div>
-                <div
-                  v-else-if="folderPickerErrorMessage"
-                  class="px-3.5 py-3 text-subhead text-danger"
-                >
+                <div v-else-if="folderPickerErrorMessage" class="px-3.5 py-3 text-body text-danger">
                   {{ folderPickerErrorMessage }}
                 </div>
                 <template v-else>
@@ -363,7 +358,7 @@ const badgeTone = (item: QueueItem): 'primary' | 'danger' | 'neutral' | 'info' =
                         class="flex-none atom-glyph text-primary"
                         :style="{ '--atom-glyph-size': '18px' }"
                       />
-                      <span class="min-w-0 flex-1 truncate text-subhead text-label">
+                      <span class="min-w-0 flex-1 truncate text-body text-label">
                         {{ folder.name }}
                       </span>
                       <AppIcon
@@ -379,7 +374,7 @@ const badgeTone = (item: QueueItem): 'primary' | 'danger' | 'neutral' | 'info' =
                   </template>
                   <div
                     v-if="folderPickerFolders.length === 0"
-                    class="px-3.5 py-3 text-subhead text-label-secondary"
+                    class="px-3.5 py-3 text-body text-label-secondary"
                   >
                     当前目录下没有子文件夹
                   </div>
@@ -402,11 +397,9 @@ const badgeTone = (item: QueueItem): 'primary' | 'danger' | 'neutral' | 'info' =
           <!-- 上传队列（分节交界：一条 hairline；gap-12 已给上方 48px） -->
           <section class="border-t border-hairline pt-6">
             <div class="mb-3.5 flex items-center justify-between gap-3">
-              <h3 class="text-title-3">上传队列</h3>
+              <h3 class="text-title">上传队列</h3>
               <div class="flex items-center gap-4">
-                <span class="text-subhead text-label-secondary"
-                  >{{ processingCount }} 项处理中</span
-                >
+                <span class="text-body text-label-secondary">{{ processingCount }} 项处理中</span>
                 <AppButton
                   tone="quiet"
                   size="sm"
@@ -467,7 +460,7 @@ const badgeTone = (item: QueueItem): 'primary' | 'danger' | 'neutral' | 'info' =
                         :style="{ width: `${clampPercent(item.percent)}%` }"
                       ></div>
                     </div>
-                    <span class="flex-none truncate text-caption text-label-secondary">
+                    <span class="flex-none truncate text-note text-label-secondary">
                       {{ formatBytes(item.file.size) }} • {{ item.message || '等待中' }}
                     </span>
                   </div>

@@ -83,4 +83,41 @@ if (unused.length) {
   )
 }
 
+/**
+ * body 校验：字形内容必须能继承文字色。
+ *
+ * 为什么名字对上了还要查 body：批 1 把 104 个图标从远程包搬进本地 JSON 时，
+ * 剥掉 `<path>` 上的 `fill="currentColor"`，字形全部退化成纯黑。而当时
+ * typecheck / 458 个用例 / build / 本脚本**全部通过**——只比对名字的话，
+ * 「引用存在且数据存在」这条判断依然成立。只有人眼看截图才发现图标黑成一片。
+ *
+ * 所以这里补一条：**每个被引用到的字形**（不是全部 107 个，未被引用的不影响
+ * 渲染）的 body 必须带 `fill="currentColor"`。缺了就是静默失色，直接拦下。
+ * 未被引用的字形只提示，不阻断——它们还没进任何界面。
+ */
+const colorless = []
+for (const name of [...referenced.keys()].sort()) {
+  if (!known.has(name)) continue // 缺图已在上一条报过，不重复
+  const glyph = local.icons?.[name.slice(local.prefix.length + 1)]
+  if (!glyph) continue // alias 指向的实体，跳过（aliases 当前为 0）
+  if (!glyph.body?.includes('fill="currentColor"')) {
+    colorless.push({ name, files: [...referenced.get(name)].sort(), body: glyph.body ?? '' })
+  }
+}
+
+if (colorless.length) {
+  console.error(
+    `\n✗ 有 ${colorless.length} 个被引用的字形 body 缺少 fill="currentColor"，会退化成纯黑：`,
+  )
+  for (const { name, files, body } of colorless) {
+    console.error(`  ${name}`)
+    console.error(`    body: ${body.slice(0, 120)}${body.length > 120 ? '…' : ''}`)
+    for (const file of files) console.error(`    ← ${file}`)
+  }
+  console.error('\n字形要跟随文字色（含禁用态、深色画布上的浅色），body 里每个 <path> 都必须带')
+  console.error('fill="currentColor"。请在 src/assets/icons.json 里补上后重跑。')
+  process.exit(1)
+}
+
 console.log('✓ 引用的图标全部存在于本地数据')
+console.log(`✓ 被引用的 ${referenced.size} 个字形 body 均带 fill="currentColor"`)

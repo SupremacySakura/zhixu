@@ -37,6 +37,14 @@ const props = withDefaults(
   },
 )
 
+/**
+ * 关掉属性透传：理由同 AppInput —— 根是 `<div class="atom-field-shell">`，
+ * 真正的 `<textarea>` 在内层，属性已经显式 `v-bind="attrs"` 过去。
+ * 不关的话 `id` 会同时落两层，`querySelector('#id')` 命中 DIV，
+ * 测试里的 `.setValue()` 拿到的不是表单元素。
+ */
+defineOptions({ inheritAttrs: false })
+
 const model = defineModel<string>({ default: '' })
 const attrs = useAttrs()
 const id = useId()

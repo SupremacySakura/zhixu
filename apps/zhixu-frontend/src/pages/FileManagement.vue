@@ -327,9 +327,7 @@ onMounted(() => {
               class="mb-5 flex flex-wrap items-center justify-between gap-3 bg-primary-tint px-4 py-3 text-body text-primary-pressed"
             >
               <p>支持 .md / .markdown 加入知识库，原文件保持不变。</p>
-              <RouterLink to="/home/knowledge" class="knowledge-text-action"
-                >打开知识库 →</RouterLink
-              >
+              <RouterLink to="/home/knowledge" class="atom-text-action">打开知识库 →</RouterLink>
             </div>
 
             <FileListView

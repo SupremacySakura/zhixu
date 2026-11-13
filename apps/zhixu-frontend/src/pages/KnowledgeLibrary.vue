@@ -383,7 +383,7 @@ onMounted(() => {
             /><input
               v-model="search"
               maxlength="200"
-              class="knowledge-input w-full pl-10"
+              class="atom-field min-h-9 w-full pl-10"
               placeholder="搜索知识标题"
               aria-label="搜索知识标题"
             />
@@ -431,12 +431,7 @@ onMounted(() => {
               label="排序方式"
               @update:model-value="sort = $event as KnowledgeSort"
             />
-            <button
-              v-if="hasFilters"
-              type="button"
-              class="knowledge-text-action"
-              @click="clearFilters"
-            >
+            <button v-if="hasFilters" type="button" class="atom-text-action" @click="clearFilters">
               清除筛选
             </button>
           </AppFilterBar>
@@ -456,12 +451,12 @@ onMounted(() => {
         </div>
         <div
           v-if="error"
-          class="mb-5 bg-warning-tint p-4 text-subhead text-warning-strong"
+          class="mb-5 bg-warning-tint p-4 text-body text-warning-strong"
           role="alert"
         >
-          {{ error }} <button class="knowledge-text-action" @click="load()">重试加载</button>
+          {{ error }} <button class="atom-text-action" @click="load()">重试加载</button>
         </div>
-        <p v-if="loading" class="py-8 text-center text-subhead text-label-secondary" role="status">
+        <p v-if="loading" class="py-8 text-center text-body text-label-secondary" role="status">
           正在加载知识…
         </p>
         <div
@@ -469,20 +464,20 @@ onMounted(() => {
           class="border border-hairline bg-surface px-6 py-16 text-center"
         >
           <span
-            class="mx-auto mb-5 flex h-16 w-14 items-center justify-center bg-primary-tint text-headline font-bold text-primary-pressed"
+            class="mx-auto mb-5 flex h-16 w-14 items-center justify-center bg-primary-tint text-lead font-bold text-primary-pressed"
             >MD</span
           >
-          <h2 class="text-title-3">
+          <h2 class="text-title">
             {{ hasFilters ? '没有匹配的知识' : '让第一份资料成为知识' }}
           </h2>
-          <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
+          <p class="mx-auto mt-3 max-w-sm text-body leading-7 text-label-secondary">
             {{
               hasFilters
                 ? '试试其他关键词或切换筛选状态。'
                 : '选择已经上传的 Markdown 文件，保留原件，同时获得清晰可读的知识正文。'
             }}
           </p>
-          <RouterLink to="/home/files" class="knowledge-button-primary mt-5"
+          <RouterLink to="/home/files" class="atom-btn atom-tone-primary atom-btn-lg mt-5"
             >去文件管理选择</RouterLink
           >
         </div>
@@ -514,7 +509,7 @@ onMounted(() => {
                 <div class="flex flex-none items-center gap-1">
                   <button
                     type="button"
-                    class="knowledge-icon-button flex h-8 w-8 items-center justify-center border border-hairline bg-surface text-label-secondary"
+                    class="atom-icon-btn flex h-8 w-8 items-center justify-center border border-hairline bg-surface text-label-secondary"
                     :class="entry.is_favorite ? 'text-warning' : ''"
                     :aria-label="
                       entry.is_favorite ? `取消收藏 ${entry.title}` : `收藏 ${entry.title}`
@@ -604,7 +599,7 @@ onMounted(() => {
           :loading="loading"
           @change="changePage"
         />
-        <p class="mt-5 text-caption leading-6 text-label-secondary">
+        <p class="mt-5 text-note leading-6 text-label-secondary">
           列表摘要来自 AI 整理结果，需在详情页确认采纳后才会展示。
         </p>
       </div>
@@ -632,7 +627,7 @@ onMounted(() => {
         @cancel="deleteTarget = null"
         @confirm="confirmDelete"
       >
-        <p v-if="deleteError" role="alert" class="mb-4 text-subhead text-danger">
+        <p v-if="deleteError" role="alert" class="mb-4 text-body text-danger">
           {{ deleteError }}
         </p>
       </ConfirmDialog>

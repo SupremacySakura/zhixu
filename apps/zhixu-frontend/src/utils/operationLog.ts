@@ -130,7 +130,7 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
       const knowledgeRemoved = detailNumber(detail, 'knowledge_removed')
       return {
         icon: 'material-symbols:delete-outline-rounded',
-        colorClass: 'bg-pink-tint text-pink',
+        colorClass: 'bg-danger-tint text-danger',
         title,
         subtitle: knowledgeRemoved > 0 ? `已删除，含 ${knowledgeRemoved} 条知识` : '已删除',
         highlight: '',
@@ -139,7 +139,7 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
     case 'download':
       return {
         icon: 'material-symbols:download-outline-rounded',
-        colorClass: 'bg-purple-tint text-purple',
+        colorClass: 'bg-primary-tint text-primary',
         title,
         subtitle: detail.packaged === true ? '打包下载' : '下载',
         highlight: '',
@@ -163,7 +163,7 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
     case 'share_link_delete':
       return {
         icon: 'material-symbols:link-off-outline-rounded',
-        colorClass: 'bg-pink-tint text-pink',
+        colorClass: 'bg-danger-tint text-danger',
         title,
         subtitle: '删除分享链接',
         highlight: '',
@@ -171,7 +171,7 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
     case 'pickup_code_create':
       return {
         icon: 'material-symbols:local-shipping-outline-rounded',
-        colorClass: 'bg-purple-tint text-purple',
+        colorClass: 'bg-primary-tint text-primary',
         title,
         subtitle: '创建取件码',
         highlight: detailString(detail, 'code'),
@@ -179,7 +179,7 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
     case 'pickup_code_delete':
       return {
         icon: 'material-symbols:local-shipping-outline-rounded',
-        colorClass: 'bg-pink-tint text-pink',
+        colorClass: 'bg-danger-tint text-danger',
         title,
         subtitle: '删除取件码',
         highlight: detailString(detail, 'code'),
@@ -214,7 +214,7 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
       const restoredFrom = detailNumber(detail, 'restored_from')
       return {
         icon: 'material-symbols:history-rounded',
-        colorClass: 'bg-purple-tint text-purple',
+        colorClass: 'bg-primary-tint text-primary',
         title,
         subtitle: '恢复历史版本',
         highlight: restoredFrom > 0 ? `第 ${restoredFrom} 版` : '',
@@ -223,7 +223,7 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
     case 'knowledge_delete':
       return {
         icon: 'material-symbols:bookmark-remove-outline-rounded',
-        colorClass: 'bg-pink-tint text-pink',
+        colorClass: 'bg-danger-tint text-danger',
         title,
         subtitle: '移出知识库',
         highlight: '',
@@ -279,7 +279,7 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
     case 'knowledge_organize_accept':
       return {
         icon: 'material-symbols:auto-awesome-rounded',
-        colorClass: 'bg-purple-tint text-purple',
+        colorClass: 'bg-primary-tint text-primary',
         title,
         subtitle: '采纳 AI 整理结果',
         highlight: '',
@@ -303,7 +303,7 @@ export const describeOperationLog = (log: OperationLogItem): OperationLogDescrip
     case 'evolution_resolve':
       return {
         icon: 'material-symbols:rule-rounded',
-        colorClass: 'bg-teal-tint text-teal',
+        colorClass: 'bg-success-tint text-success',
         title,
         subtitle: evolutionActionLabel(detailString(detail, 'action')),
         highlight: '',

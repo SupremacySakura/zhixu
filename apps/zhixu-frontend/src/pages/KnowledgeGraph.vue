@@ -141,7 +141,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
 
     <main class="shell-full flex-1 overflow-y-auto pt-band">
       <div class="shell-full">
-        <p class="px-4 pt-4 text-subhead text-label-secondary sm:px-5 lg:px-6">
+        <p class="px-4 pt-4 text-body text-label-secondary sm:px-5 lg:px-6">
           以一条知识为中心查看它的一跳关系，也可以从最近更新的知识开始探索。
         </p>
 
@@ -153,7 +153,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           <div class="relative w-full max-w-sm">
             <input
               v-model="searchTerm"
-              class="knowledge-input w-full pl-9"
+              class="atom-field min-h-9 w-full pl-9"
               placeholder="搜索知识，设为图谱中心"
               type="search"
               @input="scheduleSearch"
@@ -167,8 +167,8 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
               v-if="searchOpen && (searchResults.length || searching || searchHint)"
               class="absolute z-20 mt-2 w-full overflow-hidden border border-hairline bg-surface shadow-popover"
             >
-              <p v-if="searching" class="px-3 py-2 text-subhead text-label-secondary">正在搜索…</p>
-              <p v-else-if="searchHint" class="px-3 py-2 text-subhead text-label-secondary">
+              <p v-if="searching" class="px-3 py-2 text-body text-label-secondary">正在搜索…</p>
+              <p v-else-if="searchHint" class="px-3 py-2 text-body text-label-secondary">
                 {{ searchHint }}
               </p>
               <button
@@ -178,8 +178,8 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
                 class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-surface-secondary"
                 @click="chooseCenter(item)"
               >
-                <span class="truncate text-subhead text-label">{{ item.title }}</span>
-                <span class="shrink-0 text-caption text-label-secondary">
+                <span class="truncate text-body text-label">{{ item.title }}</span>
+                <span class="shrink-0 text-note text-label-secondary">
                   {{ knowledgeSourceLabel(item.source_type) }}
                 </span>
               </button>
@@ -188,7 +188,11 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           <!-- 角标口径与 filtersActive 一致：它已经算清了「有几个筛选在生效」，
              这里不再重数一遍（两处口径一旦分叉，清空按钮与角标会互相打脸）。 -->
           <AppFilterBar :active-count="filtersActive ? 1 : 0">
-            <button type="button" class="knowledge-button-secondary" @click="backToRecent">
+            <button
+              type="button"
+              class="atom-btn atom-tone-secondary atom-btn-wide"
+              @click="backToRecent"
+            >
               回到最近
             </button>
             <FilterMenu
@@ -237,7 +241,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
             <button
               v-if="filtersActive"
               type="button"
-              class="knowledge-text-action"
+              class="atom-text-action"
               data-test="clear-filters"
               @click="clearFilters"
             >
@@ -248,27 +252,23 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
 
         <p
           v-if="graph.truncated"
-          class="mb-4 bg-warning-tint p-4 text-subhead text-warning-strong"
+          class="mb-4 bg-warning-tint p-4 text-body text-warning-strong"
           role="status"
         >
           节点较多，已截断为连接度最高的 100 个节点。可以缩小范围，以某条知识为中心查看局部图谱。
         </p>
-        <p
-          v-if="error"
-          class="mb-4 bg-warning-tint p-4 text-subhead text-warning-strong"
-          role="alert"
-        >
+        <p v-if="error" class="mb-4 bg-warning-tint p-4 text-body text-warning-strong" role="alert">
           {{ error }}
         </p>
         <p
           v-if="loading && graph.nodes.length === 0"
-          class="border border-hairline bg-surface p-6 text-subhead text-label-secondary"
+          class="border border-hairline bg-surface p-6 text-body text-label-secondary"
         >
           正在装载图谱…
         </p>
         <p
           v-else-if="loading"
-          class="mb-4 border border-hairline bg-surface p-4 text-subhead text-label-secondary"
+          class="mb-4 border border-hairline bg-surface p-4 text-body text-label-secondary"
           role="status"
         >
           正在更新图谱…
@@ -279,13 +279,13 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           class="border border-hairline bg-surface px-6 py-16 text-center"
         >
           <template v-if="nodeFiltersActive">
-            <h2 class="text-title-3">没有符合筛选条件的知识</h2>
-            <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
+            <h2 class="text-title">没有符合筛选条件的知识</h2>
+            <p class="mx-auto mt-3 max-w-sm text-body leading-7 text-label-secondary">
               试试放宽标签或来源类型，或者清空筛选查看全部知识。
             </p>
             <button
               type="button"
-              class="knowledge-button-secondary mt-5"
+              class="atom-btn atom-tone-secondary atom-btn-wide mt-5"
               data-test="clear-filters-empty"
               @click="clearFilters"
             >
@@ -293,11 +293,11 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
             </button>
           </template>
           <template v-else>
-            <h2 class="text-title-3">还没有可展示的知识</h2>
-            <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
+            <h2 class="text-title">还没有可展示的知识</h2>
+            <p class="mx-auto mt-3 max-w-sm text-body leading-7 text-label-secondary">
               先导入或创建知识，再回到这里查看它们之间的关系。
             </p>
-            <RouterLink to="/home/knowledge" class="knowledge-button-primary mt-5">
+            <RouterLink to="/home/knowledge" class="atom-btn atom-tone-primary atom-btn-lg mt-5">
               去知识库
             </RouterLink>
           </template>
@@ -306,7 +306,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
         <template v-if="!error && graph.nodes.length">
           <p
             v-if="graph.edges.length === 0"
-            class="mb-4 border border-hairline bg-surface p-4 text-subhead text-label-secondary"
+            class="mb-4 border border-hairline bg-surface p-4 text-body text-label-secondary"
           >
             {{
               showSuggested
@@ -316,7 +316,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           </p>
           <p
             v-if="graph.edges.length > 0 && visibleEdges.length === 0"
-            class="mb-4 border border-hairline bg-surface p-4 text-subhead text-label-secondary"
+            class="mb-4 border border-hairline bg-surface p-4 text-body text-label-secondary"
             data-test="relation-filter-empty"
           >
             当前图谱里没有「{{ relationFilterLabel }}」的边，换个关系类型或清空筛选看看。
@@ -413,12 +413,12 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
         >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <p class="text-caption text-label-secondary">图谱节点</p>
-              <h2 class="mt-1 text-title-3">{{ selectedNode.title }}</h2>
+              <p class="text-note text-label-secondary">图谱节点</p>
+              <h2 class="mt-1 text-title">{{ selectedNode.title }}</h2>
             </div>
             <button
               type="button"
-              class="knowledge-icon-button shrink-0"
+              class="atom-icon-btn shrink-0"
               aria-label="关闭"
               @click="selectedId = null"
             >
@@ -428,24 +428,24 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
 
           <dl class="mt-5 grid grid-cols-2 gap-3">
             <div>
-              <dt class="text-caption text-label-secondary">来源类型</dt>
-              <dd class="mt-1 text-subhead text-label">
+              <dt class="text-note text-label-secondary">来源类型</dt>
+              <dd class="mt-1 text-body text-label">
                 {{ knowledgeSourceLabel(selectedNode.source_type) }}
               </dd>
             </div>
             <div>
-              <dt class="text-caption text-label-secondary">连接度</dt>
-              <dd class="mt-1 text-subhead text-label">度数 {{ selectedNode.degree }}</dd>
+              <dt class="text-note text-label-secondary">连接度</dt>
+              <dd class="mt-1 text-body text-label">度数 {{ selectedNode.degree }}</dd>
             </div>
           </dl>
 
-          <p v-if="selectedNode.summary" class="mt-4 text-subhead leading-7 text-label-secondary">
+          <p v-if="selectedNode.summary" class="mt-4 text-body leading-7 text-label-secondary">
             {{ selectedNode.summary }}
           </p>
 
           <section class="mt-6">
-            <h3 class="text-headline">一跳关系</h3>
-            <p v-if="oneHopRelations.length === 0" class="mt-2 text-subhead text-label-secondary">
+            <h3 class="text-lead">一跳关系</h3>
+            <p v-if="oneHopRelations.length === 0" class="mt-2 text-body text-label-secondary">
               还没有已确认的一跳关系。
             </p>
             <ul v-else class="mt-3 space-y-2">
@@ -454,9 +454,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
                 :key="relation.edge.id"
                 class="border border-hairline p-3"
               >
-                <div
-                  class="flex items-center justify-between gap-2 text-caption text-label-secondary"
-                >
+                <div class="flex items-center justify-between gap-2 text-note text-label-secondary">
                   <span>{{ relationTypeLabel(relation.edge.relation_type) }}</span>
                   <span>
                     {{ STATUS_LABELS[relation.edge.status] }} ·
@@ -465,7 +463,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
                 </div>
                 <RouterLink
                   :to="`/home/knowledge/${relation.counterpartId}`"
-                  class="mt-1 block truncate text-subhead font-medium text-primary hover:underline"
+                  class="mt-1 block truncate text-body font-medium text-primary hover:underline"
                 >
                   {{ relation.counterpartTitle }}
                 </RouterLink>
@@ -474,12 +472,12 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           </section>
 
           <div class="mt-6 flex flex-wrap gap-3">
-            <button type="button" class="knowledge-button-primary" @click="recenter">
+            <button type="button" class="atom-btn atom-tone-primary atom-btn-lg" @click="recenter">
               以此为中心
             </button>
             <RouterLink
               :to="`/home/knowledge/${selectedNode.id}`"
-              class="knowledge-button-secondary"
+              class="atom-btn atom-tone-secondary atom-btn-wide"
             >
               查看详情
             </RouterLink>

@@ -22,11 +22,11 @@ const SUGGESTIONS = [
 
 <template>
   <div class="shell-measure text-read">
-    <p class="mb-5 text-caption tracking-widest text-primary-pressed">从一句话开始</p>
+    <p class="mb-5 text-note tracking-widest text-primary-pressed">从一句话开始</p>
     <h2 class="text-display font-semibold leading-snug tracking-tight">
       先聊聊，<br />看看模型是否回应。
     </h2>
-    <p class="mt-5 text-subhead leading-7 text-label-secondary">
+    <p class="mt-5 text-body leading-7 text-label-secondary">
       使用你在设置中连接的模型。<br />这里只发送本次会话中的文字，不调用任何工具。
     </p>
     <!-- 建议行：世界的「行」——行间一条 hairline，行内左文右箭头。
@@ -36,13 +36,13 @@ const SUGGESTIONS = [
         v-for="suggestion in SUGGESTIONS"
         :key="suggestion"
         type="button"
-        class="flex w-full items-center justify-between gap-4 border-b border-hairline py-4 text-left text-subhead transition-colors hover:text-primary-pressed"
+        class="flex w-full items-center justify-between gap-4 border-b border-hairline py-4 text-left text-body transition-colors hover:text-primary-pressed"
         @click="emit('pick', suggestion)"
       >
         <span class="min-w-0">{{ suggestion }}</span>
         <span class="flex-none text-label-tertiary" aria-hidden="true">↗</span>
       </button>
     </div>
-    <p class="mt-5 text-caption text-label-secondary">对话自动保存，可在左侧历史记录中回看</p>
+    <p class="mt-5 text-note text-label-secondary">对话自动保存，可在左侧历史记录中回看</p>
   </div>
 </template>

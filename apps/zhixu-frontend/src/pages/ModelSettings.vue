@@ -182,7 +182,7 @@ function reloadConfirmation() {
 
     <main class="shell-page">
       <div class="shell-panel">
-        <p class="mb-5 text-subhead text-label-secondary">
+        <p class="mb-5 text-body text-label-secondary">
           连接你信任的模型服务，为知识整理与语义检索做好准备。
         </p>
         <!-- 分类切换：仍是 <nav> 里的 <button>（ModelSettings.test.ts:83 按此查询）。
@@ -195,7 +195,7 @@ function reloadConfirmation() {
             ]"
             :key="entry.key"
             type="button"
-            class="border-b-2 pb-3 text-subhead font-semibold"
+            class="border-b-2 pb-3 text-body font-semibold"
             :class="
               tab === entry.key
                 ? 'border-primary text-primary-pressed'
@@ -220,14 +220,14 @@ function reloadConfirmation() {
           <p
             v-if="loading"
             role="status"
-            class="flex items-center gap-2 py-8 text-subhead text-label-secondary"
+            class="flex items-center gap-2 py-8 text-body text-label-secondary"
           >
             <AppLoading size="sm" />正在加载模型设置…
           </p>
           <div
             v-if="error"
             role="alert"
-            class="mb-5 flex flex-wrap items-center gap-3 bg-warning-tint p-4 text-subhead text-warning-strong"
+            class="mb-5 flex flex-wrap items-center gap-3 bg-warning-tint p-4 text-body text-warning-strong"
           >
             {{ error }}
             <AppButton size="sm" @click="load">重新加载</AppButton>
@@ -236,12 +236,12 @@ function reloadConfirmation() {
             <fieldset :disabled="busy || loading" class="min-w-0">
               <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 class="text-title-3">默认模型</h2>
-                  <p class="mt-2 text-caption text-label-secondary">
+                  <h2 class="text-title">默认模型</h2>
+                  <p class="mt-2 text-note text-label-secondary">
                     先连接供应商，再为两类任务分别选择模型。
                   </p>
                 </div>
-                <span class="text-caption text-label-secondary">{{
+                <span class="text-note text-label-secondary">{{
                   dirty ? '有未保存的选择' : '配置版本 ' + configuration.settings.config_version
                 }}</span>
               </div>
@@ -249,10 +249,8 @@ function reloadConfirmation() {
               <AppPanel style="--atom-panel-padding: 0px">
                 <div class="grid md:grid-cols-2">
                   <div class="min-w-0 border-b border-hairline p-6 md:border-b-0 md:border-r">
-                    <h3 class="text-headline">对话与整理</h3>
-                    <p class="mb-4 mt-2 text-caption text-label-secondary">
-                      摘要、知识整理和引用问答
-                    </p>
+                    <h3 class="text-lead">对话与整理</h3>
+                    <p class="mb-4 mt-2 text-note text-label-secondary">摘要、知识整理和引用问答</p>
                     <FilterMenu
                       field
                       v-model="chat"
@@ -261,8 +259,8 @@ function reloadConfirmation() {
                     />
                   </div>
                   <div class="min-w-0 p-6">
-                    <h3 class="text-headline">向量化与检索</h3>
-                    <p class="mb-4 mt-2 text-caption text-label-secondary">
+                    <h3 class="text-lead">向量化与检索</h3>
+                    <p class="mb-4 mt-2 text-note text-label-secondary">
                       知识分块与查询使用同一 Embedding 模型
                     </p>
                     <FilterMenu
@@ -271,7 +269,7 @@ function reloadConfirmation() {
                       :options="options('embedding')"
                       label="选择默认 Embedding 模型"
                     />
-                    <p class="mt-3 text-caption text-label-secondary">
+                    <p class="mt-3 text-note text-label-secondary">
                       {{
                         embeddingModel
                           ? `${embeddingModel.dimension} 维 · 尚未经实际调用验证`
@@ -284,7 +282,7 @@ function reloadConfirmation() {
                          就会取到 DIV，setValue 直接抛。 -->
                     <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
                       <div>
-                        <label for="rag-top-k" class="mb-2 block text-caption font-semibold"
+                        <label for="rag-top-k" class="mb-2 block text-note font-semibold"
                           >参考条数 TopK</label
                         ><input
                           id="rag-top-k"
@@ -297,7 +295,7 @@ function reloadConfirmation() {
                         />
                       </div>
                       <div>
-                        <label for="rag-min-score" class="mb-2 block text-caption font-semibold"
+                        <label for="rag-min-score" class="mb-2 block text-note font-semibold"
                           >相似度阈值</label
                         ><input
                           id="rag-min-score"
@@ -310,7 +308,7 @@ function reloadConfirmation() {
                         />
                       </div>
                     </div>
-                    <p class="mt-3 text-caption text-label-secondary">
+                    <p class="mt-3 text-note text-label-secondary">
                       相似度低于阈值的片段不会作为参考；与知识库无关的问题将视为未找到相关内容。条数越大上下文越长（每片约
                       1024 字符），按需调高。
                     </p>
@@ -319,7 +317,7 @@ function reloadConfirmation() {
                 <footer
                   class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-6 py-4"
                 >
-                  <p class="text-caption text-label-secondary">
+                  <p class="text-note text-label-secondary">
                     更换 Embedding 模型需要重建向量，不会自动执行。
                   </p>
                   <AppButton :disabled="!dirty" @click="requestDefaults">保存默认模型</AppButton>
@@ -328,7 +326,7 @@ function reloadConfirmation() {
               <p
                 v-if="configuration.settings.needs_reindex"
                 role="status"
-                class="mt-4 bg-warning-tint p-4 text-subhead text-warning-strong"
+                class="mt-4 bg-warning-tint p-4 text-body text-warning-strong"
               >
                 Embedding 配置已变更，关联向量需要重建。向量化与重建功能尚未接入，知识正文不受影响。
               </p>
@@ -337,8 +335,8 @@ function reloadConfirmation() {
                 class="mb-4 mt-12 flex flex-wrap items-center justify-between gap-6 border-t border-hairline pt-12"
               >
                 <div>
-                  <h2 class="text-title-3">模型供应商</h2>
-                  <p class="mt-2 text-caption text-label-secondary">
+                  <h2 class="text-title">模型供应商</h2>
+                  <p class="mt-2 text-note text-label-secondary">
                     一个连接管理多个模型，不同任务可以使用不同供应商。
                   </p>
                 </div>
@@ -358,12 +356,12 @@ function reloadConfirmation() {
                 <AppPanel v-for="provider in configuration.providers" :key="provider.id" size="lg">
                   <div class="flex flex-wrap items-center gap-6">
                     <span
-                      class="flex h-11 w-11 shrink-0 items-center justify-center bg-surface-secondary text-headline font-bold"
+                      class="flex h-11 w-11 shrink-0 items-center justify-center bg-surface-secondary text-lead font-bold"
                       >{{ provider.catalog_id ? provider.name.charAt(0) : '&lt;/&gt;' }}</span
                     >
                     <div class="min-w-0 flex-1">
                       <div class="flex flex-wrap items-center gap-2">
-                        <h3 class="text-headline">{{ provider.name }}</h3>
+                        <h3 class="text-lead">{{ provider.name }}</h3>
                         <AppBadge
                           size="sm"
                           :tone="
@@ -380,7 +378,7 @@ function reloadConfirmation() {
                           }}</AppBadge
                         >
                       </div>
-                      <p class="mt-2 break-all text-caption text-label-secondary">
+                      <p class="mt-2 break-all text-note text-label-secondary">
                         {{ provider.provider_id }} ·
                         {{ provider.catalog_id ? '预设供应商' : '自定义 API' }} ·
                         {{ provider.base_url }}
@@ -402,7 +400,7 @@ function reloadConfirmation() {
                     <span
                       v-for="model in provider.models"
                       :key="model.id"
-                      class="break-all bg-surface-secondary px-3 py-1.5 text-caption"
+                      class="break-all bg-surface-secondary px-3 py-1.5 text-note"
                       ><span class="mr-2 text-label-secondary">{{
                         model.kind === 'chat' ? '对话' : '向量'
                       }}</span
@@ -418,12 +416,12 @@ function reloadConfirmation() {
             <div
               v-if="mutationError && !editorOpen && !deleteTarget && !confirmDefaults"
               role="alert"
-              class="mt-5 flex flex-wrap items-center gap-3 text-subhead text-danger"
+              class="mt-5 flex flex-wrap items-center gap-3 text-body text-danger"
             >
               {{ mutationError }}
               <AppButton v-if="conflict" size="sm" @click="load">重新加载最新配置</AppButton>
             </div>
-            <p class="mt-6 flex gap-3 text-caption leading-6 text-label-secondary">
+            <p class="mt-6 flex gap-3 text-note leading-6 text-label-secondary">
               <AppIcon
                 icon="material-symbols:shield-lock-outline"
                 class="mt-1 shrink-0 text-primary"
@@ -436,7 +434,7 @@ function reloadConfirmation() {
         </section>
       </div>
       <SettingsModal v-if="catalogOpen" title="选择模型供应商" @close="catalogOpen = false">
-        <p class="mb-5 text-subhead text-label-secondary">
+        <p class="mb-5 text-body text-label-secondary">
           预设填入基础地址与协议，模型 ID 需自行添加。
         </p>
         <div class="space-y-3">
@@ -452,7 +450,7 @@ function reloadConfirmation() {
           >
             <div>
               <strong>{{ preset.name }}</strong>
-              <p class="mt-2 break-all text-caption text-label-secondary">{{ preset.base_url }}</p>
+              <p class="mt-2 break-all text-note text-label-secondary">{{ preset.base_url }}</p>
             </div>
             <span>{{
               configuration?.providers.some(p => p.provider_id === preset.provider_id)
@@ -482,14 +480,14 @@ function reloadConfirmation() {
         :busy="busy"
         @close="closeConfirmation"
       >
-        <p class="mb-5 text-subhead leading-7 text-label-secondary">
+        <p class="mb-5 text-body leading-7 text-label-secondary">
           {{
             deleteTarget
               ? `将删除「${deleteTarget.name}」的连接和模型清单，不删除知识正文。正在被默认模型使用的供应商须先切换默认值。`
               : '新旧模型的向量不能混用，即使维度相同。保存后关联索引需要重建，本次不会自动重建，知识正文保持不变。'
           }}
         </p>
-        <p v-if="mutationError" role="alert" class="mb-4 text-subhead text-danger">
+        <p v-if="mutationError" role="alert" class="mb-4 text-body text-danger">
           {{ mutationError }}
         </p>
         <AppButton v-if="conflict" class="mb-4" :disabled="busy" @click="reloadConfirmation"
