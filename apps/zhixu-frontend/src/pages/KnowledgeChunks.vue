@@ -92,9 +92,16 @@ onScopeDispose(() => {
 </script>
 
 <template>
-  <main class="overflow-y-auto p-4 sm:p-6 lg:p-8">
-    <div class="mx-auto max-w-wide">
-      <nav aria-label="面包屑" class="mb-5 flex flex-wrap gap-3 text-subhead text-label-secondary">
+  <main class="shell-page">
+    <!-- 容器档是 panel（896）而不是 measure：这是 DESIGN 唯一授权的长文破例——
+         分块结构是双列变体，左侧 15rem 大纲 + 右侧正文列，896 - 240 - 24 = 632，
+         正文列天然落在 measure（640）以内，不需要再手写一次 max-w-measure。 -->
+    <div class="shell-panel">
+      <nav
+        data-test="breadcrumb"
+        aria-label="面包屑"
+        class="mb-5 flex flex-wrap gap-3 text-subhead text-label-secondary"
+      >
         <RouterLink to="/home/knowledge" class="text-primary-pressed">知识库</RouterLink>
         <span>/</span>
         <RouterLink :to="`/home/knowledge/${id}`" class="text-primary-pressed">知识详情</RouterLink>

@@ -44,6 +44,10 @@
   --color-surface: #f2eee4;
   --color-surface-secondary: #e2ddd0;
   --color-surface-tertiary: #fbf8ef;
+  /* 侧栏导航激活底（DESIGN.md §Layout / nav-item-active 冻结值 #e6e2d4）。
+     它不是第五档表面、不参与层级表达：真正的选中信号是左侧 3px 蓝条 + 蓝字，
+     这块底色只负责把行从侧栏的 surface-secondary 上「抬起半格」。 */
+  --color-nav-active: #e6e2d4;
 
   /* —— 规则线与遮罩 —— */
   --color-hairline: rgb(24 24 24 / 0.26); /* 装饰纹理 1.72:1，不可作控件边界 */
@@ -107,6 +111,14 @@
   --text-micro--font-weight: 700;
   --text-micro--letter-spacing: 0.06em;
 
+  /* 品牌字标专用档（#39）。它是 DESIGN.md §Layout 冻结的 21px/600/.2em，
+     既不在八档字级表里、也不该进去：字级表管正文排版，字标是外壳几何的一部分，
+     和 200px 侧栏、64px 页头带同级。放在这里是为了让模板里不出现任意值字号
+     （text-[21px] 会被世界守卫拦掉）。 */
+  --text-brand: 21px;
+  --text-brand--line-height: 26px;
+  --text-brand--font-weight: 600;
+
   /* —— 圆角：全部归零。v4 默认无 --radius-full 键，不显式写就杀不掉 rounded-full —— */
   --radius-xs: 0px;
   --radius-sm: 0px;
@@ -159,6 +171,18 @@
   --container-measure: 40em;
   --container-panel: 56rem;
   --container-wide: 72rem;
+
+  /* —— 外壳几何（#39）——
+     外壳是**唯一**允许写死像素的地方：它不随内容排版变，只随视口断点变。
+     这些值全部来自 DESIGN.md §Layout，写成令牌是为了让「200 / 64 / 60 / 29」
+     在组件里只有一处真值，改一次就全仓生效。 */
+  --spacing-rail: 200px; /* 桌面侧栏宽（原 256px） */
+  --spacing-band: 64px; /* 页头带高 */
+  --spacing-topbar: 60px; /* 移动全局条高 */
+  --spacing-nav-item: 29px; /* 侧栏导航项高 */
+  --spacing-brand: 62px; /* 侧栏品牌区高 */
+  --spacing-seal: 16px; /* 品牌方章边长 */
+  --width-drawer: min(15rem, 84vw); /* 窄屏抽屉宽：375 下 240px，更宽视口封顶 240px */
 }
 
 /* ============================================================
@@ -191,10 +215,6 @@
   --text-caption: 12px;
   --text-caption--line-height: 17px;
   --text-caption--font-weight: 400;
-
-  /* 毛玻璃退役：material 别名直指卡面实色 */
-  --color-material: #f2eee4;
-  --color-material-thick: #f2eee4;
 
   /* 文件类型分色并入语义四色，不再新增第五个色相 */
   --color-purple: #1f4e79;
@@ -275,6 +295,51 @@
 /* 打字机编号/计数 */
 @utility cabinet-num {
   @apply font-type text-micro tabular-nums;
+}
+
+/* ============================================================
+   外壳几何载体（#39）
+   为什么是 @utility 而不是组件：DESIGN.md §Components「明确不建」里点名
+   AppPageHeader / AppToolbar「属外壳，页面直接按 class 写」。但「按 class 写」
+   不等于九个页面各抄一遍 12 个类 —— 抄九遍就是九个版本，改一次要改九处。
+   这里把**四段结构的几何**收成 4 个载体类，页面只写类名，
+   像素值仍然只有 style.css 一处真值。
+   ============================================================ */
+
+/* 页头带 64px：左标题 + 可选等宽计数行 / 右 1 主 + ≤2 次操作。
+   下沿一条 hairline，**不吸顶** —— 滚走时腾出高度，这是 DESIGN 的明确要求。 */
+@utility shell-band {
+  @apply flex h-band flex-none items-center justify-between gap-4 border-b border-hairline bg-surface px-4 sm:px-5 lg:px-6;
+}
+
+/* 画布页的悬浮页头带：浮在满铺画布之上，仍是 64px，仍然不吸顶。
+   用 absolute 而不是 sticky —— sticky 会随滚动一直占着，那是栏杆不是纸条。 */
+@utility shell-band-float {
+  @apply absolute inset-x-0 top-0 z-toolbar flex h-band items-center justify-between gap-4 border-b border-hairline bg-surface px-4 sm:px-5 lg:px-6;
+}
+
+/* 页面滚动容器：水平内边距与页头带同一条左边线（16 / 20 / 24）。 */
+@utility shell-page {
+  @apply flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-6 lg:px-6 lg:py-8;
+}
+
+/* 工具栏 48px：搜索 + 筛选 + 右端命中计数。吸顶，z-toolbar，下沿一条 hairline。 */
+@utility shell-toolbar {
+  @apply sticky top-0 z-toolbar flex min-h-12 flex-wrap items-center gap-2 border-b border-hairline bg-surface px-4 py-2 sm:px-5 lg:px-6;
+}
+
+/* 四级容器：只有这四档，别的一律不许出现在页面级容器上。 */
+@utility shell-measure {
+  @apply mx-auto w-full max-w-measure;
+}
+@utility shell-panel {
+  @apply mx-auto w-full max-w-panel;
+}
+@utility shell-wide {
+  @apply mx-auto w-full max-w-wide;
+}
+@utility shell-full {
+  @apply w-full;
 }
 
 @layer components {

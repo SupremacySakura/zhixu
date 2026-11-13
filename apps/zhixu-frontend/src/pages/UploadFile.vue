@@ -218,10 +218,17 @@ const badgeClass = (item: QueueItem) => {
   <div class="flex min-w-0 flex-1 flex-col bg-canvas text-label">
     <LoginRequiredPlaceholder v-if="!userStore.isLoggedIn" />
     <template v-else>
-      <main class="flex-1 overflow-y-auto">
-        <div
-          class="mx-auto flex w-full max-w-[960px] flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
-        >
+      <!-- 页头带 64px：上传是表单原型（DESIGN 原型 ④），容器 panel（896）。
+           标题原先是页面内 section，现在提到带里，与其他八页对齐。 -->
+      <header class="shell-band">
+        <div class="min-w-0">
+          <h1 class="text-title">上传文件</h1>
+          <p class="font-type text-micro text-label-tertiary">拖拽或选择文件，保留原件</p>
+        </div>
+      </header>
+
+      <main class="shell-page">
+        <div class="shell-panel flex flex-col gap-8">
           <!-- 上传目录信息条 -->
           <section
             class="flex items-center justify-between gap-4 bg-surface px-[18px] py-3.5 shadow-card"

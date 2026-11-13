@@ -68,7 +68,7 @@ const onSubmit = async () => {
   <div class="flex min-h-screen flex-col">
     <!-- 顶部品牌栏：半透明材质 -->
     <header
-      class="material sticky top-0 z-20 flex h-[60px] items-center justify-between border-b border-hairline px-6 lg:px-10"
+      class="sticky top-0 z-toolbar flex h-topbar items-center justify-between border-b border-hairline bg-surface px-6 lg:px-10"
     >
       <div class="flex items-center gap-2.5">
         <svg
