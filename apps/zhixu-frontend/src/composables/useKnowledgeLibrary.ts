@@ -12,6 +12,19 @@ import { isKnowledgeActive, isKnowledgeVectorActive, knowledgeError } from '../u
 export function useKnowledgeLibrary() {
   const items = ref<KnowledgeItem[]>([])
   const total = ref(0)
+  /**
+   * 无筛选时的索引总量（#40 R2）。
+   *
+   * 工具栏右端要显示「命中 9 / 142」，分母是**整个知识库**有多大，
+   * 而不是这次查询命中多少。分母只能在无筛选那一次响应里读到 —— 筛选后的
+   * `result.total` 是命中数。所以这里缓存无筛选时的 total，而不是为拿分母
+   * 再打一次 `listKnowledge`（那会让每次筛选都翻倍请求，且既有
+   * `toHaveBeenCalledTimes` 断言会红）。
+   *
+   * 只在**无筛选**时更新：清空筛选后回到完整列表，分母自然刷新；
+   * 带筛选的响应永远不会污染它。
+   */
+  const totalAll = ref(0)
   const page = ref(1)
   const search = ref('')
   const status = ref<KnowledgeStatus | ''>('')
@@ -28,6 +41,23 @@ export function useKnowledgeLibrary() {
   let debounce: ReturnType<typeof setTimeout> | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   let query = ''
+  /**
+   * 这一屏是否带筛选条件（决定 total 是「命中数」还是「全库数」）。
+   *
+   * 口径与页面上的 `hasFilters` 一致：搜索词算筛选，**排序不算** ——
+   * 换排序不改变结果集大小，只是换个顺序，此时 total 仍是全库条数。
+   */
+  function hasActiveFilters() {
+    return Boolean(
+      query ||
+      status.value ||
+      vector.value ||
+      sourceType.value ||
+      tagId.value ||
+      favorite.value ||
+      archived.value,
+    )
+  }
   async function loadTags() {
     try {
       tags.value = (await listTags()).items
@@ -66,6 +96,9 @@ export function useKnowledgeLibrary() {
       }
       items.value = result.items
       total.value = result.total
+      // 分母只在「这一屏没有筛选条件」时采信：此时 total 就是全库条数。
+      // 筛选态下 total 是命中数，写进分母会让「命中 9 / 9」自我循环。
+      if (!hasActiveFilters()) totalAll.value = result.total
       if (
         items.value.some(
           item => isKnowledgeActive(item.status) || isKnowledgeVectorActive(item.vector_state),
@@ -108,6 +141,7 @@ export function useKnowledgeLibrary() {
   return {
     items,
     total,
+    totalAll,
     page,
     search,
     status,

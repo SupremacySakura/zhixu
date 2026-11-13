@@ -183,6 +183,15 @@
   --spacing-brand: 62px; /* 侧栏品牌区高 */
   --spacing-seal: 16px; /* 品牌方章边长 */
   --width-drawer: min(15rem, 84vw); /* 窄屏抽屉宽：375 下 240px，更宽视口封顶 240px */
+
+  /* —— 知识库硬卡（#40）——
+     DESIGN.md §Layout 原型①冻结值「知识库为 118px 硬卡」，与 §Shapes 的
+     「纸条 17px 高、逐张 +5px 阶梯缩进」一样属于**几何冻结值**，不是排版
+     尺度：它们描述的是器物本身，所以和外壳一样进令牌，模板里不出现任意值。
+     118px 容得下四行（分类号 16 / 标题 21 / 摘要 17 / meta 17）+ 12px 内边距。 */
+  --spacing-hard-card: 118px;
+  --spacing-slip: 17px;
+  --spacing-slip-step: 5px;
 }
 
 /* ============================================================
@@ -295,6 +304,54 @@
 /* 打字机编号/计数 */
 @utility cabinet-num {
   @apply font-type text-micro tabular-nums;
+}
+
+/* ============================================================
+   知识库硬卡与交叉引用纸条（#40）
+   招牌动作只属于知识库列表页（DESIGN.md §Layout「招牌动作独占条款」），
+   所以这两条不进原子层：原子是全世界共用的，硬卡 + 纸条是**一页**的器物。
+   写在 style.css 里而不是组件里，理由同外壳：像素值只留一处真值。
+   ============================================================ */
+
+/* 118px 硬卡：定高、单层 hairline 描边、双层硬偏移。
+   定高不是审美 —— 索引卡的物理属性就是同尺寸才能叠成一盒；
+   变高会让 20 张卡在滚动中失去对齐参照，扫读时每张都要重新找行。
+   不写 flex-direction：窄屏要竖排（纸条移到卡内下方，DESIGN §Layout
+   「窄屏的结构性降级」），桌面要横排，方向由调用点决定。 */
+@utility hard-card {
+  @apply flex min-w-0 bg-surface;
+  min-height: var(--spacing-hard-card);
+  border: 1px solid var(--color-hairline);
+  box-shadow: var(--shadow-card);
+}
+
+/* 卡面上的蓝色格线：摘要压在其上（DESIGN.md §Colors「卡片上的蓝色格线」）。
+   只画**一条**，不铺满整张卡：铺满会与「单屏水平线 ≤5 条」的纪律打架，
+   而且 20 张卡各铺 3 条会读成横格纸而不是索引卡。
+   蓝色格线是世界的母题，不是分隔线，所以走 --color-grid 而不是 hairline。 */
+@utility card-ruled {
+  border-bottom: 1px solid var(--color-grid);
+}
+
+/* 交叉引用纸条：17px 高、surface-tertiary 底、1px hairline 描边、1px 1px 0 硬偏移。
+   偏移量 1px 而不是 shadow-popover 的 2px —— 纸条比卡片薄，影子也该薄。 */
+@utility relation-slip {
+  @apply flex h-slip max-w-full items-center gap-1.5 overflow-hidden whitespace-nowrap bg-surface-tertiary px-1.5 text-micro text-label-secondary;
+  border: 1px solid var(--color-hairline);
+  box-shadow: 1px 1px 0 var(--color-hairline);
+}
+
+/* 纸条上的类别标签：唯一被印上去的颜色，与侧栏激活、主操作同一枚蓝。 */
+@utility relation-slip-type {
+  @apply flex-none font-semibold text-primary;
+}
+
+/* 纸条的逐张阶梯缩进：第 n 张往左多缩 5px，读起来是一叠手写小卡而不是一张表。 */
+@utility relation-slip-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 
 /* ============================================================

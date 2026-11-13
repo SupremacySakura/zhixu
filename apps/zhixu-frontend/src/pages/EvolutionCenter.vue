@@ -256,45 +256,65 @@ onMounted(() => {
 
         <template v-else-if="!error">
           <ul class="space-y-3">
+            <!-- 演化中心的「一个小动作」不是硬卡 + 纸条（那是知识库独占），
+                 而是**建议动作印在卡面**：扫一屏 20 条就能看出每条想让你做什么，
+                 不必逐条点开。建议来自后端 payload.suggested_action，不是前端猜的。 -->
             <li
               v-for="alert in items"
               :key="alert.id"
-              class="cursor-pointer border border-hairline bg-surface p-5 transition-shadow hover:shadow-popover"
+              class="flex cursor-pointer items-center gap-3 border border-hairline bg-surface px-4 py-3 shadow-card transition-colors hover:bg-surface-secondary"
               data-test="alert-card"
               tabindex="0"
               @click="openDetail(alert)"
               @keydown.enter="openDetail(alert)"
             >
-              <div class="flex flex-wrap items-center gap-2 text-caption">
-                <span class="bg-primary-tint px-2.5 py-1 font-medium text-primary-pressed">
-                  {{ TYPE_LABELS[alert.alert_type] }}
-                </span>
-                <span class="text-label-secondary">{{ STATUS_LABELS[alert.status] }}</span>
-                <span v-if="alert.severity === 'strong'" class="text-warning-strong"
-                  >需要优先处理</span
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2 font-type text-micro">
+                  <span
+                    class="flex-none bg-primary-tint px-1.5 py-0.5 font-semibold text-primary-pressed"
+                  >
+                    {{ TYPE_LABELS[alert.alert_type] }}
+                  </span>
+                  <span class="flex-none text-label-secondary">{{
+                    STATUS_LABELS[alert.status]
+                  }}</span>
+                  <span v-if="alert.severity === 'strong'" class="flex-none text-warning-strong"
+                    >需要优先处理</span
+                  >
+                  <span class="flex-none text-label-tertiary">{{
+                    knowledgeDate(alert.created_at)
+                  }}</span>
+                </div>
+                <h3 class="mt-1 truncate text-lead text-label">
+                  {{ alert.subjects[0]?.title || '演化提醒' }}
+                </h3>
+                <p class="mt-0.5 truncate text-body text-label-secondary">
+                  {{ alert.payload.reason }}
+                </p>
+                <p
+                  v-if="archived(alert)"
+                  class="mt-1 inline-block bg-warning-tint px-2 py-0.5 font-type text-micro text-warning-strong"
                 >
-                <span class="text-label-tertiary">{{ knowledgeDate(alert.created_at) }}</span>
+                  涉及知识已归档
+                </p>
+                <div
+                  v-if="tab === 'records'"
+                  class="mt-1 flex flex-wrap gap-x-3 font-type text-micro text-label-secondary"
+                >
+                  <span>{{ evolutionActionLabel(alert.resolved_action) }}</span>
+                  <span>{{ knowledgeDate(alert.resolved_at) }}</span>
+                  <span v-if="alert.resolution_note">备注：{{ alert.resolution_note }}</span>
+                </div>
               </div>
-              <h3 class="mt-2 truncate text-headline">
-                {{ alert.subjects[0]?.title || '演化提醒' }}
-              </h3>
-              <p class="mt-1 text-subhead leading-7 text-label-secondary">
-                {{ alert.payload.reason }}
-              </p>
-              <p
-                v-if="archived(alert)"
-                class="mt-2 bg-warning-tint px-3 py-1.5 text-caption text-warning-strong"
+              <!-- 建议动作：右端一枚固定宽度的「按钮位」。
+                   宽度固定是为了让 20 条卡的动作标签排成一列 —— 值扫读时
+                   眼睛只走一条竖线，不用每张重新定位。 -->
+              <span
+                v-if="tab === 'pending' && alert.payload.suggested_action"
+                class="flex-none border border-hairline bg-surface-tertiary px-2 py-1 text-center text-note font-semibold text-primary sm:w-32"
               >
-                涉及知识已归档
-              </p>
-              <div
-                v-if="tab === 'records'"
-                class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-caption text-label-secondary"
-              >
-                <span>{{ evolutionActionLabel(alert.resolved_action) }}</span>
-                <span>{{ knowledgeDate(alert.resolved_at) }}</span>
-                <span v-if="alert.resolution_note">备注：{{ alert.resolution_note }}</span>
-              </div>
+                {{ evolutionActionLabel(alert.payload.suggested_action) }}
+              </span>
             </li>
           </ul>
 
@@ -434,7 +454,16 @@ onMounted(() => {
             {{ resolveError }}
           </p>
 
-          <div v-if="tab === 'pending'" class="mt-5 flex flex-wrap gap-3">
+          <!-- 裁决按钮位（DESIGN.md §Layout：演化中心「自己页面的一个小动作」）。
+               具名区域 + 固定顺序：不同提醒的动作数不同（4/5/6 个），
+               但它们都落在这一处，位置稳定，面板下半截不会因为换一条提醒而跳。
+               dismiss 走次按钮：它是「不做处理」，与其余「做处理」的动作不同权。 -->
+          <div
+            v-if="tab === 'pending'"
+            class="mt-5 flex flex-wrap gap-3 border-t border-hairline pt-4"
+            role="group"
+            aria-label="裁决动作"
+          >
             <button
               v-for="action in actionsOf(selectedAlert)"
               :key="action"

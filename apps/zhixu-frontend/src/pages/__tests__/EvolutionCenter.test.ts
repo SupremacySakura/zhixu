@@ -337,4 +337,88 @@ describe('EvolutionCenter', () => {
 
     expect(wrapper.find('[role="dialog"]').text()).toContain('该裁决动作尚未启用')
   })
+
+  /**
+   * 裁决按钮位（#40 / DESIGN.md §Layout「自己页面的一个小动作」点名演化中心）。
+   *
+   * 演化中心不许复制知识库的「硬卡 + 右侧纸条」（独占条款），它自己的动作是
+   * **给裁决按钮一个固定的位置**：五种/六种动作的提醒共用同一个具名区域，
+   * 按钮数量变化只在这个区域里增减，不会把面板下半截整块推走。
+   * 断言落在 `aria-label="裁决动作"` 这个具名区域上 —— 它是屏幕阅读器也能
+   * 用到的公共边界，不是内部实现细节。
+   */
+  it('把裁决动作收进一个具名的固定区域，三种提醒共用同一处', async () => {
+    listMock.mockResolvedValue(
+      pageOf([
+        makeAlert({ id: 1, alert_type: 'duplicate' }),
+        makeAlert({
+          id: 2,
+          alert_type: 'outdated',
+          payload: {
+            type: 'outdated',
+            reason: '',
+            evidence: [],
+            suggested_action: 'mark_outdated',
+          },
+        }),
+        makeAlert({
+          id: 3,
+          alert_type: 'conflict',
+          payload: {
+            type: 'conflict',
+            reason: '',
+            evidence: [],
+            suggested_action: 'accept_revision',
+            revised_title: '修订标题',
+            revised_content: '修订正文',
+          },
+        }),
+      ]),
+    )
+    const wrapper = await render()
+    const cards = wrapper.findAll('[data-test="alert-card"]')
+
+    for (const card of cards) {
+      await card.trigger('click')
+      await flushPromises()
+      const slot = wrapper.find('[role="dialog"] [aria-label="裁决动作"]')
+      expect(slot.exists()).toBe(true)
+      // 全部 data-action 按钮都住在这个区域里，没有漏在外面的。
+      expect(slot.findAll('button[data-action]').length).toBe(
+        wrapper.findAll('[role="dialog"] button[data-action]').length,
+      )
+      await wrapper.find('[role="dialog"] button[aria-label="关闭"]').trigger('click')
+      await flushPromises()
+    }
+  })
+
+  /**
+   * 卡面直接印出系统建议的裁决动作。
+   *
+   * 票面要求「三页共用卡片语言」——演化中心的卡片不能只是一团文字：
+   * 用户扫一屏 20 条时应该能看出「这条建议归档其中一条」「那条建议标记过时」，
+   * 而不必逐条点开面板。建议来自后端 `payload.suggested_action`，不是前端猜的。
+   */
+  it('卡面印出建议的裁决动作，不必点开面板', async () => {
+    listMock.mockResolvedValue(
+      pageOf([
+        makeAlert({ id: 1, alert_type: 'duplicate' }),
+        makeAlert({
+          id: 2,
+          alert_type: 'outdated',
+          payload: {
+            type: 'outdated',
+            reason: '',
+            evidence: [],
+            suggested_action: 'mark_outdated',
+          },
+        }),
+      ]),
+    )
+    const wrapper = await render()
+
+    const cards = wrapper.findAll('[data-test="alert-card"]')
+    expect(cards[0]!.text()).toContain('归档重复的一条')
+    expect(cards[1]!.text()).toContain('标记过时')
+  })
 })

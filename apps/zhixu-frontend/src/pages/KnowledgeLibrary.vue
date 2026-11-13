@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onScopeDispose, ref } from 'vue'
+import { computed, onMounted, onScopeDispose, ref, watch } from 'vue'
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import AppFilterBar from '../components/ui/AppFilterBar.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
@@ -7,9 +7,11 @@ import {
   archiveKnowledge,
   deleteKnowledge,
   favoriteKnowledge,
+  listKnowledgeRelations,
   retryKnowledgeVectorize,
   unarchiveKnowledge,
   type KnowledgeItem,
+  type KnowledgeRelation,
   type KnowledgeSort,
   type KnowledgeStatus,
   type KnowledgeVectorState,
@@ -27,6 +29,7 @@ import { useKnowledgeLibrary } from '../composables/useKnowledgeLibrary'
 import { useKnowledgeImport } from '../composables/useKnowledgeImport'
 import { useToast } from '../composables/useToast'
 import { knowledgeDate } from '../utils/knowledge'
+import { RELATION_TYPE_LABELS } from '../utils/relation'
 import KnowledgeActionMenu from '../components/knowledge/KnowledgeActionMenu.vue'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
 import KnowledgeVectorBadge from '../components/knowledge/KnowledgeVectorBadge.vue'
@@ -36,6 +39,7 @@ import FilePagination from '../components/file-management/FilePagination.vue'
 const {
   items,
   total,
+  totalAll,
   page,
   search,
   status,
@@ -136,6 +140,11 @@ function clearFilters() {
   favorite.value = ''
   archived.value = ''
 }
+/** 卡片左上的分类号（DESIGN.md §Layout 招牌动作「左上分类号 KM-0142」）。
+ *  从 id 生成而不是另存字段：id 是唯一稳定的序号，重启、重建索引都不变；
+ *  另外造一个显示序号反而会在删除后出现空洞。 */
+const knowledgeSerial = (id: number) => `KM-${String(id).padStart(4, '0')}`
+
 const deleteTarget = ref<KnowledgeItem | null>(null)
 const deleting = ref(false)
 const deleteError = ref('')
@@ -232,6 +241,91 @@ function closePanel() {
   panelOpen.value = false
   void load()
 }
+
+/**
+ * 交叉引用纸条（#40 R1）。
+ *
+ * 为什么是逐卡并发 `listKnowledgeRelations`：票面 AC 要求「不用点开就能看到
+ * 这张卡依赖哪一条、和哪一条矛盾」。图谱接口只返回最近 50 个节点之间的边，
+ * 关联对象不在那 50 条里时边根本不在响应里 —— 那会渲染出一句
+ * 「暂无交叉引用」的假话。逐卡取关系才是诚实的：拿到什么就说什么。
+ *
+ * 一页 20 条，`Promise.all` 一次并发打完；20 个短请求远比串行快，
+ * 也比「先等列表、再逐条补」少一轮闪烁。
+ *
+ * `AbortController` 是必须的：翻页/筛选会重新拉列表，上一页那 20 个请求
+ * 回来时若还往 map 里写，就会把 A 卡的关系贴到 B 卡上。这里在每次重拉前
+ * abort 整批，并在写入前再查一次 `signal.aborted`（abort 与 await 之间存在
+ * 竞态窗口，光 abort 不够）。
+ */
+type RelationSummary = { total: number; slips: { type: string; title: string }[]; failed?: boolean }
+const relations = ref<Record<number, RelationSummary>>({})
+let relationsController: AbortController | null = null
+/** 纸条上最多印几条：卡片高度 118px，纸条 17px + 2px 间隙，三张刚好贴满右侧。 */
+const SLIP_LIMIT = 3
+
+function summarize(
+  confirmed: KnowledgeRelation[],
+  suggested: KnowledgeRelation[],
+): RelationSummary {
+  // 已确认的排前面：那是「事实」；建议只是「AI 觉得可能」，不该抢占第一条。
+  const all = [...confirmed, ...suggested]
+  return {
+    total: all.length,
+    // 类别文案全部来自 RELATION_TYPE_LABELS，本页不发明新的中文类别名；
+    // 对端标题用后端算好的 counterpart_title，不再为一张纸条多打一次接口。
+    slips: all.slice(0, SLIP_LIMIT).map(relation => ({
+      type: RELATION_TYPE_LABELS[relation.relation_type],
+      title: relation.counterpart_title,
+    })),
+  }
+}
+
+async function loadRelations() {
+  relationsController?.abort()
+  const current = new AbortController()
+  relationsController = current
+  const snapshot = items.value
+  // 先清空：上一页的纸条不能挂在新的卡片上。
+  relations.value = {}
+  const results = await Promise.all(
+    snapshot.map(async entry => {
+      try {
+        const data = await listKnowledgeRelations(entry.id, current.signal)
+        if (current.signal.aborted) return null
+        return [entry.id, summarize(data.confirmed, data.suggested)] as const
+      } catch {
+        // abort 引发的 rejection 不是「失败」，是「这批作废了」：返回 null 让
+        // 整批结果一起丢弃，别把「翻页了」渲染成「读取失败」。
+        if (current.signal.aborted) return null
+        // 单卡失败不拖垮整页，但**也不能伪装成「没有关系」**。
+        // 后端限流（60 req/min/IP）或单个 500 都会走到这里；把失败标出来，
+        // 让那张卡说「读取失败」而不是「暂无交叉引用」—— 后者是假阴性，
+        // 而 R1 拒绝图谱接口的全部理由就是不肯接受假阴性。
+        return [
+          entry.id,
+          { total: 0, slips: [] as RelationSummary['slips'], failed: true },
+        ] as const
+      }
+    }),
+  )
+  if (current.signal.aborted) return
+  const next: Record<number, RelationSummary> = {}
+  for (const result of results) if (result) next[result[0]] = result[1]
+  relations.value = next
+}
+// 列表内容变了就重取纸条。挂在**条目 id 列表**而不是 items 数组上：
+// useKnowledgeLibrary 在有条目还在处理时每 3s 轮询一次 load(true)，每次都会换掉
+// items 数组的引用，但页面上的卡片还是那 20 条。挂在数组上会让轮询每 3 秒
+// 重新打 20 个 relations 请求（60 req/min/IP 的后端限流会直接 429，
+// 于是本该显示「依赖 X」的卡片退化成「暂无交叉引用」—— 假阴性）。
+// 关系只取决于 id，所以按 id 串去重：翻页、筛选、删除会改 id 串，轮询不会。
+watch(
+  () => items.value.map(entry => entry.id).join(','),
+  () => void loadRelations(),
+  { immediate: true },
+)
+onScopeDispose(() => relationsController?.abort())
 onMounted(() => {
   void load()
   void loadTags()
@@ -249,7 +343,7 @@ onMounted(() => {
           data-test="band-micro"
           class="truncate font-type text-micro text-label-tertiary"
         >
-          索引 {{ total }} · 命中 {{ items.length }}
+          索引 {{ totalAll || total }}
         </p>
       </div>
       <!-- 主次上限 1+2：新建知识是主操作，恒在；另两个是次操作。
@@ -346,6 +440,19 @@ onMounted(() => {
               清除筛选
             </button>
           </AppFilterBar>
+          <!-- 命中计数钉在工具栏右端（DESIGN.md §Layout：48px 吸顶工具栏右端
+               放「命中 9 / 142」这类等宽计数）。分母只在无筛选那次加载采信；
+               没拿到分母（例如带着 URL 筛选参数直接进来）就只报命中数，
+               不写「命中 9 / 9」这种自我循环的假分母。 -->
+          <p
+            data-test="hit-count"
+            class="ml-auto flex-none whitespace-nowrap font-type text-micro text-label-tertiary"
+          >
+            <template v-if="hasFilters && totalAll && totalAll !== total">
+              命中 {{ total }} / {{ totalAll }}
+            </template>
+            <template v-else>命中 {{ total }}</template>
+          </p>
         </div>
         <div
           v-if="error"
@@ -380,65 +487,109 @@ onMounted(() => {
           >
         </div>
         <div v-else-if="!loading" class="space-y-3">
+          <!-- 118px 硬卡（DESIGN.md §Layout 原型①「知识库为 118px 硬卡」）。
+               卡面按物理索引卡的顺序排：左上分类号 → 标题 → 摘要（压蓝格线）
+               → 右下日期章；状态与向量态退成卡角的小方章。
+               右侧纸条是**这一页独占**的招牌动作（§Layout 独占条款），
+               所以它写在卡片结构里，不抽成通用组件 —— 一抽出去就会被别的页复制。 -->
           <article
             v-for="entry in items"
             :key="entry.id"
-            class="flex items-start justify-between gap-3 border border-hairline bg-surface p-5 sm:items-center sm:gap-4 sm:p-6"
+            class="hard-card flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4 sm:py-3"
           >
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2">
+            <div class="flex min-w-0 flex-1 flex-col justify-center">
+              <!-- 顶边一行：分类号 + 状态方章 + 标题 -->
+              <div class="flex min-w-0 items-center gap-2">
+                <span class="flex-none font-type text-micro text-label-tertiary">{{
+                  knowledgeSerial(entry.id)
+                }}</span>
                 <KnowledgeBadge :status="entry.status" />
                 <KnowledgeVectorBadge
                   v-if="hasKnowledgeVector(entry)"
                   :state="entry.vector_state as Exclude<KnowledgeVectorState, ''>"
                 />
+                <h2 class="min-w-0 flex-1 truncate text-lead text-label" :title="entry.title">
+                  {{ entry.title }}
+                </h2>
+                <div class="flex flex-none items-center gap-1">
+                  <button
+                    type="button"
+                    class="knowledge-icon-button flex h-8 w-8 items-center justify-center border border-hairline bg-surface text-label-secondary"
+                    :class="entry.is_favorite ? 'text-warning' : ''"
+                    :aria-label="
+                      entry.is_favorite ? `取消收藏 ${entry.title}` : `收藏 ${entry.title}`
+                    "
+                    :aria-pressed="entry.is_favorite"
+                    @click="toggleFavorite(entry)"
+                  >
+                    <AppIcon
+                      :icon="
+                        entry.is_favorite
+                          ? 'material-symbols:star-rounded'
+                          : 'material-symbols:star-outline'
+                      "
+                      class="atom-glyph"
+                      aria-hidden="true"
+                      :style="{ '--atom-glyph-size': '16px' }"
+                    />
+                  </button>
+                  <KnowledgeActionMenu
+                    :item="entry"
+                    @track="track"
+                    @delete="selectDelete"
+                    @retry-vector="retryVector"
+                    @archive="archiveEntry"
+                    @unarchive="unarchiveEntry"
+                  />
+                </div>
               </div>
-              <h2 class="mb-2 mt-3 break-all text-headline">{{ entry.title }}</h2>
-              <p v-if="entry.summary" class="mb-2 line-clamp-2 text-subhead leading-6 text-label">
-                {{ entry.summary }}
+              <!-- 摘要压在蓝色格线上：格线是世界的母题，不是分隔线，
+                   所以用 --color-grid（30% 蓝）而不是 hairline。 -->
+              <p class="card-ruled mt-1 line-clamp-1 text-body text-label-secondary">
+                {{ entry.summary || knowledgeDescription(entry) }}
               </p>
-              <p class="text-subhead leading-6 text-label-secondary">
-                {{ knowledgeDescription(entry) }}
-              </p>
-              <div class="mt-3 flex flex-wrap gap-3 text-caption text-label-secondary">
-                <span
-                  >{{ knowledgeSourceLabel(entry.source_type)
-                  }}{{ entry.source_file_id ? '文件' : '' }}</span
-                ><span v-if="entry.source_file_id" class="break-all">{{
-                  entry.source_file_name
-                }}</span
-                ><span v-if="entry.archived_at" class="text-warning">已归档</span
-                ><time>{{ knowledgeDate(entry.created_at) }}</time>
+              <!-- 右下日期章 + 来源 -->
+              <div class="mt-1 flex min-w-0 items-center gap-3 font-type text-micro">
+                <span class="flex-none text-label-tertiary">{{
+                  knowledgeSourceLabel(entry.source_type)
+                }}</span>
+                <span v-if="entry.archived_at" class="flex-none text-warning">已归档</span>
+                <time class="ml-auto flex-none text-label-tertiary">{{
+                  knowledgeDate(entry.created_at)
+                }}</time>
               </div>
             </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                class="knowledge-icon-button flex h-11 w-11 items-center justify-center border border-hairline bg-surface text-label-secondary"
-                :class="entry.is_favorite ? 'text-warning' : ''"
-                :aria-label="entry.is_favorite ? `取消收藏 ${entry.title}` : `收藏 ${entry.title}`"
-                :aria-pressed="entry.is_favorite"
-                @click="toggleFavorite(entry)"
+            <!-- 交叉引用纸条：桌面在卡右侧，窄屏落到卡内下方（DESIGN §Layout
+                 「窄屏的结构性降级」）。纸条逐张 +5px 阶梯缩进，读起来是一叠
+                 手写小卡，而不是一张表。 -->
+            <div
+              class="relation-slip-stack flex-none sm:w-40"
+              :aria-label="`交叉引用 ${entry.title}`"
+            >
+              <template v-if="relations[entry.id]?.total">
+                <span
+                  v-for="(slip, index) in relations[entry.id]!.slips"
+                  :key="index"
+                  class="relation-slip"
+                  :style="{ marginRight: `${index * 5}px` }"
+                >
+                  <span class="relation-slip-type">{{ slip.type }}</span>
+                  <span class="truncate">{{ slip.title }}</span>
+                </span>
+                <span
+                  v-if="relations[entry.id]!.total > SLIP_LIMIT"
+                  class="flex-none font-type text-micro text-label-tertiary"
+                  >另有 {{ relations[entry.id]!.total - SLIP_LIMIT }} 条</span
+                >
+              </template>
+              <!-- 「取不到」和「确实没有」必须分开说：后者是结论，前者只是这次没读到。 -->
+              <span
+                v-else-if="relations[entry.id]?.failed"
+                class="relation-slip text-warning-strong"
+                title="交叉引用读取失败，刷新页面可重试"
+                >读取失败</span
               >
-                <AppIcon
-                  :icon="
-                    entry.is_favorite
-                      ? 'material-symbols:star-rounded'
-                      : 'material-symbols:star-outline'
-                  "
-                  class="atom-glyph"
-                  aria-hidden="true"
-                  :style="{ '--atom-glyph-size': '20px' }"
-                />
-              </button>
-              <KnowledgeActionMenu
-                :item="entry"
-                @track="track"
-                @delete="selectDelete"
-                @retry-vector="retryVector"
-                @archive="archiveEntry"
-                @unarchive="unarchiveEntry"
-              />
+              <span v-else class="relation-slip text-label-tertiary">暂无交叉引用</span>
             </div>
           </article>
         </div>
