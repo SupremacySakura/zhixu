@@ -34,6 +34,17 @@ export function useKnowledgeLibrary() {
   const favorite = ref<'' | 'true'>('')
   const archived = ref<'' | 'true'>('')
   const sort = ref<KnowledgeSort>('created')
+  /**
+   * 列表的呈现方式：卡片（默认）还是紧凑表格（#35 用户故事 4）。
+   *
+   * 放在组合式函数里而不是页面里，理由与 `sort` 一致：它是**列表这一屏的状态**，
+   * 不是页面的临时 UI 开关。翻页、改筛选、改搜索都不该把它重置 —— 用户选的是
+   * 「我现在想用哪种方式扫读」，换一页不该被踢回卡片视图。
+   *
+   * 为什么不落 localStorage：这是纯视觉偏好，刷新后回到卡片视图是安全的默认；
+   * 持久化会引入「昨天切了表格，今天打开以为坏了」的状态残留。
+   */
+  const viewMode = ref<'card' | 'table'>('card')
   const tags = ref<Tag[]>([])
   const loading = ref(false)
   const error = ref('')
@@ -151,6 +162,7 @@ export function useKnowledgeLibrary() {
     favorite,
     archived,
     sort,
+    viewMode,
     tags,
     loading,
     error,

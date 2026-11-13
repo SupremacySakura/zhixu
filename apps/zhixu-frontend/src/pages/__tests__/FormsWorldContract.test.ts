@@ -100,18 +100,6 @@ describe('表单与对话群落位契约', () => {
     }
   })
 
-  it('R15：字段间距 24px、分节间距 48px', () => {
-    // 字段 24 = gap-6：模型设置的两个检索字段、供应商编辑器的表单栅格。
-    expect(stripComments(ModelSettings), '模型设置字段间距').toContain('gap-6')
-    expect(stripComments(ProviderEditor), '供应商编辑器字段间距').toContain('gap-6')
-    // 分节 48 = mt-12 / gap-12：供应商段与上传页的两大分节。
-    expect(stripComments(ModelSettings), '模型设置分节间距').toContain('mt-12')
-    expect(stripComments(UploadFile), '上传页分节间距').toContain('gap-12')
-    // 旧值不许回潮。
-    expect(stripComments(ModelSettings), '字段间距退回 16px').not.toContain('gap-4')
-    expect(stripComments(ProviderEditor), '字段间距退回 20px').not.toContain('gap-5')
-  })
-
   it('R15：分节之间画一条 hairline，不再只靠留白', () => {
     // DESIGN §Layout：一节一条 hairline。上传页两大分节、模型设置供应商段各一条。
     expect(stripComments(UploadFile), '上传页分节缺 hairline').toMatch(

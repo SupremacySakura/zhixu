@@ -24,6 +24,7 @@ import {
   knowledgeSourceLabel,
 } from '../utils/knowledge'
 import AppIcon from '../components/ui/AppIcon.vue'
+import AppButton from '../components/ui/AppButton.vue'
 import { useRouter } from 'vue-router'
 import { useKnowledgeLibrary } from '../composables/useKnowledgeLibrary'
 import { useKnowledgeImport } from '../composables/useKnowledgeImport'
@@ -32,6 +33,7 @@ import { knowledgeDate } from '../utils/knowledge'
 import { RELATION_TYPE_LABELS } from '../utils/relation'
 import KnowledgeActionMenu from '../components/knowledge/KnowledgeActionMenu.vue'
 import KnowledgeBadge from '../components/knowledge/KnowledgeBadge.vue'
+import KnowledgeTableView from '../components/knowledge/KnowledgeTableView.vue'
 import KnowledgeVectorBadge from '../components/knowledge/KnowledgeVectorBadge.vue'
 import KnowledgeTaskPanel from '../components/knowledge/KnowledgeTaskPanel.vue'
 import WebImportDialog from '../components/knowledge/WebImportDialog.vue'
@@ -49,6 +51,7 @@ const {
   favorite,
   archived,
   sort,
+  viewMode,
   tags,
   loading,
   error,
@@ -333,18 +336,27 @@ onMounted(() => {
 </script>
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <!-- 页头带 64px：左标题 + 等宽计数行，右 1 主 + 2 次操作（DESIGN.md 四段结构第 1 段）。
-         面包屑已取消 —— 侧栏已指示位置，索引页再写一遍是浪费 24px。 -->
+    <!-- 页头带 64px：左标题 + 描述行 + 等宽计数，右 1 主 + 2 次操作（DESIGN.md 四段结构第 1 段）。
+         面包屑已取消 —— 侧栏已指示位置，索引页再写一遍是浪费 24px。
+         描述行「从文件中沉淀的内容，在这里继续阅读与积累。」是这一页本来就有的文案，
+         迁移时被误删（497267c 无背书删除），现按审查裁定恢复。
+         它不单占一行：与等宽计数同行（计数靠右），整条带仍是两行 43px
+         （标题 19/26 + 描述 12/17），在 64px 里上下各留 10px。 -->
     <header class="shell-band">
       <div class="min-w-0 flex-1">
         <h1 class="truncate text-title">知识库</h1>
-        <p
-          v-if="!loading"
-          data-test="band-micro"
-          class="truncate font-type text-micro text-label-tertiary"
-        >
-          索引 {{ totalAll || total }}
-        </p>
+        <div class="flex min-w-0 items-baseline gap-3">
+          <p class="min-w-0 truncate text-note text-label-secondary">
+            从文件中沉淀的内容，在这里继续阅读与积累。
+          </p>
+          <p
+            v-if="!loading"
+            data-test="band-micro"
+            class="ml-auto flex-none whitespace-nowrap font-type text-micro text-label-tertiary"
+          >
+            索引 {{ totalAll || total }}
+          </p>
+        </div>
       </div>
       <!-- 主次上限 1+2：新建知识是主操作，恒在；另两个是次操作。
            375px 下三个带字的按钮必然溢出视口 —— 收成图标，功能一个不少。
@@ -435,13 +447,34 @@ onMounted(() => {
               清除筛选
             </button>
           </AppFilterBar>
-          <!-- 命中计数钉在工具栏右端（DESIGN.md §Layout：48px 吸顶工具栏右端
-               放「命中 9 / 142」这类等宽计数）。分母只在无筛选那次加载采信；
-               没拿到分母（例如带着 URL 筛选参数直接进来）就只报命中数，
-               不写「命中 9 / 9」这种自我循环的假分母。 -->
+          <!-- 视图切换（#35 用户故事 4）：卡片 / 表格。两枚 26px 方形图标按钮，
+               相邻密度靠 pointer-coarse:gap-3 在触摸屏上撑开 44px 热区间隙。
+               放在命中计数**左侧**：计数是工具栏右端的固定锚点（DESIGN.md
+               §Layout「48px 吸顶工具栏右端放命中 9 / 142」），切换器贴着它左边，
+               两个都是「关于这一屏的读数」，不跟左侧的搜索筛选混在一起。 -->
+          <div class="ml-auto flex flex-none items-center gap-1 pointer-coarse:gap-3">
+            <AppButton
+              size="sm"
+              icon-only
+              :tone="viewMode === 'card' ? 'primary' : 'secondary'"
+              icon="material-symbols:grid-view"
+              aria-label="卡片"
+              :aria-pressed="viewMode === 'card'"
+              @click="viewMode = 'card'"
+            />
+            <AppButton
+              size="sm"
+              icon-only
+              :tone="viewMode === 'table' ? 'primary' : 'secondary'"
+              icon="material-symbols:list"
+              aria-label="表格"
+              :aria-pressed="viewMode === 'table'"
+              @click="viewMode = 'table'"
+            />
+          </div>
           <p
             data-test="hit-count"
-            class="ml-auto flex-none whitespace-nowrap font-type text-micro text-label-tertiary"
+            class="flex-none whitespace-nowrap font-type text-micro text-label-tertiary"
           >
             <template v-if="hasFilters && totalAll && totalAll !== total">
               命中 {{ total }} / {{ totalAll }}
@@ -481,6 +514,13 @@ onMounted(() => {
             >去文件管理选择</RouterLink
           >
         </div>
+        <!-- 表格视图（#35 用户故事 4）：同一批条目、同一份关系摘要，
+             只换排布，不重新请求。分页条与页脚说明两视图共用。 -->
+        <KnowledgeTableView
+          v-else-if="!loading && viewMode === 'table'"
+          :items="items"
+          :relations="relations"
+        />
         <div v-else-if="!loading" class="space-y-3">
           <!-- 118px 硬卡（DESIGN.md §Layout 原型①「知识库为 118px 硬卡」）。
                卡面按物理索引卡的顺序排：左上分类号 → 标题 → 摘要（压蓝格线）

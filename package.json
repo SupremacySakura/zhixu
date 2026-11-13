@@ -17,11 +17,13 @@
     "build:backend": "cd apps/zhixu-backend && go build ./...",
     "typecheck": "pnpm --filter zhixu-frontend typecheck",
     "lint": "eslint \"apps/**/*.{ts,tsx,js,jsx,vue}\"",
+    "check:world": "pnpm --filter zhixu-frontend check:world",
+    "check:icons": "pnpm --filter zhixu-frontend check:icons",
     "clean": "tsc -b --clean",
     "prepare": "husky",
     "test": "pnpm --filter zhixu-frontend test:run",
     "test:backend": "cd apps/zhixu-backend && go test ./...",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm build:backend && pnpm test:backend"
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:world && pnpm check:icons && pnpm build:backend && pnpm test:backend"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
