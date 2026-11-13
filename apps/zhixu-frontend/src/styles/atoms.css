@@ -140,6 +140,21 @@
   --atom-tint-border: var(--color-danger);
 }
 
+/* 语义色两档：只给徽章用。DESIGN.md:362 把徽章的 tone 定成
+   neutral / primary / info / warning / danger 五档，info 与 warning
+   必须能读出来——统计卡上「待向量化」「向量失败」两个状态就靠它们。 */
+@utility atom-tint-info {
+  --atom-tint-surface: var(--color-info-tint);
+  --atom-tint-ink: var(--color-info);
+  --atom-tint-border: var(--color-info);
+}
+
+@utility atom-tint-warning {
+  --atom-tint-surface: var(--color-warning-tint);
+  --atom-tint-ink: var(--color-warning);
+  --atom-tint-border: var(--color-warning);
+}
+
 /* ============================================================
    按钮骨架
    ============================================================ */
@@ -368,11 +383,14 @@
   }
 }
 
+/* 状态点：4px 方块，不是圆点。DESIGN.md:362 定死了这一条——世界里
+   圆角恒 0，连 6px 的小圆点也不留（旧实现写死 border-radius:50%，
+   绕过了 --radius-* 令牌，令牌全 0 也杀不掉它）。 */
 @utility atom-badge-dot {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
   flex: none;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background-color: currentColor;
 }
 

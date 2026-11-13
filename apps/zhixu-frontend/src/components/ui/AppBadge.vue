@@ -13,8 +13,9 @@ import AppIcon from './AppIcon.vue'
 
 const props = withDefaults(
   defineProps<{
-    /** 四档语气，与按钮同一套词表。 */
-    tone?: 'primary' | 'secondary' | 'quiet' | 'danger'
+    /** 五档语气。与按钮的四档不是同一套词表：徽章要能表达
+     * 「信息 / 警告」这类状态，而按钮只需要动作强弱。 */
+    tone?: 'neutral' | 'primary' | 'info' | 'warning' | 'danger'
     /** 三档尺寸：26 / 32 / 36px。 */
     size?: 'sm' | 'md' | 'lg'
     /** 状态点：给「就绪 / 进行中 / 失败」这类持续状态用。 */
@@ -24,7 +25,7 @@ const props = withDefaults(
     /** 语义上不可用（如「暂不可用」状态）。不是交互控件，只标 aria-disabled。 */
     disabled?: boolean
   }>(),
-  { tone: 'secondary', size: 'md', dot: false, icon: '', disabled: false },
+  { tone: 'neutral', size: 'md', dot: false, icon: '', disabled: false },
 )
 
 /** 高度严格用契约的三档 26 / 32 / 36，不因为「徽章看起来该更矮」而另开刻度。 */
@@ -35,9 +36,10 @@ const SCALES = {
 } as const
 
 const TONE_CLASS = {
+  neutral: 'atom-tint-secondary',
   primary: 'atom-tint-primary',
-  secondary: 'atom-tint-secondary',
-  quiet: 'atom-tint-quiet',
+  info: 'atom-tint-info',
+  warning: 'atom-tint-warning',
   danger: 'atom-tint-danger',
 } as const
 
