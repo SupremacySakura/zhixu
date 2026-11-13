@@ -44,7 +44,7 @@ AI 工具进入项目时应优先读取的必读层。
 
 前端的视觉权威与产品真相，两者都不是实现细节，冲突时的优先级见 [ADR-0003](./adr/0003-visual-world-replacement.md)。
 
-- [../DESIGN.md](../DESIGN.md) — 索引卡盒视觉规范（v2，骨架 + 三章待回填）
+- [../DESIGN.md](../DESIGN.md) — 索引卡盒视觉规范（v2；版面/响应式已实测回填，可访问性地板四项未验）
 - [../apps/zhixu-frontend/PRODUCT.md](../apps/zhixu-frontend/PRODUCT.md) — 产品真相（用户、定位、不可破契约）
 
 ### 领域术语与决策记录

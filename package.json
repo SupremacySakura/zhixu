@@ -16,7 +16,7 @@
     "typecheck:ai": "pnpm --filter zhixu-ai typecheck",
     "build:backend": "cd apps/zhixu-backend && go build ./...",
     "typecheck": "pnpm --filter zhixu-frontend typecheck",
-    "lint": "eslint \"apps/**/*.{ts,tsx,js,jsx,vue}\"",
+    "lint": "eslint \"apps/**/*.{ts,tsx,js,jsx,vue}\" && pnpm --filter zhixu-frontend lint",
     "check:world": "pnpm --filter zhixu-frontend check:world",
     "check:icons": "pnpm --filter zhixu-frontend check:icons",
     "clean": "tsc -b --clean",

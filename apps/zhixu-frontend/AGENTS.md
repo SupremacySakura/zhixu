@@ -12,7 +12,7 @@
 ## 前端核心文档
 
 - 前端结构: [docs/frontend-structure.md](../../docs/frontend-structure.md)
-- 视觉规范: [../../DESIGN.md](../../DESIGN.md) — 索引卡盒 v2（令牌/字级/版面/组件/动效；骨架 + 三章待回填）
+- 视觉规范: [../../DESIGN.md](../../DESIGN.md) — 索引卡盒 v2（令牌/字级/版面/组件/动效；版面与响应式已实测回填，可访问性仍有四项未验）
 - 产品真相: [./PRODUCT.md](./PRODUCT.md) — 用户、定位、不可破的产品与实现契约
 - Markdown 知识前端: [docs/markdown-knowledge-frontend.md](../../docs/markdown-knowledge-frontend.md)
 - 模型设置前端: [docs/model-settings-frontend.md](../../docs/model-settings-frontend.md)

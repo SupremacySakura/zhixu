@@ -4,20 +4,25 @@ set -e
 
 echo "🔍 运行 pre-commit hooks..."
 
-# 1. lint-staged: ESLint 修复前端代码
-echo "📦 1/4 运行 lint-staged..."
+# 1. lint-staged: ESLint 修复改动文件（前端 + AI 应用）
+echo "📦 1/5 运行 lint-staged..."
 pnpm exec lint-staged
 
-# 2. 检查 Markdown H1
-echo "📝 2/4 检查 Markdown H1..."
+# 2. 类型检查：此前 pre-commit 完全不跑，类型错误只能靠人工跑 verify 发现
+echo "🧠 2/5 类型检查..."
+pnpm typecheck
+
+# 3. 前端测试：此前 pre-commit 完全不跑（364→458 个用例全部靠人工执行）
+echo "🧪 3/5 前端测试..."
+pnpm test
+
+# 4. 检查 Markdown H1
+echo "📝 4/5 检查 Markdown H1..."
 ./scripts/hooks/check-md-h1.sh
 
-# 3. 检查 docs/ 链接可达性
-echo "🔗 3/4 检查 docs/ 链接..."
+# 5. 检查 docs/ 链接可达性 + .env 文件
+echo "🔗 5/5 检查 docs/ 链接与 .env..."
 ./scripts/hooks/check-doc-links.sh
-
-# 4. 检查 .env 文件提交
-echo "🔐 4/4 检查 .env 文件..."
 ./scripts/hooks/check-env.sh
 
 echo "✅ 所有 pre-commit hooks 通过"

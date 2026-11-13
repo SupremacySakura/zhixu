@@ -16,8 +16,43 @@ env:
   FRONTEND_IMAGE: ghcr.io/supremacysakura/zhixu-frontend
 
 jobs:
+  # 检查任务：此前 CI 只 build Docker 镜像，从不跑 lint/test/typecheck，
+  # 导致 `apps/zhixu-ai/src/lib/evolve.ts` 的 prettier 错误从 eeb0ab2 起
+  # 活了 19 个提交才被人发现。这里复用仓库自己的 verify 命令，不另造一套。
+  checks:
+    name: Checks
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/zhixu-backend/go.mod
+          cache-dependency-path: apps/zhixu-backend/go.sum
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify (lint / typecheck / test / build / guards / backend)
+        run: pnpm verify
+
   deploy:
     name: Deploy to Production
+    needs: checks
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     concurrency: deploy-production
