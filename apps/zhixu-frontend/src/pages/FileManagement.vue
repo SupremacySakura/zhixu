@@ -324,7 +324,7 @@ onMounted(() => {
               @clear-selection="clearSelection"
             />
             <div
-              class="mb-5 flex flex-wrap items-center justify-between gap-3 bg-primary-tint px-4 py-3 text-subhead text-primary-pressed"
+              class="mb-5 flex flex-wrap items-center justify-between gap-3 bg-primary-tint px-4 py-3 text-body text-primary-pressed"
             >
               <p>支持 .md / .markdown 加入知识库，原文件保持不变。</p>
               <RouterLink to="/home/knowledge" class="knowledge-text-action"
@@ -469,7 +469,7 @@ onMounted(() => {
             @cancel="closeDeleteConfirmModal"
             @confirm="confirmDeleteFromModal"
           >
-            <div class="mb-6 bg-surface-secondary p-4 text-subhead">
+            <div class="mb-6 bg-surface-secondary p-4 text-body">
               <label class="flex items-start gap-3">
                 <input
                   v-model="deleteRelatedKnowledge"
@@ -479,7 +479,7 @@ onMounted(() => {
                 />
                 <span>同时删除关联知识条目</span>
               </label>
-              <p class="mt-2 text-caption leading-6 text-label-secondary">
+              <p class="mt-2 text-note leading-6 text-label-secondary">
                 若已加入知识库，不勾选则保留知识正文；勾选会删除关联知识和处理任务。删除文件夹时包含其子目录中的文件。
               </p>
             </div>

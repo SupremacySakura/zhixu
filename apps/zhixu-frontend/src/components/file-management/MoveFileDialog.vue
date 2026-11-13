@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, useId, watch } from 'vue'
 import AppIcon from '../ui/AppIcon.vue'
-import AppLoading from '../ui/AppLoading.vue'
+import AppButton from '../ui/AppButton.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../../utils/motion'
 import type { FileListItem } from '../../services/types/file'
@@ -78,15 +78,11 @@ watch(
           class="w-full max-w-2xl bg-surface p-6 shadow-popover outline-none"
         >
           <div ref="dialogRef" tabindex="-1">
-            <h3 :id="titleId" class="text-title-3 mb-2">移动到</h3>
-            <p class="text-subhead text-label-secondary mb-4">
-              当前对象：{{ target?.name ?? '-' }}
-            </p>
+            <h3 :id="titleId" class="mb-2 text-title">移动到</h3>
+            <p class="mb-4 text-note text-label-secondary">当前对象：{{ target?.name ?? '-' }}</p>
 
             <div class="mb-3 flex items-center justify-between gap-3">
-              <nav
-                class="flex items-center gap-1.5 overflow-x-auto text-caption text-label-tertiary"
-              >
+              <nav class="flex items-center gap-1.5 overflow-x-auto text-note text-label-tertiary">
                 <template
                   v-for="(breadcrumb, index) in breadcrumbs"
                   :key="`${breadcrumb.id}-${index}`"
@@ -110,21 +106,21 @@ watch(
                   />
                 </template>
               </nav>
-              <button
-                class="h-8 flex-none items-center bg-surface px-3.5 text-body font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary hover:text-label disabled:opacity-60"
-                type="button"
+              <AppButton
+                size="sm"
+                class="flex-none"
                 aria-label="选中当前目录作为目标"
                 :disabled="moving"
                 @click="emit('select-current')"
               >
                 选中当前目录
-              </button>
+              </AppButton>
             </div>
 
             <!-- 目录浏览器：48px 行，hover 底色 -->
             <div class="overflow-hidden border border-hairline">
               <div class="max-h-72 overflow-y-auto">
-                <div v-if="browserLoading" class="px-4 py-3 text-subhead text-label-secondary">
+                <div v-if="browserLoading" class="px-4 py-3 text-note text-label-secondary">
                   正在加载目录...
                 </div>
                 <template v-else>
@@ -145,7 +141,7 @@ watch(
                             :style="{ '--atom-glyph-size': '16px' }"
                           />
                         </span>
-                        <span class="truncate text-sm text-label">{{ folder.name }}</span>
+                        <span class="truncate text-body text-label">{{ folder.name }}</span>
                       </span>
                       <AppIcon
                         class="atom-glyph text-label-tertiary"
@@ -155,39 +151,28 @@ watch(
                     </button>
                     <div v-if="index < folders.length - 1" class="ml-15 h-px bg-hairline" />
                   </template>
-                  <div
-                    v-if="folders.length === 0"
-                    class="px-4 py-3 text-subhead text-label-secondary"
-                  >
+                  <div v-if="folders.length === 0" class="px-4 py-3 text-note text-label-secondary">
                     当前目录下没有子文件夹
                   </div>
                 </template>
               </div>
             </div>
 
-            <p class="mt-3 text-caption text-label-tertiary">
+            <p class="mt-3 text-note text-label-tertiary">
               已选目标目录 ID：
               <span class="font-semibold text-label">{{ targetFolderId }}</span>
             </p>
 
             <div class="mt-5 flex justify-end gap-3">
-              <button
-                class="h-10 bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary disabled:opacity-60"
-                type="button"
+              <AppButton :disabled="moving" @click="handleCancel">取消</AppButton>
+              <AppButton
+                tone="primary"
                 :disabled="moving"
-                @click="handleCancel"
-              >
-                取消
-              </button>
-              <button
-                class="flex h-10 items-center gap-2 px-5 text-sm font-semibold transition-colors disabled:opacity-60 knowledge-button-primary"
-                type="button"
-                :disabled="moving"
+                :loading="moving"
                 @click="emit('confirm')"
               >
-                <AppLoading v-if="moving" size="sm" />
                 {{ moving ? '移动中...' : '确认移动' }}
-              </button>
+              </AppButton>
             </div>
           </div>
         </Motion>

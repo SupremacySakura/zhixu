@@ -75,7 +75,7 @@ onMounted(() => document.addEventListener('click', handleDocumentClick))
 onBeforeUnmount(() => document.removeEventListener('click', handleDocumentClick))
 
 const menuItemClass =
-  'flex h-9 w-full items-center justify-between gap-[18px] px-2.5 text-left text-sm text-label transition-colors hover:bg-surface-secondary'
+  'flex h-9 w-full items-center justify-between gap-[18px] px-2.5 text-left text-body text-label transition-colors hover:bg-surface-secondary'
 const segButtonClass =
   'flex h-7 items-center justify-center px-[11px] text-label-secondary transition-colors tap-target'
 </script>
@@ -84,7 +84,7 @@ const segButtonClass =
   <!-- 粘性材质工具栏：内容滚动时从底下穿过（FileToolbar.html） -->
   <div
     ref="rootRef"
-    class="sticky top-3 z-toolbar mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border border-hairline bg-surface-secondary px-3 py-2 shadow-card"
+    class="sticky top-0 z-toolbar mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border-b border-hairline bg-surface py-2"
   >
     <div class="flex w-full flex-wrap items-center gap-2.5 lg:w-auto">
       <!-- 胶囊搜索 -->
@@ -99,7 +99,7 @@ const segButtonClass =
           type="text"
           placeholder="搜索文件..."
           aria-label="搜索文件"
-          class="h-[34px] w-full border-none bg-surface-secondary pl-[33px] pr-[30px] text-sm text-label outline-none transition-[background-color,box-shadow] placeholder:text-label-tertiary focus:bg-surface focus:shadow-[inset_0_0_0_1.5px_var(--color-primary),0_0_0_3px_var(--color-primary-tint)]"
+          class="h-[34px] w-full border-none bg-surface-secondary pl-[33px] pr-[30px] text-body text-label outline-none transition-[background-color,box-shadow] placeholder:text-label-tertiary focus:bg-surface focus:shadow-[inset_0_0_0_1.5px_var(--color-primary),0_0_0_3px_var(--color-primary-tint)]"
           @input="handleSearchInput"
         />
         <button
@@ -195,7 +195,7 @@ const segButtonClass =
     <!-- 排序 -->
     <div class="relative w-full sm:w-auto">
       <div class="flex items-center gap-1.5 pr-1 sm:justify-end">
-        <span class="text-caption text-label-tertiary">排序方式</span>
+        <span class="text-note text-label-tertiary">排序方式</span>
         <button
           class="flex h-8 items-center gap-1 px-2 text-body font-semibold text-label transition-colors hover:bg-primary-tint hover:text-primary"
           type="button"
@@ -249,7 +249,7 @@ const segButtonClass =
             />
           </button>
           <div class="mx-2.5 my-1 h-px bg-hairline"></div>
-          <div class="px-2.5 pb-1 pt-1.5 text-caption text-label-tertiary">
+          <div class="px-2.5 pb-1 pt-1.5 text-note text-label-tertiary">
             {{ sortDirection === 'asc' ? '升序' : '降序' }}
           </div>
         </Motion>

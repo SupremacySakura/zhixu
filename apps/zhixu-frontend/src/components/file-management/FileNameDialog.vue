@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import AppLoading from '../ui/AppLoading.vue'
+import AppButton from '../ui/AppButton.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../../utils/motion'
 
@@ -91,20 +91,20 @@ watch(
           :transition="springSnappy"
           class="w-full max-w-md bg-surface p-6 shadow-popover"
         >
-          <h3 :id="titleId" class="text-title-3 mb-2">{{ title }}</h3>
+          <h3 :id="titleId" class="mb-2 text-title">{{ title }}</h3>
           <slot name="description">
-            <p v-if="description" class="text-body mb-4 text-label-secondary">{{ description }}</p>
+            <p v-if="description" class="mb-4 text-note text-label-secondary">{{ description }}</p>
           </slot>
 
           <div class="mb-6" :class="description ? '' : 'mt-4'">
-            <label class="mb-1.5 block text-body font-semibold text-label-secondary">
+            <label class="mb-1.5 block text-note font-semibold text-label-secondary">
               {{ label }}
             </label>
             <input
               ref="inputRef"
               :value="value"
               type="text"
-              class="h-11 w-full border border-hairline bg-surface-secondary px-3.5 text-lead font-normal text-label transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary focus:border-primary focus:bg-surface disabled:opacity-60"
+              class="h-9 w-full border border-hairline bg-surface-secondary px-3 text-body text-label transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary focus:border-primary focus:bg-surface disabled:opacity-60"
               :placeholder="placeholder"
               :disabled="loading"
               @input="handleInput"
@@ -113,23 +113,15 @@ watch(
           </div>
 
           <div class="flex justify-end gap-3">
-            <button
-              class="h-10 bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary disabled:opacity-60"
-              type="button"
-              :disabled="loading"
-              @click="handleCancel"
-            >
-              {{ cancelText }}
-            </button>
-            <button
-              class="flex h-10 items-center gap-2 px-5 text-sm font-semibold transition-colors disabled:opacity-60 knowledge-button-primary"
-              type="button"
+            <AppButton :disabled="loading" @click="handleCancel">{{ cancelText }}</AppButton>
+            <AppButton
+              tone="primary"
               :disabled="isConfirmDisabled"
+              :loading="loading"
               @click="handleConfirm"
             >
-              <AppLoading v-if="loading" size="sm" />
               {{ loading ? loadingText : confirmText }}
-            </button>
+            </AppButton>
           </div>
         </Motion>
       </Motion>

@@ -44,7 +44,7 @@ const pageButtonClass = 'min-w-8 text-body font-semibold tracking-[0.01em] trans
   <div
     class="flex flex-col gap-3 border-t border-hairline bg-surface px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6"
   >
-    <p class="text-caption text-label-secondary">
+    <p class="text-note text-label-secondary">
       第 <span class="font-bold text-label">{{ startIndex }}-{{ endIndex }}</span> 项，共
       <span class="font-bold text-label">{{ totalCount }}</span> 项
     </p>
@@ -104,7 +104,7 @@ const pageButtonClass = 'min-w-8 text-body font-semibold tracking-[0.01em] trans
         />
       </button>
       <div v-if="safeTotalPages > 1" class="ml-2.5 flex items-center gap-1.5">
-        <span class="text-caption text-label-tertiary">跳至</span>
+        <span class="text-note text-label-tertiary">跳至</span>
         <input
           v-model="jumpToPageInput"
           type="number"
@@ -116,7 +116,7 @@ const pageButtonClass = 'min-w-8 text-body font-semibold tracking-[0.01em] trans
           class="h-8 w-14 border border-hairline bg-surface-secondary px-2 text-center text-body text-label transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary focus:border-primary focus:bg-surface disabled:opacity-45"
           @keyup.enter="submitJump"
         />
-        <span class="text-caption text-label-tertiary">页</span>
+        <span class="text-note text-label-tertiary">页</span>
       </div>
     </div>
   </div>

@@ -6,6 +6,7 @@ import type { FileDisplayItem, FileItemKey } from '../../types/file'
 import { formatBytes } from '../../utils/file'
 import { ownerInitials } from '../../utils/file-management'
 import FileEmptyState from './FileEmptyState.vue'
+import FileSelectBox from './FileSelectBox.vue'
 import FileKnowledgeAction from '../knowledge/FileKnowledgeAction.vue'
 import type { KnowledgeItem } from '../../services/apis/knowledge'
 
@@ -37,10 +38,6 @@ const emit = defineEmits<{
 const ownerBadge = computed(() => ownerInitials(props.ownerName))
 
 const handleItemClick = (file: FileDisplayItem) => emit('open-item', file)
-const handleToggleSelect = (file: FileDisplayItem, event: Event) => {
-  const input = event.currentTarget
-  if (input instanceof HTMLInputElement) emit('toggle-select', file, input.checked)
-}
 const handleOpenMenu = (file: FileDisplayItem, event: MouseEvent) => {
   const anchor = event.currentTarget
   if (anchor instanceof HTMLElement) emit('open-menu', file, anchor)
@@ -57,7 +54,9 @@ const cardClass = (key: FileItemKey) =>
 
 <template>
   <div>
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- 基础档就是两列：375px 下双列卡片是 DESIGN.md:514 的明确要求，
+         原来只在 sm（≥640px）以上才双列，375 下退成单列，等于窄屏信息密度腰斩。 -->
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
       <!-- 「..」返回上一级目录卡 -->
       <div
         v-if="hasParentFolder"
@@ -78,8 +77,8 @@ const cardClass = (key: FileItemKey) =>
             />
           </span>
           <div class="min-w-0">
-            <p class="truncate text-lead font-semibold leading-5 text-label">..</p>
-            <p class="mt-0.5 text-body text-label-secondary">返回上一级目录</p>
+            <p class="truncate text-lead leading-5 text-label">..</p>
+            <p class="mt-0.5 text-note text-label-secondary">返回上一级目录</p>
           </div>
         </div>
       </div>
@@ -105,44 +104,21 @@ const cardClass = (key: FileItemKey) =>
             />
           </span>
           <div class="min-w-0 flex-1">
-            <p class="line-clamp-2 text-lead font-semibold leading-5 text-label">
+            <p class="line-clamp-2 text-lead leading-5 text-label">
               {{ file.name }}
             </p>
-            <p class="mt-0.5 truncate text-body text-label-secondary">{{ file.typeLabel }}</p>
+            <p class="mt-0.5 truncate text-note text-label-secondary">{{ file.typeLabel }}</p>
           </div>
-          <label class="inline-flex flex-none cursor-pointer pt-0.5" @click.stop>
-            <input
-              type="checkbox"
-              class="peer sr-only"
-              :aria-label="`选择 ${file.name}`"
+          <span class="flex-none pt-0.5">
+            <FileSelectBox
+              :label="`选择 ${file.name}`"
               :checked="isSelected(file.key)"
-              @change="handleToggleSelect(file, $event)"
+              @change="checked => emit('toggle-select', file, checked)"
             />
-            <span
-              class="flex h-[18px] w-[18px] items-center justify-center border-[1.5px] border-label-tertiary bg-surface transition-[background-color,border-color] hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50"
-            >
-              <svg
-                v-if="isSelected(file.key)"
-                class="h-[11px] w-[11px]"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="m5 12.5 5 5L19 8"
-                  stroke="#fff"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </span>
-          </label>
+          </span>
         </div>
 
-        <div
-          class="mt-3.5 flex items-center justify-between gap-2 text-caption text-label-secondary"
-        >
+        <div class="mt-3.5 flex items-center justify-between gap-2 text-note text-label-secondary">
           <span>{{ file.type === 'folder' ? '-' : formatBytes(file.size) }}</span>
           <span class="whitespace-nowrap">{{ file.lastModifiedText }}</span>
         </div>
@@ -160,7 +136,7 @@ const cardClass = (key: FileItemKey) =>
             >
               {{ ownerBadge }}
             </span>
-            <span class="truncate text-caption text-label-secondary">{{ ownerName }}</span>
+            <span class="truncate text-note text-label-secondary">{{ ownerName }}</span>
           </div>
           <button
             class="flex h-8 w-8 flex-none items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
@@ -180,7 +156,7 @@ const cardClass = (key: FileItemKey) =>
       <div v-if="loading" class="col-span-full py-20">
         <div class="flex flex-col items-center justify-center text-center">
           <AppLoading :size="28" class="mb-3 text-primary" />
-          <p class="text-subhead text-label-tertiary">加载中...</p>
+          <p class="text-note text-label-tertiary">加载中...</p>
         </div>
       </div>
       <div v-else-if="files.length === 0" class="col-span-full py-20">
