@@ -23,16 +23,16 @@ const emit = defineEmits<{ close: []; retry: []; refresh: [] }>()
             <h2 class="text-body font-semibold">加入知识库</h2>
             <button
               type="button"
-              class="knowledge-icon-button"
+              class="atom-icon-btn"
               aria-label="关闭处理面板"
               @click="emit('close')"
             >
               <AppIcon icon="material-symbols:close-rounded" />
             </button>
           </div>
-          <p class="mb-3 break-all text-subhead">{{ item.source_file_name }}</p>
+          <p class="mb-3 break-all text-body">{{ item.source_file_name }}</p>
           <KnowledgeBadge :status="item.status" />
-          <p class="mt-4 text-subhead leading-6 text-label-secondary" role="status">
+          <p class="mt-4 text-body leading-6 text-label-secondary" role="status">
             {{
               item.status === 'ready'
                 ? '正文已提取并保存，原文件保持不变。'
@@ -43,20 +43,15 @@ const emit = defineEmits<{ close: []; retry: []; refresh: [] }>()
                     : '正在提取 Markdown 正文并保存知识条目。'
             }}
           </p>
-          <p v-if="error" class="mt-3 text-subhead text-warning-strong" role="alert">{{ error }}</p>
+          <p v-if="error" class="mt-3 text-body text-warning-strong" role="alert">{{ error }}</p>
           <div class="mt-4 flex justify-end gap-2">
-            <button
-              v-if="error"
-              type="button"
-              class="knowledge-text-action"
-              @click="emit('refresh')"
-            >
+            <button v-if="error" type="button" class="atom-text-action" @click="emit('refresh')">
               重新查询
             </button>
             <button
               v-if="item.status === 'failed'"
               type="button"
-              class="knowledge-button-secondary"
+              class="atom-btn atom-tone-secondary atom-btn-wide"
               :disabled="busy"
               @click="emit('retry')"
             >
@@ -65,7 +60,7 @@ const emit = defineEmits<{ close: []; retry: []; refresh: [] }>()
             <RouterLink
               v-if="item.status === 'ready'"
               :to="`/home/knowledge/${item.id}`"
-              class="knowledge-button-tint"
+              class="atom-btn atom-tone-tint atom-btn-wide"
               @click="emit('close')"
               >查看知识</RouterLink
             >

@@ -163,7 +163,7 @@ onMounted(() => {
 
     <main class="shell-page">
       <div class="shell-wide">
-        <p class="mb-4 text-subhead text-label-secondary">
+        <p class="mb-4 text-body text-label-secondary">
           逐条处理重复、过时与冲突提醒；每条裁决只影响提醒涉及的知识。
         </p>
         <div class="mb-4 flex gap-1" role="tablist" aria-label="演化提醒视图">
@@ -172,7 +172,7 @@ onMounted(() => {
             role="tab"
             :aria-selected="tab === 'pending'"
             :class="[
-              ' px-4 py-1.5 text-subhead transition-colors',
+              ' px-4 py-1.5 text-body transition-colors',
               tab === 'pending'
                 ? 'bg-primary-tint font-semibold text-primary-pressed'
                 : 'text-label-secondary hover:bg-surface-secondary',
@@ -186,7 +186,7 @@ onMounted(() => {
             role="tab"
             :aria-selected="tab === 'records'"
             :class="[
-              ' px-4 py-1.5 text-subhead transition-colors',
+              ' px-4 py-1.5 text-body transition-colors',
               tab === 'records'
                 ? 'bg-primary-tint font-semibold text-primary-pressed'
                 : 'text-label-secondary hover:bg-surface-secondary',
@@ -208,18 +208,14 @@ onMounted(() => {
             />
             <FilterMenu v-model="status" :options="statusOptions" label="提醒状态" />
           </AppFilterBar>
-          <span class="text-caption text-label-secondary">共 {{ total }} 条</span>
+          <span class="text-note text-label-secondary">共 {{ total }} 条</span>
         </section>
 
-        <p
-          v-if="error"
-          class="mb-4 bg-warning-tint p-4 text-subhead text-warning-strong"
-          role="alert"
-        >
+        <p v-if="error" class="mb-4 bg-warning-tint p-4 text-body text-warning-strong" role="alert">
           {{ error }}
         </p>
 
-        <p v-if="loading" class="mb-4 text-subhead text-label-secondary" role="status">
+        <p v-if="loading" class="mb-4 text-body text-label-secondary" role="status">
           正在加载提醒…
         </p>
 
@@ -228,11 +224,15 @@ onMounted(() => {
           class="border border-hairline bg-surface px-6 py-16 text-center"
           data-test="empty-filtered"
         >
-          <h2 class="text-title-3">没有符合筛选条件的提醒</h2>
-          <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
+          <h2 class="text-title">没有符合筛选条件的提醒</h2>
+          <p class="mx-auto mt-3 max-w-sm text-body leading-7 text-label-secondary">
             换一个类型或状态试试，也可以清空筛选看全部提醒。
           </p>
-          <button type="button" class="knowledge-button-secondary mt-6" @click="clearFilters">
+          <button
+            type="button"
+            class="atom-btn atom-tone-secondary atom-btn-wide mt-6"
+            @click="clearFilters"
+          >
             清空筛选
           </button>
         </div>
@@ -242,10 +242,10 @@ onMounted(() => {
           class="border border-hairline bg-surface px-6 py-16 text-center"
           data-test="empty-none"
         >
-          <h2 class="text-title-3">
+          <h2 class="text-title">
             {{ tab === 'pending' ? '当前没有需要处理的演化提醒' : '还没有处理记录' }}
           </h2>
-          <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
+          <p class="mx-auto mt-3 max-w-sm text-body leading-7 text-label-secondary">
             {{
               tab === 'pending'
                 ? '导入或编辑知识后，系统会自动检查重复、过时与冲突，发现问题会出现在这里。'
@@ -348,17 +348,17 @@ onMounted(() => {
         >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <p class="text-caption text-label-secondary">
+              <p class="text-note text-label-secondary">
                 {{ TYPE_LABELS[selectedAlert.alert_type] }}提醒 ·
                 {{ STATUS_LABELS[selectedAlert.status] }}
               </p>
-              <h2 class="mt-1 text-title-3">
+              <h2 class="mt-1 text-title">
                 {{ selectedAlert.subjects[0]?.title || '演化提醒' }}
               </h2>
             </div>
             <button
               type="button"
-              class="knowledge-icon-button shrink-0"
+              class="atom-icon-btn shrink-0"
               aria-label="关闭"
               @click="closeDetail"
             >
@@ -366,25 +366,25 @@ onMounted(() => {
             </button>
           </div>
 
-          <p class="mt-4 text-subhead leading-7 text-label-secondary">
+          <p class="mt-4 text-body leading-7 text-label-secondary">
             {{ selectedAlert.payload.reason }}
           </p>
 
           <p
             v-if="archived(selectedAlert)"
-            class="mt-3 bg-warning-tint px-3 py-2 text-caption text-warning-strong"
+            class="mt-3 bg-warning-tint px-3 py-2 text-note text-warning-strong"
           >
             涉及知识已归档，只能忽略或标记已核实
           </p>
           <p
             v-if="selectedAlert.alert_type === 'conflict' && !hasRevision(selectedAlert)"
-            class="mt-3 bg-surface-secondary px-3 py-2 text-caption text-label-secondary"
+            class="mt-3 bg-surface-secondary px-3 py-2 text-note text-label-secondary"
           >
             该提醒没有修订稿，暂不能采纳修订
           </p>
 
           <section class="mt-5">
-            <h3 class="text-headline">证据对照</h3>
+            <h3 class="text-lead">证据对照</h3>
             <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div
                 v-for="index in [0, 1]"
@@ -392,20 +392,20 @@ onMounted(() => {
                 class="border border-hairline p-3"
                 :data-test="`evidence-${index}`"
               >
-                <p class="text-caption text-label-secondary">
+                <p class="text-note text-label-secondary">
                   {{ index === 0 ? '本次检查的知识' : '被比对的知识' }}
                 </p>
                 <RouterLink
                   v-if="subjectAt(selectedAlert, index)"
                   :to="`/home/knowledge/${subjectAt(selectedAlert, index)!.id}`"
-                  class="mt-1 block truncate text-subhead font-medium text-primary hover:underline"
+                  class="mt-1 block truncate text-body font-medium text-primary hover:underline"
                 >
                   {{ subjectAt(selectedAlert, index)!.title }}
                 </RouterLink>
-                <p class="mt-1 text-caption text-label-tertiary">
+                <p class="mt-1 text-note text-label-tertiary">
                   {{ knowledgeSourceLabel(subjectAt(selectedAlert, index)?.source_type || '') }}
                 </p>
-                <blockquote class="mt-2 text-subhead leading-7 text-label">
+                <blockquote class="mt-2 text-body leading-7 text-label">
                   <template
                     v-for="(segment, segmentIndex) in highlightQuote(
                       quoteAt(selectedAlert, index),
@@ -424,23 +424,23 @@ onMounted(() => {
           </section>
 
           <section v-if="hasRevision(selectedAlert)" class="mt-5">
-            <h3 class="text-headline">修订稿</h3>
-            <p class="mt-2 text-subhead font-medium text-label">
+            <h3 class="text-lead">修订稿</h3>
+            <p class="mt-2 text-body font-medium text-label">
               {{ selectedAlert.payload.revised_title }}
             </p>
-            <p class="mt-1 text-subhead leading-7 text-label-secondary">
+            <p class="mt-1 text-body leading-7 text-label-secondary">
               {{ selectedAlert.payload.revised_content }}
             </p>
           </section>
 
           <section v-if="tab === 'pending'" class="mt-5">
-            <label class="text-caption text-label-secondary" for="evolution-note"
+            <label class="text-note text-label-secondary" for="evolution-note"
               >备注（随裁决一并记录）</label
             >
             <textarea
               id="evolution-note"
               v-model="note"
-              class="knowledge-textarea mt-2"
+              class="atom-field min-h-0 resize-y py-3 mt-2"
               rows="3"
               placeholder="可选，例如：两条内容重复但来源不同，先保留"
             />
@@ -448,7 +448,7 @@ onMounted(() => {
 
           <p
             v-if="resolveError"
-            class="mt-3 bg-warning-tint p-3 text-subhead text-warning-strong"
+            class="mt-3 bg-warning-tint p-3 text-body text-warning-strong"
             role="alert"
           >
             {{ resolveError }}
@@ -472,7 +472,9 @@ onMounted(() => {
               :disabled="Boolean(disabledReason(selectedAlert, action)) || resolving"
               :title="disabledReason(selectedAlert, action) || undefined"
               :class="
-                action === 'dismiss' ? 'knowledge-button-secondary' : 'knowledge-button-primary'
+                action === 'dismiss'
+                  ? 'atom-btn atom-tone-secondary atom-btn-wide'
+                  : 'atom-btn atom-tone-primary atom-btn-lg'
               "
               @click="submit(selectedAlert, action)"
             >
@@ -484,7 +486,7 @@ onMounted(() => {
             <RouterLink
               v-if="subjectAt(selectedAlert, 0)"
               :to="`/home/knowledge/${subjectAt(selectedAlert, 0)!.id}`"
-              class="knowledge-button-secondary"
+              class="atom-btn atom-tone-secondary atom-btn-wide"
             >
               查看知识
             </RouterLink>

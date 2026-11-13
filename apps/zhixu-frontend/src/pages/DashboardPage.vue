@@ -69,12 +69,12 @@ const fileTypeMeta: Record<string, { title: string; icon: string; colorClass: st
   video: {
     title: '视频',
     icon: 'material-symbols:videocam-outline-rounded',
-    colorClass: 'bg-pink-tint text-pink',
+    colorClass: 'bg-danger-tint text-danger',
   },
   audio: {
     title: '音频',
     icon: 'material-symbols:music-note-rounded',
-    colorClass: 'bg-purple-tint text-purple',
+    colorClass: 'bg-primary-tint text-primary',
   },
   document: {
     title: '文档',

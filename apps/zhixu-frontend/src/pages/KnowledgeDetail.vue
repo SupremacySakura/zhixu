@@ -207,7 +207,7 @@ function onOrganized(updated: KnowledgeItem) {
       </div>
       <p v-if="loading" class="py-12 text-center" role="status">正在读取知识正文…</p>
       <div v-if="error" class="mb-5 bg-warning-tint p-4 text-warning-strong" role="alert">
-        {{ error }} <button class="knowledge-text-action" @click="load()">重新加载</button>
+        {{ error }} <button class="atom-text-action" @click="load()">重新加载</button>
       </div>
       <template v-if="item">
         <header class="mb-6">
@@ -226,7 +226,7 @@ function onOrganized(updated: KnowledgeItem) {
             · 原始正文<template v-if="item.archived_at"> · 已归档</template>
           </p>
           <!-- 无页头带 ⇒ 动作落在正文流里。用 32px 的次操作（shell-band-action）：
-               36px 的 knowledge-button-* 六个并排会顶满整行，读起来像工具栏。 -->
+               36px 的 atom-btn 六个并排会顶满整行，读起来像工具栏。 -->
           <div class="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -351,7 +351,7 @@ function onOrganized(updated: KnowledgeItem) {
               <RouterLink
                 v-if="item.status === 'failed'"
                 to="/home/knowledge"
-                class="knowledge-text-action mt-4"
+                class="atom-text-action mt-4"
                 >返回知识库重试</RouterLink
               >
             </div>

@@ -208,18 +208,18 @@ onMounted(() => {
         <div
           v-if="loading"
           role="status"
-          class="flex items-center gap-2 p-8 text-subhead text-label-secondary"
+          class="flex items-center gap-2 p-8 text-body text-label-secondary"
         >
           <AppLoading size="sm" />正在读取模型配置…
         </div>
         <div
           v-else-if="loadingHistory"
           role="status"
-          class="flex items-center gap-2 p-8 text-subhead text-label-secondary"
+          class="flex items-center gap-2 p-8 text-body text-label-secondary"
         >
           <AppLoading size="sm" />正在读取对话历史…
         </div>
-        <div v-else-if="error" role="alert" class="p-8 text-subhead text-danger">
+        <div v-else-if="error" role="alert" class="p-8 text-body text-danger">
           {{ error }}<AppButton size="sm" class="ml-3" @click="load">重新加载</AppButton>
         </div>
         <div v-else-if="!selected" class="shell-wide px-6 py-16">
@@ -230,7 +230,7 @@ onMounted(() => {
             size="lg"
           >
             <template #actions>
-              <RouterLink to="/home/settings" class="knowledge-button-primary"
+              <RouterLink to="/home/settings" class="atom-btn atom-tone-primary atom-btn-lg"
                 >前往模型设置</RouterLink
               >
             </template>
@@ -252,7 +252,7 @@ onMounted(() => {
         </div>
       </section>
       <div class="shell-wide shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
-        <p role="status" class="min-h-7 text-caption text-label-secondary">
+        <p role="status" class="min-h-7 text-note text-label-secondary">
           {{
             running
               ? '正在生成 · 可停止'
@@ -282,13 +282,13 @@ onMounted(() => {
               v-model="prompt"
               maxlength="2000"
               rows="2"
-              class="w-full resize-none bg-transparent text-subhead leading-7 outline-none"
+              class="w-full resize-none bg-transparent text-body leading-7 outline-none"
               :disabled="!selected || running || loadingHistory || incomplete"
               placeholder="发送一条消息，测试你的模型连接…"
               @keydown="keydown"
             />
             <div
-              class="mt-2 flex items-center justify-between gap-2 text-caption text-label-secondary"
+              class="mt-2 flex items-center justify-between gap-2 text-note text-label-secondary"
             >
               <span class="hidden sm:inline">Enter 发送 · Shift + Enter 换行</span>
               <div class="ml-auto flex items-center gap-3">
@@ -348,7 +348,7 @@ onMounted(() => {
             <div
               class="flex flex-none items-center justify-between border-b border-hairline px-3 py-2.5"
             >
-              <h2 class="px-1 text-caption font-semibold tracking-wide text-label-secondary">
+              <h2 class="px-1 text-note font-semibold tracking-wide text-label-secondary">
                 会话历史
               </h2>
               <AppButton
@@ -371,7 +371,7 @@ onMounted(() => {
         </Motion>
       </AnimatePresence>
       <SettingsModal v-if="confirmation" title="开始新对话？" @close="confirmation = null"
-        ><p class="mb-6 text-subhead leading-7 text-label-secondary">
+        ><p class="mb-6 text-body leading-7 text-label-secondary">
           当前消息和草稿将清空，正在生成的回复会停止，无法恢复。切换模型只影响本次会话，不修改默认模型。
         </p>
         <div class="flex justify-end gap-3">

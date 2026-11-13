@@ -158,7 +158,7 @@ onMounted(() => {
     class="overflow-hidden bg-surface shadow-popover"
   >
     <div class="flex items-center justify-between border-b border-hairline px-6 py-5">
-      <h3 class="text-title-3">创建取件码</h3>
+      <h3 class="text-title">创建取件码</h3>
       <button
         class="flex h-9 w-9 items-center justify-center text-label-secondary transition-[background-color,color] tap-target hover:bg-surface-secondary hover:text-label"
         type="button"
@@ -217,11 +217,11 @@ onMounted(() => {
         <div class="max-h-54 overflow-y-auto border border-hairline">
           <div v-if="loading" class="flex items-center justify-center gap-3 px-4 py-[22px]">
             <AppLoading :size="18" class="text-primary" />
-            <span class="text-subhead text-label-secondary">正在加载文件...</span>
+            <span class="text-body text-label-secondary">正在加载文件...</span>
           </div>
           <div
             v-else-if="displayFileList.length === 0"
-            class="px-4 py-[22px] text-center text-subhead text-label-secondary"
+            class="px-4 py-[22px] text-center text-body text-label-secondary"
           >
             暂无可选文件，请先上传文件。
           </div>
@@ -245,7 +245,7 @@ onMounted(() => {
                       ? 'bg-surface-tertiary text-label-secondary'
                       : item.type === 'folder'
                         ? 'bg-warning-tint text-warning'
-                        : 'bg-teal-tint text-info'
+                        : 'bg-success-tint text-info'
                   "
                 >
                   <AppIcon
@@ -265,7 +265,7 @@ onMounted(() => {
                     {{ item.name }}
                   </span>
                   <span
-                    class="text-caption"
+                    class="text-note"
                     :class="
                       selectedItemId === item.id && item.id !== -1
                         ? 'text-primary-pressed'
@@ -298,9 +298,7 @@ onMounted(() => {
           :max="maxDownloads"
           class="h-11 w-full border border-hairline bg-surface-secondary px-3.5 text-lead font-normal text-label transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary focus:border-primary focus:bg-surface"
         />
-        <p class="text-caption text-label-tertiary">
-          范围：{{ minDownloads }} - {{ maxDownloads }}
-        </p>
+        <p class="text-note text-label-tertiary">范围：{{ minDownloads }} - {{ maxDownloads }}</p>
       </div>
 
       <!-- 有效期：分段控件（surface-tertiary 轨道 + 选中白 pill）；到期时间按今天 + 天数实时计算 -->
@@ -322,7 +320,7 @@ onMounted(() => {
             {{ days }} 天
           </button>
         </div>
-        <p class="text-caption text-label-tertiary">
+        <p class="text-note text-label-tertiary">
           到期时间：{{ new Date(expireTime).toLocaleDateString() }}
         </p>
       </div>
@@ -338,7 +336,7 @@ onMounted(() => {
       </button>
       <button
         type="button"
-        class="flex h-10 items-center gap-2 px-5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 knowledge-button-primary"
+        class="flex h-10 items-center gap-2 px-5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 atom-btn atom-tone-primary atom-btn-lg"
         :disabled="!canSubmit || submitting"
         @click="handleSubmit"
       >

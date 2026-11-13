@@ -88,7 +88,7 @@ onBeforeUnmount(() => document.removeEventListener('click', outside))
         field
           ? 'w-full justify-between border border-hairline bg-surface-secondary text-left'
           : 'bg-surface-tertiary',
-        compact ? 'min-h-9 px-2.5 text-caption' : 'min-h-11 px-[13px] text-body',
+        compact ? 'min-h-9 px-2.5 text-note' : 'min-h-11 px-[13px] text-body',
       ]"
       @click="toggle"
     >

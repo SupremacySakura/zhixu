@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <dialog
       ref="dialog"
-      class="knowledge-dialog"
+      class="atom-dialog-shell"
       :aria-labelledby="id"
       @cancel.prevent="close"
       @click.self="close"
@@ -110,14 +110,14 @@ onBeforeUnmount(() => {
           >
             <div class="flex items-center justify-between gap-3 border-b border-hairline p-6">
               <div>
-                <h2 :id="id" class="text-title-3">版本历史</h2>
-                <p class="mt-1 text-caption text-label-secondary">
+                <h2 :id="id" class="text-title">版本历史</h2>
+                <p class="mt-1 text-note text-label-secondary">
                   恢复历史版本会生成一个新版本，已有版本不会被删除。
                 </p>
               </div>
               <button
                 type="button"
-                class="knowledge-icon-button"
+                class="atom-icon-btn"
                 :disabled="busy"
                 aria-label="关闭弹窗"
                 @click="close"
@@ -128,13 +128,11 @@ onBeforeUnmount(() => {
             <p
               v-if="error"
               role="alert"
-              class="mx-6 mt-4 bg-warning-tint p-3 text-subhead text-warning-strong"
+              class="mx-6 mt-4 bg-warning-tint p-3 text-body text-warning-strong"
             >
               {{ error }}
             </p>
-            <p v-if="loading" class="p-10 text-center text-subhead" role="status">
-              正在读取版本历史…
-            </p>
+            <p v-if="loading" class="p-10 text-center text-body" role="status">正在读取版本历史…</p>
             <div
               v-else-if="versions.length"
               class="grid gap-5 p-6 sm:grid-cols-[13rem_minmax(0,1fr)]"
@@ -152,15 +150,15 @@ onBeforeUnmount(() => {
                   "
                   @click="selectVersion(version.version_number)"
                 >
-                  <span class="flex items-center justify-between gap-2 text-subhead font-semibold">
+                  <span class="flex items-center justify-between gap-2 text-body font-semibold">
                     第 {{ version.version_number }} 版
                     <span
                       v-if="version.current"
-                      class="bg-primary-tint px-1.5 py-0.5 text-caption text-primary-pressed"
+                      class="bg-primary-tint px-1.5 py-0.5 text-note text-primary-pressed"
                       >当前</span
                     >
                   </span>
-                  <span class="mt-1 block text-caption text-label-secondary"
+                  <span class="mt-1 block text-note text-label-secondary"
                     >{{ knowledgeDate(version.created_at) }} ·
                     {{ changeSourceLabel(version.change_source) }}</span
                   >
@@ -168,17 +166,17 @@ onBeforeUnmount(() => {
               </div>
               <div class="min-w-0">
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <p class="text-subhead font-semibold">
+                  <p class="text-body font-semibold">
                     第 {{ selectedVersion?.version_number }} 版预览
-                    <span v-if="selectedVersion?.current" class="text-caption text-label-secondary"
+                    <span v-if="selectedVersion?.current" class="text-note text-label-secondary"
                       >（当前版本）</span
                     >
                   </p>
-                  <span class="text-caption text-label-secondary">{{ detail?.title }}</span>
+                  <span class="text-note text-label-secondary">{{ detail?.title }}</span>
                 </div>
                 <p
                   v-if="detailLoading"
-                  class="border border-hairline p-6 text-center text-subhead"
+                  class="border border-hairline p-6 text-center text-body"
                   role="status"
                 >
                   正在读取版本正文…
@@ -191,11 +189,11 @@ onBeforeUnmount(() => {
                 />
               </div>
             </div>
-            <p v-else class="p-10 text-center text-subhead">暂无历史版本。</p>
+            <p v-else class="p-10 text-center text-body">暂无历史版本。</p>
             <div class="flex justify-end gap-2 border-t border-hairline p-5">
               <button
                 type="button"
-                class="knowledge-button-secondary"
+                class="atom-btn atom-tone-secondary atom-btn-wide"
                 :disabled="busy"
                 @click="close"
               >
@@ -203,7 +201,7 @@ onBeforeUnmount(() => {
               </button>
               <button
                 type="button"
-                class="knowledge-button-primary"
+                class="atom-btn atom-tone-primary atom-btn-lg"
                 :disabled="busy || loading || !selectedVersion || selectedVersion.current"
                 @click="restore"
               >

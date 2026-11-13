@@ -65,7 +65,7 @@ function close() {
     <button
       type="button"
       data-test="filter-bar-trigger"
-      class="flex min-h-9 items-center gap-1.5 border border-hairline bg-surface px-2.5 text-caption font-semibold text-label-secondary transition-colors hover:text-label lg:hidden"
+      class="flex min-h-9 items-center gap-1.5 border border-hairline bg-surface px-2.5 text-note font-semibold text-label-secondary transition-colors hover:text-label lg:hidden"
       :aria-expanded="open"
       @click="open = true"
     >
@@ -108,7 +108,11 @@ function close() {
 
       <slot />
 
-      <button type="button" class="knowledge-button-primary mt-3 w-full lg:hidden" @click="close">
+      <button
+        type="button"
+        class="atom-btn atom-tone-primary atom-btn-lg mt-3 w-full lg:hidden"
+        @click="close"
+      >
         完成
       </button>
     </div>

@@ -19,7 +19,7 @@ const open = ref(false)
 const id = useId()
 const position = ref({ top: 0, left: 0, above: false })
 const itemClass =
-  'flex min-h-11 w-full items-center gap-2.5 px-3 py-2.5 text-left text-subhead active:bg-surface-tertiary'
+  'flex min-h-11 w-full items-center gap-2.5 px-3 py-2.5 text-left text-body active:bg-surface-tertiary'
 const canRetryVector = computed(
   () => props.item.status === 'ready' && props.item.vector_state === 'partial',
 )

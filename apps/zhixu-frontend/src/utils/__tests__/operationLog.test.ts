@@ -70,7 +70,7 @@ describe('describeOperationLog', () => {
 
   it('maps delete', () => {
     const d = describeOperationLog(makeLog({ action: 'delete' }))
-    expect(d.colorClass).toBe('bg-pink-tint text-pink')
+    expect(d.colorClass).toBe('bg-danger-tint text-danger')
     expect(d.subtitle).toBe('已删除')
     expect(d.highlight).toBe('')
   })
@@ -134,7 +134,7 @@ describe('describeOperationLog', () => {
       }),
     )
     expect(d.icon).toBe('material-symbols:history-rounded')
-    expect(d.colorClass).toBe('bg-purple-tint text-purple')
+    expect(d.colorClass).toBe('bg-primary-tint text-primary')
     expect(d.title).toBe('手写笔记')
     expect(d.subtitle).toBe('恢复历史版本')
     expect(d.highlight).toBe('第 2 版')
@@ -198,7 +198,7 @@ describe('describeOperationLog', () => {
       }),
     )
     expect(accepted.icon).toBe('material-symbols:auto-awesome-rounded')
-    expect(accepted.colorClass).toBe('bg-purple-tint text-purple')
+    expect(accepted.colorClass).toBe('bg-primary-tint text-primary')
     expect(accepted.subtitle).toBe('采纳 AI 整理结果')
   })
 
@@ -228,7 +228,7 @@ describe('describeOperationLog', () => {
       }),
     )
     expect(d.icon).toBe('material-symbols:rule-rounded')
-    expect(d.colorClass).toBe('bg-teal-tint text-teal')
+    expect(d.colorClass).toBe('bg-success-tint text-success')
     expect(d.title).toBe('演化提醒 #7')
     expect(d.subtitle).toBe('归档重复的一条')
   })
@@ -266,7 +266,7 @@ describe('describeOperationLog', () => {
       makeLog({ action: 'knowledge_delete', target_type: 'knowledge', target_name: '笔记' }),
     )
     expect(removed.subtitle).toBe('移出知识库')
-    expect(removed.colorClass).toBe('bg-pink-tint text-pink')
+    expect(removed.colorClass).toBe('bg-danger-tint text-danger')
     expect(removed.highlight).toBe('')
 
     const retried = describeOperationLog(
@@ -310,7 +310,7 @@ describe('describeOperationLog', () => {
 
     const deleted = describeOperationLog(makeLog({ action: 'share_link_delete' }))
     expect(deleted.subtitle).toBe('删除分享链接')
-    expect(deleted.colorClass).toBe('bg-pink-tint text-pink')
+    expect(deleted.colorClass).toBe('bg-danger-tint text-danger')
   })
 
   it('maps pickup code create and delete with code highlight', () => {

@@ -43,6 +43,16 @@ const props = withDefaults(
   },
 )
 
+/**
+ * 关掉属性透传：本组件的根是 `<div class="atom-field-shell">`，而真正要接收
+ * `id` / `name` / `autocomplete` 的是里面那层 `<input>`。不关的话 Vue 会把
+ * 同一批属性**同时**落到 div 与 input 上，`document.querySelector('#id')`
+ * 先命中的是 DIV —— 测试里 `wrapper.get('#xxx').setValue()` 会直接抛
+ * （DIV 没有 setValue）。本组件已经在模板里显式 `v-bind="attrs"` 到 input，
+ * 所以关掉透传不会丢任何属性。
+ */
+defineOptions({ inheritAttrs: false })
+
 const model = defineModel<string | number>({ default: '' })
 const attrs = useAttrs()
 const id = useId()

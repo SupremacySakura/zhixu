@@ -81,7 +81,7 @@ watch(
           class="w-full max-w-md bg-surface p-6 shadow-popover"
           @click.stop
         >
-          <h3 :id="'dialog-title-' + title" class="text-title-3 mb-2">{{ title }}</h3>
+          <h3 :id="'dialog-title-' + title" class="text-title mb-2">{{ title }}</h3>
           <p v-if="message" class="text-body mb-6 text-label-secondary">{{ message }}</p>
           <slot />
 
@@ -99,7 +99,9 @@ watch(
               type="button"
               :disabled="loading"
               class="flex h-10 items-center gap-2 px-5 text-sm font-semibold transition-colors disabled:opacity-60"
-              :class="danger ? 'atom-btn atom-tone-danger' : 'knowledge-button-primary'"
+              :class="
+                danger ? 'atom-btn atom-tone-danger' : 'atom-btn atom-tone-primary atom-btn-lg'
+              "
               @click="handleConfirm"
             >
               <slot name="confirm-icon" />

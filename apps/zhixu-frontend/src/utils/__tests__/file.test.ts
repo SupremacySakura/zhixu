@@ -65,24 +65,24 @@ describe('iconForFile', () => {
     const videoFile = new File([''], 'test.mp4', { type: 'video/mp4' })
     const result = iconForFile(videoFile)
     expect(result.icon).toBe('material-symbols:movie')
-    expect(result.bg).toBe('bg-teal-tint')
-    expect(result.fg).toBe('text-teal')
+    expect(result.bg).toBe('bg-success-tint')
+    expect(result.fg).toBe('text-success')
   })
 
   it('should return image icon for image files', () => {
     const imageFile = new File([''], 'test.png', { type: 'image/png' })
     const result = iconForFile(imageFile)
     expect(result.icon).toBe('material-symbols:image')
-    expect(result.bg).toBe('bg-pink-tint')
-    expect(result.fg).toBe('text-pink')
+    expect(result.bg).toBe('bg-danger-tint')
+    expect(result.fg).toBe('text-danger')
   })
 
   it('should return music icon for audio files', () => {
     const audioFile = new File([''], 'test.mp3', { type: 'audio/mpeg' })
     const result = iconForFile(audioFile)
     expect(result.icon).toBe('material-symbols:music-note')
-    expect(result.bg).toBe('bg-purple-tint')
-    expect(result.fg).toBe('text-purple')
+    expect(result.bg).toBe('bg-primary-tint')
+    expect(result.fg).toBe('text-primary')
   })
 
   it('should return document icon for document files', () => {
@@ -113,24 +113,24 @@ describe('iconForListItem', () => {
     const video = { type: 'file' as const, file_type: FileType.Video }
     const result = iconForListItem(video)
     expect(result.icon).toBe('material-symbols:movie')
-    expect(result.bg).toBe('bg-teal-tint')
-    expect(result.fg).toBe('text-teal')
+    expect(result.bg).toBe('bg-success-tint')
+    expect(result.fg).toBe('text-success')
   })
 
   it('should return image icon for image type', () => {
     const image = { type: 'file' as const, file_type: FileType.Image }
     const result = iconForListItem(image)
     expect(result.icon).toBe('material-symbols:image')
-    expect(result.bg).toBe('bg-pink-tint')
-    expect(result.fg).toBe('text-pink')
+    expect(result.bg).toBe('bg-danger-tint')
+    expect(result.fg).toBe('text-danger')
   })
 
   it('should return music icon for audio type', () => {
     const audio = { type: 'file' as const, file_type: FileType.Audio }
     const result = iconForListItem(audio)
     expect(result.icon).toBe('material-symbols:music-note')
-    expect(result.bg).toBe('bg-purple-tint')
-    expect(result.fg).toBe('text-purple')
+    expect(result.bg).toBe('bg-primary-tint')
+    expect(result.fg).toBe('text-primary')
   })
 
   it('should return document icon for document type', () => {

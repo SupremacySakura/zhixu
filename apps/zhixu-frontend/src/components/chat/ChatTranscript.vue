@@ -59,7 +59,7 @@ function statusText(message: ChatMessage) {
         :class="message.role === 'user' ? 'flex flex-col items-end' : ''"
       >
         <p
-          class="mb-3 text-caption"
+          class="mb-3 text-note"
           :class="message.role === 'user' ? 'text-label-secondary' : 'text-primary-pressed'"
         >
           {{ message.role === 'user' ? '你' : message.model }}
@@ -75,7 +75,7 @@ function statusText(message: ChatMessage) {
         </div>
         <div
           v-if="message.role === 'assistant'"
-          class="mt-3 flex flex-wrap items-center gap-4 text-caption text-label-secondary"
+          class="mt-3 flex flex-wrap items-center gap-4 text-note text-label-secondary"
         >
           <span>{{ statusText(message) }}</span>
           <AppButton
@@ -98,7 +98,7 @@ function statusText(message: ChatMessage) {
         </div>
         <!-- 引文带：上下各一条 rule 短横，中间是被引用的原文。
              折叠行为不变（<details>），摘要文案一字未改。 -->
-        <details v-if="message.sources?.length" class="mt-3 border-y border-rule py-3 text-caption">
+        <details v-if="message.sources?.length" class="mt-3 border-y border-rule py-3 text-note">
           <summary class="cursor-pointer text-label-primary">
             参考来源（{{ message.sources.length }}）<span
               v-if="message.query"
@@ -122,7 +122,7 @@ function statusText(message: ChatMessage) {
         <p
           v-if="message.error"
           role="alert"
-          class="mt-3 border-l-2 border-danger bg-danger-tint p-4 text-subhead leading-7 text-danger"
+          class="mt-3 border-l-2 border-danger bg-danger-tint p-4 text-body leading-7 text-danger"
         >
           {{ message.error
           }}<RouterLink to="/home/settings" class="ml-3 underline">检查模型设置</RouterLink>

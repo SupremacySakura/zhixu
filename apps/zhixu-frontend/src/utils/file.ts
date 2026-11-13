@@ -102,11 +102,11 @@ export const detectFileType = (file: File) => {
 export const iconForFile = (file: File) => {
   const kind = detectFileType(file)
   if (kind === FileType.Video)
-    return { icon: 'material-symbols:movie', bg: 'bg-teal-tint', fg: 'text-teal' }
+    return { icon: 'material-symbols:movie', bg: 'bg-success-tint', fg: 'text-success' }
   if (kind === FileType.Image)
-    return { icon: 'material-symbols:image', bg: 'bg-pink-tint', fg: 'text-pink' }
+    return { icon: 'material-symbols:image', bg: 'bg-danger-tint', fg: 'text-danger' }
   if (kind === FileType.Audio)
-    return { icon: 'material-symbols:music-note', bg: 'bg-purple-tint', fg: 'text-purple' }
+    return { icon: 'material-symbols:music-note', bg: 'bg-primary-tint', fg: 'text-primary' }
   if (kind === FileType.Document)
     return { icon: 'material-symbols:description', bg: 'bg-primary-tint', fg: 'text-primary' }
   return { icon: 'material-symbols:description', bg: 'bg-primary-tint', fg: 'text-primary' }
@@ -118,11 +118,11 @@ export const iconForListItem = (item: Pick<FileListItem, 'type' | 'file_type'>) 
   }
   const kind = item.file_type as FileType
   if (kind === FileType.Video)
-    return { icon: 'material-symbols:movie', bg: 'bg-teal-tint', fg: 'text-teal' }
+    return { icon: 'material-symbols:movie', bg: 'bg-success-tint', fg: 'text-success' }
   if (kind === FileType.Image)
-    return { icon: 'material-symbols:image', bg: 'bg-pink-tint', fg: 'text-pink' }
+    return { icon: 'material-symbols:image', bg: 'bg-danger-tint', fg: 'text-danger' }
   if (kind === FileType.Audio)
-    return { icon: 'material-symbols:music-note', bg: 'bg-purple-tint', fg: 'text-purple' }
+    return { icon: 'material-symbols:music-note', bg: 'bg-primary-tint', fg: 'text-primary' }
   if (kind === FileType.Document)
     return { icon: 'material-symbols:description', bg: 'bg-primary-tint', fg: 'text-primary' }
   return { icon: 'material-symbols:description', bg: 'bg-primary-tint', fg: 'text-primary' }

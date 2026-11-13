@@ -139,7 +139,7 @@ defineExpose({ acceptVersion })
     :busy="busy"
     @close="close"
   >
-    <p class="mb-5 text-subhead leading-6 text-label-secondary">
+    <p class="mb-5 text-body leading-6 text-label-secondary">
       填写连接信息，再手动添加可用模型。保存配置不会调用模型。
     </p>
     <form @submit.prevent="submit">
@@ -149,7 +149,7 @@ defineExpose({ acceptVersion })
            get('#provider-id') 就会取到 DIV，setValue 直接抛。 -->
       <fieldset :disabled="busy" class="grid min-w-0 gap-6 sm:grid-cols-2">
         <div>
-          <label for="provider-id" class="mb-2 block text-subhead font-semibold">
+          <label for="provider-id" class="mb-2 block text-body font-semibold">
             Provider ID<span class="ml-1 text-danger" aria-hidden="true">*</span>
           </label>
           <input
@@ -162,10 +162,10 @@ defineExpose({ acceptVersion })
             :disabled="!!provider || !!preset"
             placeholder="my-gateway"
           />
-          <p class="mt-2 text-caption text-label-secondary">小写字母开头；保存后不可修改。</p>
+          <p class="mt-2 text-note text-label-secondary">小写字母开头；保存后不可修改。</p>
         </div>
         <div>
-          <label for="provider-name" class="mb-2 block text-subhead font-semibold">
+          <label for="provider-name" class="mb-2 block text-body font-semibold">
             显示名称<span class="ml-1 text-danger" aria-hidden="true">*</span>
           </label>
           <input
@@ -179,7 +179,7 @@ defineExpose({ acceptVersion })
           />
         </div>
         <div class="sm:col-span-2">
-          <label for="provider-url" class="mb-2 block text-subhead font-semibold">
+          <label for="provider-url" class="mb-2 block text-body font-semibold">
             API 基础地址<span class="ml-1 text-danger" aria-hidden="true">*</span>
           </label>
           <input
@@ -193,13 +193,13 @@ defineExpose({ acceptVersion })
             :disabled="!!catalogID"
             placeholder="https://gateway.example.com/v1"
           />
-          <p class="mt-2 text-caption text-label-secondary">
+          <p class="mt-2 text-note text-label-secondary">
             不含 /chat/completions 或 /embeddings。其他端点请添加自定义 API。
           </p>
         </div>
         <div>
-          <p class="mb-2 text-subhead font-semibold">对话 API 协议</p>
-          <p v-if="catalogID" class="text-subhead">OpenAI Chat Completions</p>
+          <p class="mb-2 text-body font-semibold">对话 API 协议</p>
+          <p v-if="catalogID" class="text-body">OpenAI Chat Completions</p>
           <FilterMenu
             field
             v-else
@@ -213,8 +213,8 @@ defineExpose({ acceptVersion })
           />
         </div>
         <div>
-          <p class="mb-2 text-subhead font-semibold">认证方式</p>
-          <p v-if="catalogID" class="text-subhead">API Key</p>
+          <p class="mb-2 text-body font-semibold">认证方式</p>
+          <p v-if="catalogID" class="text-body">API Key</p>
           <FilterMenu
             field
             v-else
@@ -231,7 +231,7 @@ defineExpose({ acceptVersion })
         <div v-if="auth === 'key'" class="sm:col-span-2">
           <label
             for="provider-key"
-            class="mb-2 flex flex-wrap items-center gap-2 text-subhead font-semibold"
+            class="mb-2 flex flex-wrap items-center gap-2 text-body font-semibold"
           >
             <span>API Key ·</span>
             <AppBadge
@@ -258,7 +258,7 @@ defineExpose({ acceptVersion })
             />
             <AppButton class="shrink-0" @click="clearCredential">清除凭据</AppButton>
           </div>
-          <p class="mt-2 text-caption text-label-secondary">
+          <p class="mt-2 text-note text-label-secondary">
             密钥仅提交给服务端，不写入浏览器存储。无密钥也可保存为待配置状态。
           </p>
         </div>
@@ -267,8 +267,8 @@ defineExpose({ acceptVersion })
         class="mb-4 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-5"
       >
         <div>
-          <h3 class="text-headline">模型目录</h3>
-          <p class="mt-1 text-caption text-label-secondary">
+          <h3 class="text-lead">模型目录</h3>
+          <p class="mt-1 text-note text-label-secondary">
             Embedding 使用独立的 /embeddings 接口，维度需与模型一致。
           </p>
         </div>
@@ -282,7 +282,7 @@ defineExpose({ acceptVersion })
           class="grid gap-3 bg-surface-secondary p-4 sm:grid-cols-[minmax(0,1fr)_auto_100px_40px]"
         >
           <div>
-            <label :for="`model-${entry.key}`" class="mb-2 block text-caption font-semibold"
+            <label :for="`model-${entry.key}`" class="mb-2 block text-note font-semibold"
               >模型 ID<span class="ml-1 text-danger" aria-hidden="true">*</span></label
             ><input
               :id="`model-${entry.key}`"
@@ -295,7 +295,7 @@ defineExpose({ acceptVersion })
             />
           </div>
           <div>
-            <p class="mb-2 text-caption font-semibold">用途</p>
+            <p class="mb-2 text-note font-semibold">用途</p>
             <FilterMenu
               field
               :model-value="entry.kind"
@@ -312,7 +312,7 @@ defineExpose({ acceptVersion })
             />
           </div>
           <div>
-            <label :for="`dimension-${entry.key}`" class="mb-2 block text-caption font-semibold"
+            <label :for="`dimension-${entry.key}`" class="mb-2 block text-note font-semibold"
               >向量维度</label
             ><input
               :id="`dimension-${entry.key}`"
@@ -339,7 +339,7 @@ defineExpose({ acceptVersion })
       </fieldset>
       <label
         v-if="needsConfirmation"
-        class="mt-5 flex items-start gap-3 bg-warning-tint p-4 text-subhead text-warning-strong"
+        class="mt-5 flex items-start gap-3 bg-warning-tint p-4 text-body text-warning-strong"
         ><input
           v-model="reindexConfirmed"
           type="checkbox"
@@ -347,7 +347,7 @@ defineExpose({ acceptVersion })
           :disabled="busy"
         />我确认：当前 Embedding 地址或维度变更需要重建向量；保存不会自动重建。</label
       >
-      <p v-if="localError || error" role="alert" class="mt-4 text-subhead text-danger">
+      <p v-if="localError || error" role="alert" class="mt-4 text-body text-danger">
         {{ localError || error }}
       </p>
       <AppButton v-if="conflict" class="mt-3" :disabled="busy" @click="reload">
@@ -356,7 +356,7 @@ defineExpose({ acceptVersion })
       <footer
         class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-5"
       >
-        <p class="text-caption text-label-secondary">模型调用与连接测试尚未接入。</p>
+        <p class="text-note text-label-secondary">模型调用与连接测试尚未接入。</p>
         <div class="flex gap-2">
           <AppButton disabled>测试连接（待接入）</AppButton>
           <AppButton type="submit" tone="primary" :disabled="busy">

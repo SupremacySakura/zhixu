@@ -47,16 +47,16 @@ onScopeDispose(() => {
   <div v-if="file.type === 'file'" class="flex flex-wrap items-center gap-2" @click.stop>
     <template v-if="format">
       <KnowledgeBadge v-if="item" :status="item.status" />
-      <span v-else class="text-caption text-label-secondary">{{
+      <span v-else class="text-note text-label-secondary">{{
         state === 'loading' ? '查询状态…' : state === 'error' ? '状态查询失败' : '未加入'
       }}</span>
-      <button v-if="state === 'error'" type="button" class="knowledge-text-action" @click="load">
+      <button v-if="state === 'error'" type="button" class="atom-text-action" @click="load">
         重新查询
       </button>
       <button
         v-else
         type="button"
-        class="knowledge-text-action"
+        class="atom-text-action"
         :disabled="state === 'loading' || (!item && tooLarge)"
         @click="emit('action', file, item)"
       >
@@ -73,6 +73,6 @@ onScopeDispose(() => {
         }}
       </button>
     </template>
-    <span v-else class="text-caption text-label-secondary">知识化暂不支持此格式</span>
+    <span v-else class="text-note text-label-secondary">知识化暂不支持此格式</span>
   </div>
 </template>
