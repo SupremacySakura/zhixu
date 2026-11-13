@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import AppButton from '../ui/AppButton.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import {
   deleteConversation,
   listConversations,
@@ -74,11 +76,17 @@ defineExpose({ reload: load })
   >
     <div class="flex items-center justify-between px-4 py-4">
       <h2 class="text-caption font-semibold tracking-wide text-label-secondary">会话历史</h2>
-      <button type="button" class="knowledge-text-action" @click="emit('new')">＋ 新对话</button>
+      <AppButton tone="quiet" size="sm" @click="emit('new')">＋ 新对话</AppButton>
     </div>
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-      <p v-if="loading" role="status" class="px-2 py-4 text-caption text-label-secondary">
-        加载中…
+      <!-- 加载态：线环 + 既有 role="status" 文案。AppLoading 不传 label ——
+           传了它会渲染第二个 [role="status"]，与这里的语义重复。 -->
+      <p
+        v-if="loading"
+        role="status"
+        class="flex items-center gap-2 px-2 py-4 text-caption text-label-secondary"
+      >
+        <AppLoading size="sm" />加载中…
       </p>
       <p v-else-if="error" role="alert" class="px-2 py-4 text-caption text-danger">{{ error }}</p>
       <p v-else-if="!conversations.length" class="px-2 py-4 text-caption text-label-secondary">
@@ -113,8 +121,18 @@ defineExpose({ reload: load })
               <div class="mt-1 flex items-center justify-between text-note text-label-secondary">
                 <span>{{ relative(conversation.updated_at) }}</span>
                 <span class="flex gap-2 lg:hidden lg:group-hover:flex lg:group-focus-within:flex">
-                  <button type="button" @click="startRename(conversation)">改名</button>
-                  <button type="button" class="text-danger" @click="remove(conversation.id)">
+                  <button
+                    type="button"
+                    class="transition-colors hover:text-label"
+                    @click="startRename(conversation)"
+                  >
+                    改名
+                  </button>
+                  <button
+                    type="button"
+                    class="text-danger transition-colors hover:underline"
+                    @click="remove(conversation.id)"
+                  >
                     删除
                   </button>
                 </span>

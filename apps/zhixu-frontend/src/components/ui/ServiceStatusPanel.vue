@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import AppBadge from './AppBadge.vue'
+import AppLoading from './AppLoading.vue'
 import type { ServiceHealth, ServiceStatusReport } from '../../services/apis/serviceStatus'
 
 const props = defineProps<{
@@ -32,11 +34,13 @@ const checkedTime = computed(() => {
   const date = new Date(props.report.checked_at)
   return Number.isNaN(date.getTime()) ? props.report.checked_at : date.toLocaleString('zh-CN')
 })
-function badgeClass(status: ServiceHealth | undefined) {
-  if (status === 'healthy') return 'bg-primary-tint text-primary-pressed'
-  if (status === 'unconfigured') return 'bg-warning-tint text-warning-strong'
-  if (status) return 'bg-danger-tint text-danger'
-  return 'bg-surface-secondary text-label-secondary'
+function badgeTone(
+  status: ServiceHealth | undefined,
+): 'primary' | 'warning' | 'danger' | 'neutral' {
+  if (status === 'healthy') return 'primary'
+  if (status === 'unconfigured') return 'warning'
+  if (status) return 'danger'
+  return 'neutral'
 }
 </script>
 
@@ -53,7 +57,7 @@ function badgeClass(status: ServiceHealth | undefined) {
       </div>
       <button
         type="button"
-        class="knowledge-button-secondary"
+        class="atom-btn atom-tone-secondary"
         :disabled="loading"
         @click="$emit('refresh')"
       >
@@ -63,8 +67,15 @@ function badgeClass(status: ServiceHealth | undefined) {
     <p class="mb-5 mt-3 text-subhead text-label-secondary">
       这些连接由部署配置管理，不属于模型供应商设置。仅检测基础服务，不调用付费模型。
     </p>
-    <p v-if="loading" role="status" class="mb-4 text-subhead text-label-secondary">
-      正在检测基础服务…<span v-if="report">下方保留上次结果。</span>
+    <!-- 加载态：线环 + 既有 role="status" 文案。线环不传 label ——
+         ServiceStatusPanel.test.ts:47 用单数 get('[role="status"]')，
+         AppLoading 传 label 会渲染第二个，立刻抛「Found multiple elements」。 -->
+    <p
+      v-if="loading"
+      role="status"
+      class="mb-4 flex items-center gap-2 text-subhead text-label-secondary"
+    >
+      <AppLoading size="sm" />正在检测基础服务…<span v-if="report">下方保留上次结果。</span>
     </p>
     <p v-if="error" role="alert" class="mb-4 bg-warning-tint p-4 text-subhead text-warning-strong">
       {{ error }}<span v-if="stale"> 当前显示旧结果，不代表最新服务状态。</span>
@@ -87,9 +98,9 @@ function badgeClass(status: ServiceHealth | undefined) {
           class="text-caption tabular-nums text-label-secondary"
           >{{ entry.result.latency_ms }} ms</span
         >
-        <span class="px-3 py-1 text-caption" :class="badgeClass(entry.result?.status)">
+        <AppBadge :tone="badgeTone(entry.result?.status)">
           {{ entry.result ? healthLabels[entry.result.status] : '尚无检测结果' }}
-        </span>
+        </AppBadge>
       </div>
     </article>
     <p class="text-caption leading-6 text-label-secondary">
