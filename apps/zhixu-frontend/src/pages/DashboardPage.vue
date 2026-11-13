@@ -202,26 +202,26 @@ watch(
         <!-- 待处理提醒：只取摘要计数，点击进演化中心逐条处理 -->
         <RouterLink
           to="/home/evolution"
-          class="block bg-surface p-6 shadow-card transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-popover"
+          class="block border border-hairline bg-surface p-6 shadow-card transition-colors hover:bg-surface-secondary"
           data-test="evolution-card"
         >
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h3 class="text-title-3">待处理提醒</h3>
-              <p class="mt-1 text-subhead text-label-secondary">
+              <h3 class="text-title">待处理提醒</h3>
+              <p class="mt-1 text-body text-label-secondary">
                 重复、过时与冲突提醒集中在这里，逐条确认后才落地。
               </p>
             </div>
-            <span class="text-subhead font-medium text-primary">前往演化中心 →</span>
+            <span class="text-body font-medium text-primary">前往演化中心 →</span>
           </div>
 
-          <p v-if="evolutionPendingCount === 0" class="mt-4 text-subhead text-label-secondary">
+          <p v-if="evolutionPendingCount === 0" class="mt-4 text-body text-label-secondary">
             暂无待处理提醒
           </p>
           <div v-else class="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
             <div>
-              <p class="text-caption text-label-secondary">待处理</p>
-              <p class="text-title-1 mt-0.5" data-test="evolution-pending-total">
+              <p class="text-note text-label-secondary">待处理</p>
+              <p class="mt-0.5 font-type text-display" data-test="evolution-pending-total">
                 {{ evolutionPendingCount }}
               </p>
             </div>
@@ -230,8 +230,8 @@ watch(
               :key="stat.key"
               class="border-l border-hairline pl-8"
             >
-              <p class="text-caption text-label-secondary">{{ stat.label }}</p>
-              <p class="mt-0.5 text-title-3">{{ stat.count }}</p>
+              <p class="text-note text-label-secondary">{{ stat.label }}</p>
+              <p class="mt-0.5 font-type text-title">{{ stat.count }}</p>
             </div>
           </div>
         </RouterLink>
@@ -239,9 +239,11 @@ watch(
         <!-- 存储用量 + 类型统计 -->
         <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           <!-- 存储卡：品牌绿环形进度（≥90% 转 warning） -->
-          <div class="bg-surface p-6 shadow-card lg:col-span-4 lg:self-start">
+          <div
+            class="border border-hairline bg-surface p-6 shadow-card lg:col-span-4 lg:self-start"
+          >
             <div class="mb-3 flex items-start justify-between gap-4">
-              <h3 class="text-title-3">存储使用情况</h3>
+              <h3 class="text-title">存储使用情况</h3>
               <span class="flex h-9 w-9 flex-none items-center justify-center text-label-tertiary">
                 <AppIcon
                   icon="material-symbols:info-outline-rounded"
@@ -278,30 +280,26 @@ watch(
                 />
               </svg>
               <div class="absolute inset-0 flex flex-col items-center justify-center">
-                <span class="text-title-1" :class="isStorageWarning && 'text-danger'">
+                <span class="font-type text-display" :class="isStorageWarning && 'text-danger'">
                   {{ storageUsedPercent }}%
                 </span>
-                <span
-                  class="text-caption font-semibold uppercase tracking-[0.08em] text-label-tertiary"
-                >
-                  已使用
-                </span>
+                <span class="font-type text-micro uppercase text-label-tertiary"> 已使用 </span>
               </div>
             </div>
 
-            <div class="mt-4 space-y-2.5 border-t border-hairline pt-4 text-subhead">
+            <div class="mt-4 space-y-2.5 border-t border-hairline pt-4 text-body">
               <div class="flex items-center justify-between gap-4">
                 <span class="text-label-secondary">已使用</span>
-                <span class="font-semibold text-label">{{ storageUsedStr }}</span>
+                <span class="font-type font-semibold text-label">{{ storageUsedStr }}</span>
               </div>
               <div class="flex items-center justify-between gap-4">
                 <span class="text-label-secondary">总容量</span>
-                <span class="font-semibold text-label">{{ storageTotalStr }}</span>
+                <span class="font-type font-semibold text-label">{{ storageTotalStr }}</span>
               </div>
               <div class="flex items-center justify-between gap-4">
                 <span class="text-label-secondary">剩余</span>
                 <span
-                  class="font-semibold"
+                  class="font-type font-semibold"
                   :class="isStorageWarning ? 'text-danger' : 'text-primary'"
                   >{{ storageLeftStr }}</span
                 >
@@ -309,12 +307,14 @@ watch(
             </div>
           </div>
 
-          <!-- 文件类型统计：hover 微浮起 + 阴影加深 -->
+          <!-- 文件类型统计：悬停只改底色（DESIGN.md §Elevation：线/留白/硬偏移三选二，
+               位移与阴影加深属于「第四种手段」，且与知识库硬卡的静止感相冲突）。 -->
           <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:col-span-8 xl:grid-cols-3">
             <div
               v-for="stat in fileStats"
               :key="stat.type"
-              class="flex flex-col justify-between bg-surface p-5 shadow-card transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-popover"
+              class="flex flex-col justify-between border border-hairline bg-surface p-5 shadow-card transition-colors hover:bg-surface-secondary"
+              data-test="file-type-card"
             >
               <div :class="['mb-4 flex h-10 w-10 items-center justify-center', stat.colorClass]">
                 <AppIcon
@@ -324,19 +324,21 @@ watch(
                 />
               </div>
               <div>
-                <h4 class="text-subhead text-label-secondary">{{ stat.title }}</h4>
-                <p class="text-title-1 mt-0.5">{{ stat.count }}</p>
-                <p class="text-caption mt-1.5 text-label-tertiary">共 {{ stat.size }}</p>
+                <h4 class="text-note text-label-secondary">{{ stat.title }}</h4>
+                <p class="mt-0.5 font-type text-title" data-test="file-type-count">
+                  {{ stat.count }}
+                </p>
+                <p class="mt-1.5 font-type text-micro text-label-tertiary">共 {{ stat.size }}</p>
               </div>
             </div>
           </div>
         </div>
 
         <!-- 操作日志：iCloud Drive 风格 48px 行 -->
-        <div class="overflow-hidden bg-surface shadow-card">
+        <div class="overflow-hidden border border-hairline bg-surface shadow-card">
           <div class="flex items-center justify-between border-b border-hairline p-6">
-            <h3 class="text-title-3">操作日志</h3>
-            <span class="text-subhead text-label-secondary">{{
+            <h3 class="text-title">操作日志</h3>
+            <span class="font-type text-micro text-label-secondary">{{
               isOperationLogsLoading ? '加载中...' : `共 ${operationLogTotal} 条`
             }}</span>
           </div>
@@ -355,7 +357,7 @@ watch(
           <template v-else>
             <p
               v-if="operationLogCards.length === 0"
-              class="py-8 text-center text-subhead text-label-secondary"
+              class="py-8 text-center text-body text-label-secondary"
             >
               暂无操作记录
             </p>
@@ -375,10 +377,10 @@ watch(
                   />
                 </div>
                 <div class="min-w-0 flex-1">
-                  <p class="truncate text-lead font-semibold leading-[22px]">
+                  <p class="truncate text-lead text-label">
                     {{ card.title }}
                   </p>
-                  <p class="truncate text-subhead text-label-secondary">
+                  <p class="truncate text-body text-label-secondary">
                     {{ card.subtitle
                     }}<span v-if="card.highlight" class="text-primary"
                       >{{ ' ' }}{{ card.highlight }}</span
@@ -386,7 +388,7 @@ watch(
                   </p>
                 </div>
                 <div class="flex-none text-right">
-                  <p class="text-caption text-label-tertiary">{{ card.time }}</p>
+                  <p class="font-type text-micro text-label-tertiary">{{ card.time }}</p>
                 </div>
               </div>
               <div v-if="index < operationLogCards.length - 1" class="ml-17 h-px bg-hairline" />
@@ -396,7 +398,7 @@ watch(
             <div v-if="hasMore" class="border-t border-hairline px-6 py-3">
               <button
                 type="button"
-                class="w-full py-2 text-subhead font-medium text-primary transition-colors hover:bg-surface-secondary disabled:opacity-50"
+                class="w-full py-2 text-body font-medium text-primary transition-colors hover:bg-surface-secondary disabled:opacity-50"
                 :disabled="isLoadingMore"
                 @click="loadMoreOperationLogs"
               >

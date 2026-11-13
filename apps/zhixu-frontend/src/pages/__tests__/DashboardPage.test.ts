@@ -106,4 +106,39 @@ describe('DashboardPage 演化提醒卡片', () => {
 
     expect(wrapper.find('[data-test="evolution-card"]').text()).toContain('暂无待处理提醒')
   })
+
+  /**
+   * 三页共用的卡片语言（#40 票面 AC）。
+   *
+   * 仪表盘不是索引列表，但它和另外两页共用同一套器物词汇：硬卡描边 + 硬偏移、
+   * 分类号/计数走等宽字面、悬停只改底色不改位置。断言落在**卡面上的数字**
+   * 与**卡片的类串**两处：前者证明数字真的走 font-type，后者证明没有回头
+   * 去用「浮起 + 阴影加深」的旧世界悬停。
+   */
+  it('卡片语言与索引列表一致：数字走等宽字面、悬停不位移', async () => {
+    overviewMock.mockResolvedValue({
+      storage_used: 1024,
+      storage_total: 2048,
+      storage_left: 1024,
+      storage_used_percent: 50,
+      file_stats: [{ type: 'image', count: 3, size: 2048 }],
+    })
+    const { wrapper } = await render()
+
+    // 文件类型卡上的计数必须落在 font-type 上（DESIGN.md §Do's and Don'ts：
+    // 数字/编号/计数/日期一律 --font-type）。
+    const statCards = wrapper.findAll('[data-test="file-type-card"]')
+    expect(statCards.length).toBe(5)
+    for (const card of statCards) {
+      const count = card.find('[data-test="file-type-count"]')
+      expect(count.exists()).toBe(true)
+      expect(count.classes()).toContain('font-type')
+    }
+
+    // 悬停只改底色：不许位移，也不许换阴影。
+    for (const card of [...statCards, wrapper.find('[data-test="evolution-card"]')]) {
+      expect(card.classes()).not.toContain('hover:-translate-y-0.5')
+      expect(card.classes()).not.toContain('hover:shadow-popover')
+    }
+  })
 })
