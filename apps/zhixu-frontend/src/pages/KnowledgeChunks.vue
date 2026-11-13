@@ -115,14 +115,14 @@ onScopeDispose(() => {
       <p
         v-if="error || detailError"
         role="alert"
-        class="mb-5 rounded-lg bg-warning-tint p-4 text-warning-strong"
+        class="mb-5 bg-warning-tint p-4 text-warning-strong"
       >
         {{ error || detailError }}
         <button class="knowledge-text-action" type="button" @click="refresh">重新加载</button>
       </p>
       <div class="grid items-start gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
         <aside class="space-y-5 lg:sticky lg:top-4">
-          <section class="rounded-lg border border-hairline bg-surface p-5">
+          <section class="border border-hairline bg-surface p-5">
             <h2 class="text-body font-semibold">章节大纲</h2>
             <p class="mt-2 text-caption text-label-secondary">
               字符范围从 0 开始，结束位置不包含在块内。
@@ -132,7 +132,7 @@ onScopeDispose(() => {
                 v-for="section in sections"
                 :key="section.key"
                 type="button"
-                class="w-full rounded-sm px-2 py-2 text-left text-subhead hover:bg-primary-tint focus-visible:outline-primary"
+                class="w-full px-2 py-2 text-left text-subhead hover:bg-primary-tint"
                 @click="locate(section.first)"
               >
                 <span class="block break-words">{{ section.title }}</span>
@@ -154,7 +154,7 @@ onScopeDispose(() => {
           </p>
           <p
             v-else-if="!visible.length && !error"
-            class="rounded-lg border border-hairline bg-surface p-8 text-subhead text-label-secondary"
+            class="border border-hairline bg-surface p-8 text-subhead text-label-secondary"
           >
             {{ failedOnly ? '没有失败分块。' : '尚未生成分块，任务开始后会自动展示。' }}
           </p>
@@ -162,7 +162,7 @@ onScopeDispose(() => {
             v-for="chunk in visible"
             :id="`chunk-${chunk.seq}`"
             :key="chunk.id"
-            class="scroll-mt-4 rounded-lg border bg-surface p-5 sm:p-6"
+            class="scroll-mt-4 border bg-surface p-5 sm:p-6"
             :class="[
               chunk.state === 'failed' ? 'border-danger' : 'border-hairline',
               chunk.seq === highlightSeq ? 'border-primary ring-2 ring-primary' : '',
@@ -178,7 +178,7 @@ onScopeDispose(() => {
                 </p>
               </div>
               <span
-                class="rounded-full px-3 py-1 text-caption"
+                class="px-3 py-1 text-caption"
                 :class="
                   chunk.state === 'failed'
                     ? 'bg-danger-tint text-danger'
@@ -201,11 +201,11 @@ onScopeDispose(() => {
             </p>
             <pre
               class="whitespace-pre-wrap break-words font-sans text-subhead leading-7"
-            ><mark v-if="chunk.overlap_chars" class="rounded-sm bg-primary-tint text-primary-pressed">{{ leading(chunk.content, chunk.overlap_chars) }}</mark>{{ remainder(chunk.content, chunk.overlap_chars) }}</pre>
+            ><mark v-if="chunk.overlap_chars" class="bg-primary-tint text-primary-pressed">{{ leading(chunk.content, chunk.overlap_chars) }}</mark>{{ remainder(chunk.content, chunk.overlap_chars) }}</pre>
             <p
               v-if="chunk.error_message"
               role="status"
-              class="mt-4 rounded-sm bg-danger-tint p-3 text-subhead text-danger"
+              class="mt-4 bg-danger-tint p-3 text-subhead text-danger"
             >
               {{ chunk.error_message }}
             </p>

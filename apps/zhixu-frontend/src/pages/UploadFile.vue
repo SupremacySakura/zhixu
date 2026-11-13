@@ -224,14 +224,14 @@ const badgeClass = (item: QueueItem) => {
         >
           <!-- 上传目录信息条 -->
           <section
-            class="flex items-center justify-between gap-4 rounded-md bg-surface px-[18px] py-3.5 shadow-card"
+            class="flex items-center justify-between gap-4 bg-surface px-[18px] py-3.5 shadow-card"
           >
             <div class="min-w-0">
               <p class="text-caption text-label-secondary">上传目录</p>
               <p class="text-headline truncate text-label">{{ selectedUploadFolderPath }}</p>
             </div>
             <button
-              class="inline-flex h-10 flex-none items-center gap-1.5 rounded-full bg-primary-tint px-4 text-[15px] font-semibold text-primary transition-[background-color,scale] duration-150 hover:bg-primary/[0.18] active:scale-[0.97]"
+              class="inline-flex h-10 flex-none items-center gap-1.5 bg-primary-tint px-4 text-lead font-semibold text-primary transition-colors hover:bg-primary/[0.18]"
               type="button"
               aria-label="选择上传目录"
               @click="openFolderPicker"
@@ -251,7 +251,7 @@ const badgeClass = (item: QueueItem) => {
 
           <!-- 大拖放区：虚线淡描边 + surface-secondary 底；悬停品牌绿描边，拖拽中 primary-tint 底 + 轻微放大 -->
           <section
-            class="group flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-label-tertiary bg-surface-secondary px-4 py-16 text-center transition-[transform,border-color,background-color,box-shadow] duration-200 ease-out hover:border-primary"
+            class="group flex cursor-pointer flex-col items-center justify-center border-2 border-dashed border-label-tertiary bg-surface-secondary px-4 py-16 text-center transition-[transform,border-color,background-color,box-shadow] hover:border-primary"
             :class="isDragging ? 'scale-[1.01] border-primary bg-primary-tint shadow-card' : ''"
             @click="openFileDialog"
             @dragover="onDragOver"
@@ -259,17 +259,21 @@ const badgeClass = (item: QueueItem) => {
             @drop="onDrop"
           >
             <div
-              class="mb-4 flex size-16 items-center justify-center rounded-full bg-surface text-primary shadow-card transition-transform duration-200 ease-out group-hover:scale-110"
+              class="mb-4 flex size-16 items-center justify-center bg-surface text-primary shadow-card transition-transform"
               :class="isDragging ? 'scale-110' : ''"
             >
-              <AppIcon class="text-[28px]" icon="material-symbols:upload-file" />
+              <AppIcon
+                class="atom-glyph"
+                icon="material-symbols:upload-file"
+                :style="{ '--atom-glyph-size': '28px' }"
+              />
             </div>
             <h3 class="text-title-3 mb-1.5">拖拽文件到此处上传</h3>
             <p class="text-subhead mb-5 max-w-sm text-label-secondary">
               支持图片、视频、文档与压缩包等常见格式。
             </p>
             <button
-              class="h-10 rounded-full bg-surface px-[18px] text-[15px] font-semibold text-label ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97]"
+              class="h-10 bg-surface px-[18px] text-lead font-semibold text-label ring-1 ring-hairline transition-colors hover:bg-surface-secondary"
               type="button"
               aria-label="选择文件"
             >
@@ -287,7 +291,7 @@ const badgeClass = (item: QueueItem) => {
                 :animate="{ opacity: 1 }"
                 :exit="{ opacity: 0 }"
                 :transition="fadeTransition"
-                class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
                 role="dialog"
                 aria-modal="true"
                 @click.self="closeFolderPicker"
@@ -297,7 +301,7 @@ const badgeClass = (item: QueueItem) => {
                   :animate="{ opacity: 1, scale: 1 }"
                   :exit="{ opacity: 0, scale: 0.98 }"
                   :transition="springSnappy"
-                  class="flex max-h-[min(80vh,42rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-surface p-6 shadow-popover"
+                  class="flex max-h-[min(80vh,42rem)] w-full max-w-2xl flex-col overflow-hidden bg-surface p-6 shadow-popover"
                   @click.stop
                 >
                   <h3 class="text-title-3 mb-2">选择上传目录</h3>
@@ -315,7 +319,7 @@ const badgeClass = (item: QueueItem) => {
                       >
                         <button
                           v-if="idx < folderPickerBreadcrumbs.length - 1"
-                          class="whitespace-nowrap rounded-sm transition-colors duration-150 hover:text-primary"
+                          class="whitespace-nowrap transition-colors hover:text-primary"
                           type="button"
                           :aria-label="`导航到 ${bc.name}`"
                           @click="goToFolderPickerBreadcrumb(idx)"
@@ -328,12 +332,12 @@ const badgeClass = (item: QueueItem) => {
                         <AppIcon
                           v-if="idx < folderPickerBreadcrumbs.length - 1"
                           icon="material-symbols:chevron-right"
-                          class="text-[14px] text-label-tertiary"
+                          class="text-body text-label-tertiary"
                         />
                       </template>
                     </nav>
                     <button
-                      class="h-8 flex-none rounded-full bg-surface px-3.5 text-[13px] font-semibold text-label ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97]"
+                      class="h-8 flex-none bg-surface px-3.5 text-body font-semibold text-label ring-1 ring-hairline transition-colors hover:bg-surface-secondary"
                       type="button"
                       aria-label="选择当前目录"
                       @click="selectCurrentFolderForUpload"
@@ -343,7 +347,7 @@ const badgeClass = (item: QueueItem) => {
                   </div>
 
                   <!-- 目录浏览器：48px 行，hover 底色，分隔线自图标后内缩 -->
-                  <div class="overflow-hidden rounded-md border border-hairline">
+                  <div class="overflow-hidden border border-hairline">
                     <div class="max-h-72 overflow-y-auto">
                       <div
                         v-if="isFolderPickerLoading"
@@ -360,21 +364,23 @@ const badgeClass = (item: QueueItem) => {
                       <template v-else>
                         <template v-for="(folder, index) in folderPickerFolders" :key="folder.id">
                           <button
-                            class="flex min-h-12 w-full items-center gap-2.5 px-3.5 text-left transition-colors duration-150 hover:bg-surface-secondary focus:outline-none"
+                            class="flex min-h-12 w-full items-center gap-2.5 px-3.5 text-left transition-colors hover:bg-surface-secondary"
                             type="button"
                             :aria-label="`打开文件夹 ${folder.name}`"
                             @click="goToFolderPickerFolder(folder)"
                           >
                             <AppIcon
                               icon="material-symbols:folder"
-                              class="flex-none text-[18px] text-primary"
+                              class="flex-none atom-glyph text-primary"
+                              :style="{ '--atom-glyph-size': '18px' }"
                             />
                             <span class="min-w-0 flex-1 truncate text-subhead text-label">
                               {{ folder.name }}
                             </span>
                             <AppIcon
                               icon="material-symbols:chevron-right"
-                              class="flex-none text-[16px] text-label-tertiary"
+                              class="flex-none atom-glyph text-label-tertiary"
+                              :style="{ '--atom-glyph-size': '16px' }"
                             />
                           </button>
                           <div
@@ -394,7 +400,7 @@ const badgeClass = (item: QueueItem) => {
 
                   <div class="mt-5 flex justify-end gap-3">
                     <button
-                      class="h-10 rounded-full bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97]"
+                      class="h-10 bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary"
                       type="button"
                       aria-label="取消选择"
                       @click="closeFolderPicker"
@@ -402,7 +408,7 @@ const badgeClass = (item: QueueItem) => {
                       取消
                     </button>
                     <button
-                      class="h-10 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed"
+                      class="h-10 px-5 text-sm font-semibold transition-colors knowledge-button-primary"
                       type="button"
                       aria-label="确认选择当前目录"
                       @click="selectCurrentFolderForUpload"
@@ -424,7 +430,7 @@ const badgeClass = (item: QueueItem) => {
                   >{{ processingCount }} 项处理中</span
                 >
                 <button
-                  class="flex h-8 items-center rounded-full px-3 text-[13px] font-semibold text-primary transition-[background-color,scale] duration-150 hover:bg-primary-tint active:scale-[0.97]"
+                  class="flex h-8 items-center px-3 text-body font-semibold text-primary transition-colors hover:bg-primary-tint"
                   type="button"
                   aria-label="清理已完成的上传任务"
                   @click="clearCompleted"
@@ -434,10 +440,7 @@ const badgeClass = (item: QueueItem) => {
               </div>
             </div>
 
-            <div
-              v-if="items.length === 0"
-              class="rounded-md bg-surface p-10 text-center shadow-card"
-            >
+            <div v-if="items.length === 0" class="bg-surface p-10 text-center shadow-card">
               <p class="text-body text-label-secondary">暂无上传任务</p>
             </div>
 
@@ -445,19 +448,23 @@ const badgeClass = (item: QueueItem) => {
               <div
                 v-for="item in items"
                 :key="item.id"
-                class="flex min-h-16 items-center gap-3 rounded-md bg-surface-secondary/70 p-3.5 transition-colors duration-150 hover:bg-surface-tertiary/60"
+                class="flex min-h-16 items-center gap-3 bg-surface-secondary/70 p-3.5 transition-colors hover:bg-surface-tertiary/60"
               >
                 <span
-                  class="flex h-10 w-10 flex-none items-center justify-center rounded-sm"
+                  class="flex h-10 w-10 flex-none items-center justify-center"
                   :class="`${iconForFile(item.file).bg} ${iconForFile(item.file).fg}`"
                 >
-                  <AppIcon class="text-[20px]" :icon="iconForFile(item.file).icon" />
+                  <AppIcon
+                    class="atom-glyph"
+                    :icon="iconForFile(item.file).icon"
+                    :style="{ '--atom-glyph-size': '20px' }"
+                  />
                 </span>
 
                 <div class="flex min-w-0 flex-1 flex-col gap-1.5">
                   <div class="flex items-center justify-between gap-3">
                     <p
-                      class="truncate text-[15px] font-semibold"
+                      class="truncate text-lead font-semibold"
                       :class="item.status === 'canceled' ? 'text-label-secondary' : 'text-label'"
                     >
                       {{ item.file.name }}
@@ -471,11 +478,9 @@ const badgeClass = (item: QueueItem) => {
                   </div>
 
                   <div class="flex min-w-0 items-center gap-3">
-                    <div
-                      class="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-tertiary"
-                    >
+                    <div class="h-1.5 min-w-0 flex-1 overflow-hidden bg-surface-tertiary">
                       <div
-                        class="h-full rounded-full transition-[width] duration-[120ms] ease-linear"
+                        class="h-full transition-[width] duration-standard"
                         :class="
                           item.status === 'failed'
                             ? 'bg-danger'
@@ -495,12 +500,16 @@ const badgeClass = (item: QueueItem) => {
                 <div class="flex flex-none items-center gap-1.5">
                   <button
                     v-if="item.status === 'failed'"
-                    class="flex h-8 items-center gap-1.5 rounded-full bg-primary-tint px-3 text-[13px] font-semibold text-primary transition-[background-color,scale] duration-150 hover:bg-primary/[0.18] active:scale-[0.97]"
+                    class="flex h-8 items-center gap-1.5 bg-primary-tint px-3 text-body font-semibold text-primary transition-colors hover:bg-primary/[0.18]"
                     type="button"
                     aria-label="重试上传"
                     @click="retryItem(item)"
                   >
-                    <AppIcon class="text-[16px]" icon="material-symbols:replay" />
+                    <AppIcon
+                      class="atom-glyph"
+                      icon="material-symbols:replay"
+                      :style="{ '--atom-glyph-size': '16px' }"
+                    />
                     重试
                   </button>
 
@@ -509,7 +518,11 @@ const badgeClass = (item: QueueItem) => {
                     class="p-1.5 text-primary"
                     aria-label="上传成功"
                   >
-                    <AppIcon class="text-[22px]" icon="material-symbols:check-circle" />
+                    <AppIcon
+                      class="atom-glyph"
+                      icon="material-symbols:check-circle"
+                      :style="{ '--atom-glyph-size': '22px' }"
+                    />
                   </div>
 
                   <button
@@ -518,22 +531,30 @@ const badgeClass = (item: QueueItem) => {
                       item.status === 'hashing' ||
                       item.status === 'merging'
                     "
-                    class="flex h-9 w-9 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-danger"
+                    class="flex h-9 w-9 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-danger"
                     type="button"
                     aria-label="取消上传"
                     @click="cancelItem(item)"
                   >
-                    <AppIcon class="text-[20px]" icon="material-symbols:close" />
+                    <AppIcon
+                      class="atom-glyph"
+                      icon="material-symbols:close"
+                      :style="{ '--atom-glyph-size': '20px' }"
+                    />
                   </button>
 
                   <button
                     v-else
-                    class="flex h-9 w-9 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-danger"
+                    class="flex h-9 w-9 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-danger"
                     type="button"
                     aria-label="移除任务"
                     @click="removeItem(item.id)"
                   >
-                    <AppIcon class="text-[20px]" icon="material-symbols:close" />
+                    <AppIcon
+                      class="atom-glyph"
+                      icon="material-symbols:close"
+                      :style="{ '--atom-glyph-size': '20px' }"
+                    />
                   </button>
                 </div>
               </div>

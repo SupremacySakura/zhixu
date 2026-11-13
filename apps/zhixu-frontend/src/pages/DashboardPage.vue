@@ -200,7 +200,7 @@ watch(
       <!-- 待处理提醒：只取摘要计数，点击进演化中心逐条处理 -->
       <RouterLink
         to="/home/evolution"
-        class="block rounded-md bg-surface p-6 shadow-card transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-popover"
+        class="block bg-surface p-6 shadow-card transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-popover"
         data-test="evolution-card"
       >
         <div class="flex flex-wrap items-start justify-between gap-4">
@@ -237,16 +237,15 @@ watch(
       <!-- 存储用量 + 类型统计 -->
       <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         <!-- 存储卡：品牌绿环形进度（≥90% 转 warning） -->
-        <div class="rounded-md bg-surface p-6 shadow-card lg:col-span-4 lg:self-start">
+        <div class="bg-surface p-6 shadow-card lg:col-span-4 lg:self-start">
           <div class="mb-3 flex items-start justify-between gap-4">
             <h3 class="text-title-3">存储使用情况</h3>
-            <span
-              class="flex h-9 w-9 flex-none items-center justify-center rounded-sm text-label-tertiary"
-            >
+            <span class="flex h-9 w-9 flex-none items-center justify-center text-label-tertiary">
               <AppIcon
                 icon="material-symbols:info-outline-rounded"
-                class="text-[20px]"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '20px' }"
               />
             </span>
           </div>
@@ -264,7 +263,7 @@ watch(
               />
               <circle
                 :class="isStorageWarning ? 'text-warning' : 'text-primary'"
-                class="transition-all duration-1000 ease-out"
+                class="transition-[stroke-dashoffset] duration-standard"
                 cx="64"
                 cy="64"
                 fill="transparent"
@@ -313,15 +312,14 @@ watch(
           <div
             v-for="stat in fileStats"
             :key="stat.type"
-            class="flex flex-col justify-between rounded-md bg-surface p-5 shadow-card transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-popover"
+            class="flex flex-col justify-between bg-surface p-5 shadow-card transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-popover"
           >
-            <div
-              :class="[
-                'mb-4 flex h-10 w-10 items-center justify-center rounded-sm',
-                stat.colorClass,
-              ]"
-            >
-              <AppIcon :icon="stat.icon" class="text-[20px]" />
+            <div :class="['mb-4 flex h-10 w-10 items-center justify-center', stat.colorClass]">
+              <AppIcon
+                :icon="stat.icon"
+                class="atom-glyph"
+                :style="{ '--atom-glyph-size': '20px' }"
+              />
             </div>
             <div>
               <h4 class="text-subhead text-label-secondary">{{ stat.title }}</h4>
@@ -333,7 +331,7 @@ watch(
       </div>
 
       <!-- 操作日志：iCloud Drive 风格 48px 行 -->
-      <div class="overflow-hidden rounded-md bg-surface shadow-card">
+      <div class="overflow-hidden bg-surface shadow-card">
         <div class="flex items-center justify-between border-b border-hairline p-6">
           <h3 class="text-title-3">操作日志</h3>
           <span class="text-subhead text-label-secondary">{{
@@ -343,11 +341,11 @@ watch(
 
         <!-- 加载骨架 -->
         <div v-if="isOperationLogsLoading" class="space-y-3.5 p-6">
-          <div v-for="n in 2" :key="n" class="flex animate-pulse items-center gap-3">
-            <div class="h-8 w-8 flex-none rounded-sm bg-surface-secondary"></div>
+          <div v-for="n in 2" :key="n" class="flex items-center gap-3">
+            <div class="h-8 w-8 flex-none bg-hairline"></div>
             <div class="flex-1 space-y-1.5">
-              <div class="h-3 w-1/2 rounded-full bg-surface-secondary"></div>
-              <div class="h-3 w-1/3 rounded-full bg-surface-secondary"></div>
+              <div class="h-3 w-1/2 bg-hairline"></div>
+              <div class="h-3 w-1/3 bg-hairline"></div>
             </div>
           </div>
         </div>
@@ -362,16 +360,20 @@ watch(
 
           <template v-for="(card, index) in operationLogCards" :key="card.id">
             <div
-              class="flex min-h-12 items-center gap-3 px-6 transition-colors duration-150 hover:bg-surface-secondary"
+              class="flex min-h-12 items-center gap-3 px-6 transition-colors hover:bg-surface-secondary"
             >
               <div
-                class="flex h-8 w-8 flex-none items-center justify-center rounded-sm"
+                class="flex h-8 w-8 flex-none items-center justify-center"
                 :class="card.colorClass"
               >
-                <AppIcon :icon="card.icon" class="text-[16px]" />
+                <AppIcon
+                  :icon="card.icon"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '16px' }"
+                />
               </div>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-[15px] font-semibold leading-[22px]">
+                <p class="truncate text-lead font-semibold leading-[22px]">
                   {{ card.title }}
                 </p>
                 <p class="truncate text-subhead text-label-secondary">
@@ -392,7 +394,7 @@ watch(
           <div v-if="hasMore" class="border-t border-hairline px-6 py-3">
             <button
               type="button"
-              class="w-full rounded-sm py-2 text-subhead font-medium text-primary transition-colors duration-150 hover:bg-surface-secondary disabled:opacity-50"
+              class="w-full py-2 text-subhead font-medium text-primary transition-colors hover:bg-surface-secondary disabled:opacity-50"
               :disabled="isLoadingMore"
               @click="loadMoreOperationLogs"
             >

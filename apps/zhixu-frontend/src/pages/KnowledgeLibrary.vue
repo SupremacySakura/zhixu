@@ -302,7 +302,7 @@ onMounted(() => {
       </div>
       <div
         v-if="error"
-        class="mb-5 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
+        class="mb-5 bg-warning-tint p-4 text-subhead text-warning-strong"
         role="alert"
       >
         {{ error }} <button class="knowledge-text-action" @click="load()">重试加载</button>
@@ -312,10 +312,10 @@ onMounted(() => {
       </p>
       <div
         v-else-if="!error && !items.length"
-        class="rounded-lg border border-hairline bg-surface px-6 py-16 text-center"
+        class="border border-hairline bg-surface px-6 py-16 text-center"
       >
         <span
-          class="mx-auto mb-5 flex h-16 w-14 items-center justify-center rounded-lg bg-primary-tint text-headline font-bold text-primary-pressed"
+          class="mx-auto mb-5 flex h-16 w-14 items-center justify-center bg-primary-tint text-headline font-bold text-primary-pressed"
           >MD</span
         >
         <h2 class="text-title-3">
@@ -336,7 +336,7 @@ onMounted(() => {
         <article
           v-for="entry in items"
           :key="entry.id"
-          class="flex items-start justify-between gap-3 rounded-lg border border-hairline bg-surface p-5 sm:items-center sm:gap-4 sm:p-6"
+          class="flex items-start justify-between gap-3 border border-hairline bg-surface p-5 sm:items-center sm:gap-4 sm:p-6"
         >
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
@@ -367,7 +367,7 @@ onMounted(() => {
           <div class="flex shrink-0 items-center gap-2">
             <button
               type="button"
-              class="knowledge-icon-button flex h-11 w-11 items-center justify-center rounded-sm border border-hairline bg-surface text-label-secondary"
+              class="knowledge-icon-button flex h-11 w-11 items-center justify-center border border-hairline bg-surface text-label-secondary"
               :class="entry.is_favorite ? 'text-warning' : ''"
               :aria-label="entry.is_favorite ? `取消收藏 ${entry.title}` : `收藏 ${entry.title}`"
               :aria-pressed="entry.is_favorite"
@@ -379,8 +379,9 @@ onMounted(() => {
                     ? 'material-symbols:star-rounded'
                     : 'material-symbols:star-outline'
                 "
-                class="text-xl"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '20px' }"
               />
             </button>
             <KnowledgeActionMenu
@@ -396,7 +397,7 @@ onMounted(() => {
       </div>
       <FilePagination
         v-if="total > 0"
-        class="mt-5 rounded-lg"
+        class="mt-5"
         :page="page"
         :total-pages="Math.max(1, Math.ceil(total / 20))"
         :start-index="(page - 1) * 20 + 1"

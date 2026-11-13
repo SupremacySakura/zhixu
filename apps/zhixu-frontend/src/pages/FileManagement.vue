@@ -6,7 +6,7 @@ import KnowledgeTaskPanel from '../components/knowledge/KnowledgeTaskPanel.vue'
 import { useKnowledgeImport } from '../composables/useKnowledgeImport'
 import type { KnowledgeItem } from '../services/apis/knowledge'
 import type { FileDisplayItem } from '../types/file'
-import AppIcon from '../components/ui/AppIcon.vue'
+import AppLoading from '../components/ui/AppLoading.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import LoginRequiredPlaceholder from '../components/bussiness/LoginRequiredPlaceholder.vue'
 import FileListView from '../components/file-management/FileListView.vue'
@@ -320,7 +320,7 @@ onMounted(() => {
             @clear-selection="clearSelection"
           />
           <div
-            class="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary-tint px-4 py-3 text-subhead text-primary-pressed"
+            class="mb-5 flex flex-wrap items-center justify-between gap-3 bg-primary-tint px-4 py-3 text-subhead text-primary-pressed"
           >
             <p>支持 .md / .markdown 加入知识库，原文件保持不变。</p>
             <RouterLink to="/home/knowledge" class="knowledge-text-action">打开知识库 →</RouterLink>
@@ -374,7 +374,7 @@ onMounted(() => {
             <template #footer>
               <FilePagination
                 v-if="sortedFiles.length > 0"
-                class="mt-6 overflow-hidden rounded-md bg-surface shadow-card"
+                class="mt-6 overflow-hidden bg-surface shadow-card"
                 :page="page"
                 :total-pages="totalPages"
                 :start-index="startIndex"
@@ -463,7 +463,7 @@ onMounted(() => {
           @cancel="closeDeleteConfirmModal"
           @confirm="confirmDeleteFromModal"
         >
-          <div class="mb-6 rounded-sm bg-surface-secondary p-4 text-subhead">
+          <div class="mb-6 bg-surface-secondary p-4 text-subhead">
             <label class="flex items-start gap-3">
               <input
                 v-model="deleteRelatedKnowledge"
@@ -478,11 +478,7 @@ onMounted(() => {
             </p>
           </div>
           <template #confirm-icon>
-            <AppIcon
-              v-if="deletingMenuTargetId"
-              icon="material-symbols:progress-activity"
-              class="animate-spin"
-            />
+            <AppLoading v-if="deletingMenuTargetId" size="sm" />
           </template>
         </ConfirmDialog>
 

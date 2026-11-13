@@ -16,7 +16,7 @@ const emit = defineEmits<{ close: []; retry: []; refresh: [] }>()
         :animate="{ opacity: 1, y: 0, scale: 1 }"
         :exit="{ opacity: 0, y: 16 }"
         :transition="springSnappy"
-        class="fixed bottom-4 right-4 z-30 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-material-thick p-5 shadow-floating backdrop-blur-xl"
+        class="fixed bottom-4 right-4 z-30 w-80 max-w-[calc(100vw-2rem)] border border-hairline bg-surface p-5 shadow-floating"
       >
         <aside aria-label="知识导入进度">
           <div class="mb-4 flex items-center justify-between">

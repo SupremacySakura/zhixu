@@ -41,7 +41,7 @@ function badgeClass(status: ServiceHealth | undefined) {
 </script>
 
 <template>
-  <section class="rounded-lg bg-surface p-6 shadow-card" :aria-busy="loading">
+  <section class="bg-surface p-6 shadow-card" :aria-busy="loading">
     <header class="flex flex-wrap items-center justify-between gap-4">
       <div>
         <h2 class="text-title-3">基础服务</h2>
@@ -66,11 +66,7 @@ function badgeClass(status: ServiceHealth | undefined) {
     <p v-if="loading" role="status" class="mb-4 text-subhead text-label-secondary">
       正在检测基础服务…<span v-if="report">下方保留上次结果。</span>
     </p>
-    <p
-      v-if="error"
-      role="alert"
-      class="mb-4 rounded-md bg-warning-tint p-4 text-subhead text-warning-strong"
-    >
+    <p v-if="error" role="alert" class="mb-4 bg-warning-tint p-4 text-subhead text-warning-strong">
       {{ error }}<span v-if="stale"> 当前显示旧结果，不代表最新服务状态。</span>
     </p>
     <article
@@ -91,7 +87,7 @@ function badgeClass(status: ServiceHealth | undefined) {
           class="text-caption tabular-nums text-label-secondary"
           >{{ entry.result.latency_ms }} ms</span
         >
-        <span class="rounded-full px-3 py-1 text-caption" :class="badgeClass(entry.result?.status)">
+        <span class="px-3 py-1 text-caption" :class="badgeClass(entry.result?.status)">
           {{ entry.result ? healthLabels[entry.result.status] : '尚无检测结果' }}
         </span>
       </div>

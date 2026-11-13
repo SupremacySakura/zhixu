@@ -83,12 +83,12 @@ onBeforeUnmount(() => document.removeEventListener('click', outside))
       :aria-expanded="open"
       :aria-controls="id"
       :disabled="disabled"
-      class="flex items-center gap-1.5 font-semibold text-label-secondary transition-all hover:text-label active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+      class="flex items-center gap-1.5 font-semibold text-label-secondary transition-colors hover:text-label disabled:cursor-not-allowed disabled:opacity-60"
       :class="[
         field
-          ? 'w-full justify-between rounded-sm border border-hairline bg-surface-secondary text-left'
-          : 'rounded-full bg-surface-tertiary',
-        compact ? 'min-h-9 px-2.5 text-caption' : 'min-h-11 px-[13px] text-[13px]',
+          ? 'w-full justify-between border border-hairline bg-surface-secondary text-left'
+          : 'bg-surface-tertiary',
+        compact ? 'min-h-9 px-2.5 text-caption' : 'min-h-11 px-[13px] text-body',
       ]"
       @click="toggle"
     >
@@ -107,7 +107,7 @@ onBeforeUnmount(() => document.removeEventListener('click', outside))
         :animate="{ opacity: 1, scale: 1 }"
         :exit="{ opacity: 0, scale: 0.95 }"
         :transition="springSnappy"
-        class="absolute left-0 top-full z-40 mt-1.5 max-h-60 min-w-[180px] max-w-[calc(100vw-3rem)] origin-top-left overflow-y-auto rounded-md bg-surface p-1.5 shadow-popover"
+        class="absolute left-0 top-full z-40 mt-1.5 max-h-60 min-w-[180px] max-w-[calc(100vw-3rem)] origin-top-left overflow-y-auto bg-surface p-1.5 shadow-popover"
         :class="field ? 'w-full' : ''"
       >
         <button
@@ -116,7 +116,7 @@ onBeforeUnmount(() => document.removeEventListener('click', outside))
           type="button"
           role="menuitemradio"
           :aria-checked="modelValue === option.key"
-          class="flex min-h-9 w-full items-center justify-between gap-[18px] break-all rounded-sm px-2.5 py-2 text-left text-sm text-label transition-colors hover:bg-surface-secondary"
+          class="flex min-h-9 w-full items-center justify-between gap-[18px] break-all px-2.5 py-2 text-left text-sm text-label transition-colors hover:bg-surface-secondary"
           @click="select(option.key)"
         >
           {{ option.label

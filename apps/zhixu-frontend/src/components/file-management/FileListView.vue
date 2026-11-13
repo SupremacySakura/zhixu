@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import type { FileDisplayItem, FileItemKey } from '../../types/file'
 import { formatBytes } from '../../utils/file'
 import { ownerInitials } from '../../utils/file-management'
@@ -58,7 +59,7 @@ const rowGridClass =
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-md bg-surface shadow-card">
+  <div class="overflow-hidden bg-surface shadow-card">
     <div class="overflow-x-auto">
       <!-- 表头 -->
       <div :class="[rowGridClass, 'min-h-10 border-b border-hairline bg-surface-secondary']">
@@ -71,7 +72,7 @@ const rowGridClass =
             @change="handleToggleAll"
           />
           <span
-            class="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-label-tertiary bg-surface transition-all duration-100 hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 active:scale-[0.88]"
+            class="flex h-[18px] w-[18px] items-center justify-center border-[1.5px] border-label-tertiary bg-surface transition-[background-color,border-color] hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50"
           >
             <svg
               v-if="allSelected"
@@ -108,23 +109,22 @@ const rowGridClass =
       <!-- 「..」返回上一级目录行 -->
       <div
         v-if="hasParentFolder"
-        :class="[
-          rowGridClass,
-          'cursor-pointer transition-colors duration-150 hover:bg-surface-secondary',
-        ]"
+        :class="[rowGridClass, 'cursor-pointer transition-colors hover:bg-surface-secondary']"
         role="button"
         tabindex="0"
         @click="emit('go-parent')"
         @keyup.enter.self="emit('go-parent')"
       >
         <span></span>
-        <span
-          class="flex h-10 w-10 items-center justify-center rounded-sm bg-warning-tint text-warning"
-        >
-          <AppIcon class="text-[20px]" icon="material-symbols:folder" />
+        <span class="flex h-10 w-10 items-center justify-center bg-warning-tint text-warning">
+          <AppIcon
+            class="atom-glyph"
+            icon="material-symbols:folder"
+            :style="{ '--atom-glyph-size': '20px' }"
+          />
         </span>
         <span class="truncate">
-          <span class="text-[15px] font-semibold text-label">..</span>
+          <span class="text-lead font-semibold text-label">..</span>
           <span class="text-subhead text-label-secondary">　返回上一级目录</span>
         </span>
         <span class="text-subhead text-label-secondary">文件夹</span>
@@ -140,7 +140,7 @@ const rowGridClass =
         <div
           :class="[
             rowGridClass,
-            'transition-colors duration-150',
+            'transition-colors',
             file.type === 'folder' ? 'cursor-pointer' : '',
             selectedIds.has(file.key)
               ? 'bg-primary-tint hover:bg-primary-tint'
@@ -160,7 +160,7 @@ const rowGridClass =
               @change="handleToggleSelect(file, $event)"
             />
             <span
-              class="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-label-tertiary bg-surface transition-all duration-100 hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 active:scale-[0.88]"
+              class="flex h-[18px] w-[18px] items-center justify-center border-[1.5px] border-label-tertiary bg-surface transition-[background-color,border-color] hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50"
             >
               <svg
                 v-if="selectedIds.has(file.key)"
@@ -180,13 +180,17 @@ const rowGridClass =
             </span>
           </label>
           <span
-            class="flex h-10 w-10 items-center justify-center rounded-sm"
+            class="flex h-10 w-10 items-center justify-center"
             :class="`${file.iconBg} ${file.iconFg}`"
           >
-            <AppIcon class="text-[20px]" :icon="file.icon" />
+            <AppIcon
+              class="atom-glyph"
+              :icon="file.icon"
+              :style="{ '--atom-glyph-size': '20px' }"
+            />
           </span>
           <div class="min-w-0 py-2">
-            <p class="truncate text-[15px] font-semibold text-label">{{ file.name }}</p>
+            <p class="truncate text-lead font-semibold text-label">{{ file.name }}</p>
             <FileKnowledgeAction
               :file="file"
               :revision="knowledgeRevision"
@@ -199,7 +203,7 @@ const rowGridClass =
           </span>
           <span class="flex min-w-0 items-center gap-2">
             <span
-              class="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-surface-tertiary text-[10px] font-bold tracking-[0.02em] text-label-secondary"
+              class="flex h-6 w-6 flex-none items-center justify-center bg-surface-tertiary text-note font-bold tracking-[0.02em] text-label-secondary"
             >
               {{ ownerBadge }}
             </span>
@@ -209,7 +213,7 @@ const rowGridClass =
             {{ file.lastModifiedText }}
           </span>
           <button
-            class="flex h-9 w-9 items-center justify-center justify-self-end rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-label"
+            class="flex h-9 w-9 items-center justify-center justify-self-end text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
             type="button"
             :aria-label="`${file.name} 操作菜单`"
             @click.stop="handleOpenMenu(file, $event)"
@@ -222,10 +226,7 @@ const rowGridClass =
 
       <!-- 加载中 -->
       <div v-if="loading" class="flex flex-col items-center justify-center gap-2.5 py-11">
-        <AppIcon
-          icon="material-symbols:progress-activity"
-          class="animate-spin text-[28px] text-primary"
-        />
+        <AppLoading :size="28" class="text-primary" />
         <p class="text-subhead text-label-tertiary">加载中...</p>
       </div>
 

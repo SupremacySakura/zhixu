@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import { createPickupCode, getListByFolderIDAndUserID } from '../../services/apis/file'
 import type { PickupCodeType } from '../../services/types/file'
 import type { FileListItem } from '../../services/types/file'
@@ -154,17 +155,21 @@ onMounted(() => {
     role="dialog"
     aria-modal="true"
     aria-label="创建取件码"
-    class="overflow-hidden rounded-lg bg-surface shadow-popover"
+    class="overflow-hidden bg-surface shadow-popover"
   >
     <div class="flex items-center justify-between border-b border-hairline px-6 py-5">
       <h3 class="text-title-3">创建取件码</h3>
       <button
-        class="flex h-9 w-9 items-center justify-center rounded-full text-label-secondary transition-[background-color,color,scale] duration-150 hover:bg-surface-secondary hover:text-label active:scale-[0.92]"
+        class="flex h-9 w-9 items-center justify-center text-label-secondary transition-[background-color,color] tap-target hover:bg-surface-secondary hover:text-label"
         type="button"
         aria-label="关闭"
         @click="emit('close')"
       >
-        <AppIcon icon="material-symbols:close-rounded" class="text-xl" />
+        <AppIcon
+          icon="material-symbols:close-rounded"
+          class="atom-glyph"
+          :style="{ '--atom-glyph-size': '20px' }"
+        />
       </button>
     </div>
 
@@ -172,7 +177,7 @@ onMounted(() => {
       <!-- 结果反馈：成功 700ms 后关闭并 emit success；失败保留弹窗可重试 -->
       <div
         v-if="toast"
-        class="flex items-center gap-2 rounded-sm px-3.5 py-2.5 text-[13px] font-medium"
+        class="flex items-center gap-2 px-3.5 py-2.5 text-body font-medium"
         :class="
           toast.type === 'success'
             ? 'bg-primary-tint text-primary-pressed'
@@ -183,7 +188,8 @@ onMounted(() => {
           :icon="
             toast.type === 'success' ? 'material-symbols:check-circle' : 'material-symbols:error'
           "
-          class="flex-none text-[16px]"
+          class="flex-none atom-glyph"
+          :style="{ '--atom-glyph-size': '16px' }"
         />
         {{ toast.text }}
       </div>
@@ -196,23 +202,21 @@ onMounted(() => {
             v-for="(path, index) in pathStack"
             :key="`${path.id}-${index}`"
             type="button"
-            class="inline-flex items-center gap-0.5 whitespace-nowrap rounded-sm px-1.5 py-1 text-[13px] text-label-secondary transition-colors duration-150 hover:bg-primary-tint hover:text-primary"
+            class="inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-1 text-body text-label-secondary transition-colors hover:bg-primary-tint hover:text-primary"
             @click="handleNavigatePath(index)"
           >
             <AppIcon
               v-if="index !== 0"
               icon="material-symbols:chevron-right-rounded"
-              class="text-sm"
+              class="atom-glyph"
+              :style="{ '--atom-glyph-size': '14px' }"
             />
             <span>{{ path.name }}</span>
           </button>
         </nav>
-        <div class="max-h-54 overflow-y-auto rounded-md border border-hairline">
+        <div class="max-h-54 overflow-y-auto border border-hairline">
           <div v-if="loading" class="flex items-center justify-center gap-3 px-4 py-[22px]">
-            <AppIcon
-              icon="material-symbols:progress-activity"
-              class="animate-spin text-[18px] text-primary"
-            />
+            <AppLoading :size="18" class="text-primary" />
             <span class="text-subhead text-label-secondary">正在加载文件...</span>
           </div>
           <div
@@ -225,7 +229,7 @@ onMounted(() => {
             <template v-for="(item, index) in displayFileList" :key="item.id">
               <button
                 type="button"
-                class="flex min-h-12 w-full items-center gap-3 px-4 text-left transition-colors duration-150"
+                class="flex min-h-12 w-full items-center gap-3 px-4 text-left transition-colors"
                 :class="
                   selectedItemId === item.id && item.id !== -1
                     ? 'bg-primary-tint shadow-[inset_2px_0_0_0_var(--color-primary)] hover:bg-primary-tint'
@@ -235,7 +239,7 @@ onMounted(() => {
                 @dblclick="handleEnterFolder(item)"
               >
                 <span
-                  class="flex h-8 w-8 flex-none items-center justify-center rounded-sm"
+                  class="flex h-8 w-8 flex-none items-center justify-center"
                   :class="
                     item.id === -1
                       ? 'bg-surface-tertiary text-label-secondary'
@@ -252,11 +256,12 @@ onMounted(() => {
                           ? 'material-symbols:folder-outline-rounded'
                           : 'material-symbols:description-outline-rounded'
                     "
-                    class="text-[16px]"
+                    class="atom-glyph"
+                    :style="{ '--atom-glyph-size': '16px' }"
                   />
                 </span>
                 <span class="flex min-w-0 flex-1 flex-col gap-px">
-                  <span class="truncate text-[15px] font-semibold text-label">
+                  <span class="truncate text-lead font-semibold text-label">
                     {{ item.name }}
                   </span>
                   <span
@@ -273,7 +278,8 @@ onMounted(() => {
                 <AppIcon
                   v-if="selectedItemId === item.id && item.id !== -1"
                   icon="material-symbols:check-circle"
-                  class="flex-none text-[18px] text-primary"
+                  class="flex-none atom-glyph text-primary"
+                  :style="{ '--atom-glyph-size': '18px' }"
                 />
               </button>
               <div v-if="index < displayFileList.length - 1" class="ml-15 h-px bg-hairline" />
@@ -290,7 +296,7 @@ onMounted(() => {
           v-model.number="form.max_downloads"
           :min="minDownloads"
           :max="maxDownloads"
-          class="h-11 w-full rounded-sm border border-hairline bg-surface-secondary px-3.5 text-[15px] text-label transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-label-tertiary focus:border-primary focus:bg-surface focus:outline-none focus:ring-[3px] focus:ring-primary-tint"
+          class="h-11 w-full border border-hairline bg-surface-secondary px-3.5 text-lead font-normal text-label transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary focus:border-primary focus:bg-surface"
         />
         <p class="text-caption text-label-tertiary">
           范围：{{ minDownloads }} - {{ maxDownloads }}
@@ -300,15 +306,15 @@ onMounted(() => {
       <!-- 有效期：分段控件（surface-tertiary 轨道 + 选中白 pill）；到期时间按今天 + 天数实时计算 -->
       <div class="flex flex-col gap-1.5">
         <label class="text-sm font-semibold text-label">有效期</label>
-        <div class="inline-flex gap-0.5 self-start rounded-full bg-surface-tertiary p-0.5">
+        <div class="inline-flex gap-0.5 self-start bg-surface-tertiary p-0.5">
           <button
             v-for="days in expireDayOptions"
             :key="days"
             type="button"
-            class="h-7 rounded-full px-3.5 text-[13px] font-semibold transition-[background-color,color,box-shadow] duration-150"
+            class="h-7 px-3.5 text-body font-semibold transition-[background-color,color,box-shadow]"
             :class="
               form.expire_days === days
-                ? 'bg-surface text-label shadow-sm'
+                ? 'bg-surface text-label'
                 : 'text-label-secondary hover:text-label'
             "
             @click="form.expire_days = days"
@@ -325,18 +331,18 @@ onMounted(() => {
     <div class="flex justify-end gap-3 border-t border-hairline px-6 py-4">
       <button
         type="button"
-        class="h-10 rounded-full bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97]"
+        class="h-10 bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary"
         @click="emit('close')"
       >
         取消
       </button>
       <button
         type="button"
-        class="flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed disabled:cursor-not-allowed disabled:opacity-60"
+        class="flex h-10 items-center gap-2 px-5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 knowledge-button-primary"
         :disabled="!canSubmit || submitting"
         @click="handleSubmit"
       >
-        <AppIcon v-if="submitting" icon="material-symbols:progress-activity" class="animate-spin" />
+        <AppLoading v-if="submitting" size="sm" />
         {{ submitting ? '创建中...' : '生成取件码' }}
       </button>
     </div>

@@ -29,7 +29,7 @@ onBeforeUnmount(() => {
         :initial="{ opacity: 0, scale: 0.96 }"
         :animate="{ opacity: 1, scale: 1 }"
         :transition="springSnappy"
-        class="rounded-xl bg-surface p-6 shadow-popover sm:p-7"
+        class="bg-surface p-6 shadow-popover sm:p-7"
       >
         <header class="mb-5 flex items-center justify-between gap-4">
           <h2 :id="id" class="text-title-3">{{ title }}</h2>

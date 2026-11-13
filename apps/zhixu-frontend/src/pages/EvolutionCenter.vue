@@ -169,7 +169,7 @@ onMounted(() => {
           role="tab"
           :aria-selected="tab === 'pending'"
           :class="[
-            'rounded-full px-4 py-1.5 text-subhead transition-colors',
+            ' px-4 py-1.5 text-subhead transition-colors',
             tab === 'pending'
               ? 'bg-primary-tint font-semibold text-primary-pressed'
               : 'text-label-secondary hover:bg-surface-secondary',
@@ -183,7 +183,7 @@ onMounted(() => {
           role="tab"
           :aria-selected="tab === 'records'"
           :class="[
-            'rounded-full px-4 py-1.5 text-subhead transition-colors',
+            ' px-4 py-1.5 text-subhead transition-colors',
             tab === 'records'
               ? 'bg-primary-tint font-semibold text-primary-pressed'
               : 'text-label-secondary hover:bg-surface-secondary',
@@ -207,7 +207,7 @@ onMounted(() => {
 
       <p
         v-if="error"
-        class="mb-4 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
+        class="mb-4 bg-warning-tint p-4 text-subhead text-warning-strong"
         role="alert"
       >
         {{ error }}
@@ -219,7 +219,7 @@ onMounted(() => {
 
       <div
         v-else-if="!error && items.length === 0 && filtered"
-        class="rounded-lg border border-hairline bg-surface px-6 py-16 text-center"
+        class="border border-hairline bg-surface px-6 py-16 text-center"
         data-test="empty-filtered"
       >
         <h2 class="text-title-3">没有符合筛选条件的提醒</h2>
@@ -233,7 +233,7 @@ onMounted(() => {
 
       <div
         v-else-if="!error && items.length === 0"
-        class="rounded-lg border border-hairline bg-surface px-6 py-16 text-center"
+        class="border border-hairline bg-surface px-6 py-16 text-center"
         data-test="empty-none"
       >
         <h2 class="text-title-3">
@@ -253,16 +253,14 @@ onMounted(() => {
           <li
             v-for="alert in items"
             :key="alert.id"
-            class="cursor-pointer rounded-lg border border-hairline bg-surface p-5 transition-shadow hover:shadow-popover"
+            class="cursor-pointer border border-hairline bg-surface p-5 transition-shadow hover:shadow-popover"
             data-test="alert-card"
             tabindex="0"
             @click="openDetail(alert)"
             @keydown.enter="openDetail(alert)"
           >
             <div class="flex flex-wrap items-center gap-2 text-caption">
-              <span
-                class="rounded-full bg-primary-tint px-2.5 py-1 font-medium text-primary-pressed"
-              >
+              <span class="bg-primary-tint px-2.5 py-1 font-medium text-primary-pressed">
                 {{ TYPE_LABELS[alert.alert_type] }}
               </span>
               <span class="text-label-secondary">{{ STATUS_LABELS[alert.status] }}</span>
@@ -279,7 +277,7 @@ onMounted(() => {
             </p>
             <p
               v-if="archived(alert)"
-              class="mt-2 rounded-sm bg-warning-tint px-3 py-1.5 text-caption text-warning-strong"
+              class="mt-2 bg-warning-tint px-3 py-1.5 text-caption text-warning-strong"
             >
               涉及知识已归档
             </p>
@@ -346,13 +344,13 @@ onMounted(() => {
 
         <p
           v-if="archived(selectedAlert)"
-          class="mt-3 rounded-sm bg-warning-tint px-3 py-2 text-caption text-warning-strong"
+          class="mt-3 bg-warning-tint px-3 py-2 text-caption text-warning-strong"
         >
           涉及知识已归档，只能忽略或标记已核实
         </p>
         <p
           v-if="selectedAlert.alert_type === 'conflict' && !hasRevision(selectedAlert)"
-          class="mt-3 rounded-sm bg-surface-secondary px-3 py-2 text-caption text-label-secondary"
+          class="mt-3 bg-surface-secondary px-3 py-2 text-caption text-label-secondary"
         >
           该提醒没有修订稿，暂不能采纳修订
         </p>
@@ -363,7 +361,7 @@ onMounted(() => {
             <div
               v-for="index in [0, 1]"
               :key="index"
-              class="rounded-md border border-hairline p-3"
+              class="border border-hairline p-3"
               :data-test="`evidence-${index}`"
             >
               <p class="text-caption text-label-secondary">
@@ -387,7 +385,7 @@ onMounted(() => {
                   )"
                   :key="segmentIndex"
                 >
-                  <mark v-if="segment.hit" class="rounded-sm bg-warning-tint text-warning-strong">{{
+                  <mark v-if="segment.hit" class="bg-warning-tint text-warning-strong">{{
                     segment.text
                   }}</mark>
                   <template v-else>{{ segment.text }}</template>
@@ -422,7 +420,7 @@ onMounted(() => {
 
         <p
           v-if="resolveError"
-          class="mt-3 rounded-lg bg-warning-tint p-3 text-subhead text-warning-strong"
+          class="mt-3 bg-warning-tint p-3 text-subhead text-warning-strong"
           role="alert"
         >
           {{ resolveError }}

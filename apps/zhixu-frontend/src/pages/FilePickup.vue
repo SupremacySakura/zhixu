@@ -149,7 +149,7 @@ const handleRetrieve = async () => {
       <!-- Main Container -->
       <div class="w-full max-w-[480px] space-y-8">
         <!-- Entry Card -->
-        <div class="rounded-xl bg-surface p-6 shadow-card sm:p-8">
+        <div class="bg-surface p-6 shadow-card sm:p-8">
           <div class="mb-7 text-center">
             <h1 class="text-display mb-2 text-label">文件取件</h1>
             <p class="text-body text-label-secondary">请输入您的 6 位提取码获取文件</p>
@@ -162,11 +162,11 @@ const handleRetrieve = async () => {
                 :key="index"
                 :ref="el => setInputRef(el as HTMLInputElement | null, index)"
                 :aria-label="`取件码第${index + 1}位`"
-                class="aspect-square min-w-0 w-full cursor-default rounded-sm border-[1.5px] text-center font-mono text-title-3 uppercase text-label caret-primary transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-label-tertiary focus:outline-none"
+                class="aspect-square min-w-0 w-full cursor-default border-[1.5px] text-center font-mono text-title-3 uppercase text-label caret-primary transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary"
                 :class="
                   errorMessage
                     ? 'border-danger bg-surface ring-[3px] ring-danger-tint'
-                    : 'border-hairline bg-surface-secondary focus:border-primary focus:bg-surface focus:ring-[3px] focus:ring-primary-tint'
+                    : 'border-hairline bg-surface-secondary focus:border-primary focus:bg-surface'
                 "
                 maxlength="1"
                 inputmode="text"
@@ -179,12 +179,12 @@ const handleRetrieve = async () => {
                 @paste="handlePaste"
               />
             </div>
-            <p v-if="errorMessage" class="text-center text-[13px] font-medium text-danger">
+            <p v-if="errorMessage" class="text-center text-body font-medium text-danger">
               {{ errorMessage }}
             </p>
             <button
               aria-label="提取文件"
-              class="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-primary text-headline text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed disabled:cursor-not-allowed disabled:opacity-60"
+              class="flex h-14 w-full items-center justify-center gap-2 text-headline transition-colors disabled:cursor-not-allowed disabled:opacity-60 knowledge-button-primary"
               :disabled="!canSubmit"
               @click="handleRetrieve"
             >
@@ -195,7 +195,11 @@ const handleRetrieve = async () => {
           <div
             class="mt-6 flex items-center justify-center gap-1.5 border-t border-hairline pt-4 text-caption text-label-tertiary"
           >
-            <AppIcon icon="material-symbols:lock-clock" class="text-[14px]" />
+            <AppIcon
+              icon="material-symbols:lock-clock"
+              class="atom-glyph"
+              :style="{ '--atom-glyph-size': '14px' }"
+            />
             仅限有效期内提取
           </div>
         </div>
@@ -203,20 +207,28 @@ const handleRetrieve = async () => {
         <!-- Success State Section -->
         <div v-if="successState" class="space-y-4">
           <div class="flex items-center gap-2 px-2 text-primary">
-            <AppIcon icon="material-symbols:check-circle" class="text-[18px]" />
+            <AppIcon
+              icon="material-symbols:check-circle"
+              class="atom-glyph"
+              :style="{ '--atom-glyph-size': '18px' }"
+            />
             <h3 class="text-headline">已提取文件</h3>
           </div>
           <div
-            class="flex flex-col items-center gap-5 rounded-lg bg-surface p-6 shadow-card sm:flex-row sm:gap-6"
+            class="flex flex-col items-center gap-5 bg-surface p-6 shadow-card sm:flex-row sm:gap-6"
           >
             <div
-              class="relative flex h-20 w-16 flex-none items-center justify-center overflow-hidden rounded-md border border-current/20"
+              class="relative flex h-20 w-16 flex-none items-center justify-center overflow-hidden border border-current/20"
               :class="[downloadedFile.iconBg, downloadedFile.iconFg]"
             >
               <div class="absolute inset-0 bg-current opacity-5"></div>
-              <AppIcon :icon="downloadedFile.typeIcon" class="text-4xl" />
+              <AppIcon
+                :icon="downloadedFile.typeIcon"
+                class="atom-glyph"
+                :style="{ '--atom-glyph-size': '36px' }"
+              />
               <div
-                class="absolute bottom-1 right-1 rounded bg-current px-1 text-[8px] font-bold text-white"
+                class="absolute bottom-1 right-1 bg-current px-1 text-note font-bold text-white"
                 :class="downloadedFile.iconFg.replace('text-', 'bg-')"
               >
                 {{ downloadedFile.extLabel }}
@@ -232,10 +244,14 @@ const handleRetrieve = async () => {
             </div>
             <button
               aria-label="重新下载文件"
-              class="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-label px-6 text-headline text-white transition-[background-color,scale] duration-150 hover:bg-label/85 active:scale-[0.97] sm:w-auto"
+              class="flex h-12 w-full items-center justify-center gap-2 bg-label px-6 text-headline text-white transition-colors hover:bg-label/85 sm:w-auto"
               @click="handleRetrieve"
             >
-              <AppIcon icon="material-symbols:download" class="text-xl" />
+              <AppIcon
+                icon="material-symbols:download"
+                class="atom-glyph"
+                :style="{ '--atom-glyph-size': '20px' }"
+              />
               重新下载
             </button>
           </div>

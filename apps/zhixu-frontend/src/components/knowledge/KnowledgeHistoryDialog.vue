@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import {
   getKnowledgeVersion,
   listKnowledgeVersions,
@@ -105,7 +106,7 @@ onBeforeUnmount(() => {
             :initial="{ opacity: 0, scale: 0.96 }"
             :animate="{ opacity: 1, scale: 1 }"
             :transition="springSnappy"
-            class="w-[min(56rem,calc(100vw-2rem))] rounded-xl bg-surface shadow-popover"
+            class="w-[min(56rem,calc(100vw-2rem))] bg-surface shadow-popover"
           >
             <div class="flex items-center justify-between gap-3 border-b border-hairline p-6">
               <div>
@@ -127,7 +128,7 @@ onBeforeUnmount(() => {
             <p
               v-if="error"
               role="alert"
-              class="mx-6 mt-4 rounded-lg bg-warning-tint p-3 text-subhead text-warning-strong"
+              class="mx-6 mt-4 bg-warning-tint p-3 text-subhead text-warning-strong"
             >
               {{ error }}
             </p>
@@ -143,7 +144,7 @@ onBeforeUnmount(() => {
                   v-for="version in versions"
                   :key="version.version_number"
                   type="button"
-                  class="w-full rounded-lg border p-3 text-left transition"
+                  class="w-full border p-3 text-left transition"
                   :class="
                     version.version_number === selected
                       ? 'border-primary bg-primary-tint'
@@ -155,7 +156,7 @@ onBeforeUnmount(() => {
                     第 {{ version.version_number }} 版
                     <span
                       v-if="version.current"
-                      class="rounded bg-primary-tint px-1.5 py-0.5 text-caption text-primary-pressed"
+                      class="bg-primary-tint px-1.5 py-0.5 text-caption text-primary-pressed"
                       >当前</span
                     >
                   </span>
@@ -177,14 +178,14 @@ onBeforeUnmount(() => {
                 </div>
                 <p
                   v-if="detailLoading"
-                  class="rounded-lg border border-hairline p-6 text-center text-subhead"
+                  class="border border-hairline p-6 text-center text-subhead"
                   role="status"
                 >
                   正在读取版本正文…
                 </p>
                 <div
                   v-else
-                  class="knowledge-markdown max-h-80 overflow-y-auto rounded-lg border border-hairline p-5"
+                  class="knowledge-markdown max-h-80 overflow-y-auto border border-hairline p-5"
                   aria-label="版本正文预览"
                   v-html="html"
                 />
@@ -206,11 +207,7 @@ onBeforeUnmount(() => {
                 :disabled="busy || loading || !selectedVersion || selectedVersion.current"
                 @click="restore"
               >
-                <AppIcon
-                  v-if="busy"
-                  class="animate-spin"
-                  icon="material-symbols:progress-activity"
-                />{{ busy ? '恢复中…' : '恢复此版本' }}
+                <AppLoading v-if="busy" size="sm" />{{ busy ? '恢复中…' : '恢复此版本' }}
               </button>
             </div>
           </Motion>

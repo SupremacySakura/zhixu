@@ -79,7 +79,7 @@ watch(() => props.knowledgeId, load)
 onMounted(load)
 </script>
 <template>
-  <aside class="rounded-lg border border-hairline bg-surface p-5">
+  <aside class="border border-hairline bg-surface p-5">
     <div class="mb-3 flex items-center justify-between gap-2">
       <h2 class="text-body font-semibold">标签</h2>
       <button
@@ -97,7 +97,7 @@ onMounted(load)
         <span
           v-for="tag in draft"
           :key="tag.name"
-          class="inline-flex items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1 text-caption"
+          class="inline-flex items-center gap-1.5 bg-surface-secondary px-3 py-1 text-caption"
         >
           {{ tag.name }}
           <button
@@ -124,7 +124,7 @@ onMounted(load)
             v-for="suggestion in suggestions"
             :key="suggestion.name"
             type="button"
-            class="rounded-full border border-hairline px-3 py-1 text-caption text-label-secondary transition-colors hover:border-primary hover:text-primary"
+            class="border border-hairline px-3 py-1 text-caption text-label-secondary transition-colors hover:border-primary hover:text-primary"
             @click="addTag(suggestion.name)"
           >
             {{ suggestion.name

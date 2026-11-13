@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, useId, watch } from 'vue'
 import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../../utils/motion'
 import type { FileListItem } from '../../services/types/file'
@@ -62,7 +63,7 @@ watch(
         :animate="{ opacity: 1 }"
         :exit="{ opacity: 0 }"
         :transition="fadeTransition"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="titleId"
@@ -74,7 +75,7 @@ watch(
           :animate="{ opacity: 1, scale: 1 }"
           :exit="{ opacity: 0, scale: 0.98 }"
           :transition="springSnappy"
-          class="w-full max-w-2xl rounded-lg bg-surface p-6 shadow-popover outline-none"
+          class="w-full max-w-2xl bg-surface p-6 shadow-popover outline-none"
         >
           <div ref="dialogRef" tabindex="-1">
             <h3 :id="titleId" class="text-title-3 mb-2">移动到</h3>
@@ -92,7 +93,7 @@ watch(
                 >
                   <button
                     v-if="!isLastBreadcrumb(index)"
-                    class="whitespace-nowrap rounded-sm transition-colors duration-150 hover:text-primary"
+                    class="whitespace-nowrap transition-colors hover:text-primary"
                     type="button"
                     @click="emit('navigate', index)"
                   >
@@ -104,12 +105,13 @@ watch(
                   <AppIcon
                     v-if="!isLastBreadcrumb(index)"
                     icon="material-symbols:chevron-right"
-                    class="text-[14px]"
+                    class="atom-glyph"
+                    :style="{ '--atom-glyph-size': '14px' }"
                   />
                 </template>
               </nav>
               <button
-                class="h-8 flex-none items-center rounded-full bg-surface px-3.5 text-[13px] font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary hover:text-label active:scale-[0.97] disabled:opacity-60"
+                class="h-8 flex-none items-center bg-surface px-3.5 text-body font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary hover:text-label disabled:opacity-60"
                 type="button"
                 aria-label="选中当前目录作为目标"
                 :disabled="moving"
@@ -120,7 +122,7 @@ watch(
             </div>
 
             <!-- 目录浏览器：48px 行，hover 底色 -->
-            <div class="overflow-hidden rounded-md border border-hairline">
+            <div class="overflow-hidden border border-hairline">
               <div class="max-h-72 overflow-y-auto">
                 <div v-if="browserLoading" class="px-4 py-3 text-subhead text-label-secondary">
                   正在加载目录...
@@ -128,22 +130,27 @@ watch(
                 <template v-else>
                   <template v-for="(folder, index) in folders" :key="`folder:${folder.id}`">
                     <button
-                      class="flex min-h-12 w-full items-center justify-between px-4 text-left transition-colors duration-150 hover:bg-surface-secondary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      class="flex min-h-12 w-full items-center justify-between px-4 text-left transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-50"
                       type="button"
                       :disabled="isOwnFolder(folder) || moving"
                       @click="emit('open-folder', folder)"
                     >
                       <span class="flex min-w-0 items-center gap-3">
                         <span
-                          class="flex h-8 w-8 flex-none items-center justify-center rounded-sm bg-warning-tint text-warning"
+                          class="flex h-8 w-8 flex-none items-center justify-center bg-warning-tint text-warning"
                         >
-                          <AppIcon class="text-[16px]" icon="material-symbols:folder" />
+                          <AppIcon
+                            class="atom-glyph"
+                            icon="material-symbols:folder"
+                            :style="{ '--atom-glyph-size': '16px' }"
+                          />
                         </span>
                         <span class="truncate text-sm text-label">{{ folder.name }}</span>
                       </span>
                       <AppIcon
-                        class="text-[16px] text-label-tertiary"
+                        class="atom-glyph text-label-tertiary"
                         icon="material-symbols:chevron-right"
+                        :style="{ '--atom-glyph-size': '16px' }"
                       />
                     </button>
                     <div v-if="index < folders.length - 1" class="ml-15 h-px bg-hairline" />
@@ -165,7 +172,7 @@ watch(
 
             <div class="mt-5 flex justify-end gap-3">
               <button
-                class="h-10 rounded-full bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97] disabled:opacity-60"
+                class="h-10 bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary disabled:opacity-60"
                 type="button"
                 :disabled="moving"
                 @click="handleCancel"
@@ -173,16 +180,12 @@ watch(
                 取消
               </button>
               <button
-                class="flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed disabled:opacity-60"
+                class="flex h-10 items-center gap-2 px-5 text-sm font-semibold transition-colors disabled:opacity-60 knowledge-button-primary"
                 type="button"
                 :disabled="moving"
                 @click="emit('confirm')"
               >
-                <AppIcon
-                  v-if="moving"
-                  icon="material-symbols:progress-activity"
-                  class="animate-spin"
-                />
+                <AppLoading v-if="moving" size="sm" />
                 {{ moving ? '移动中...' : '确认移动' }}
               </button>
             </div>

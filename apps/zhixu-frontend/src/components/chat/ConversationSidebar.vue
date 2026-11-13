@@ -87,14 +87,14 @@ defineExpose({ reload: load })
       <ul v-else class="space-y-1">
         <li v-for="conversation in conversations" :key="conversation.id">
           <div
-            class="group rounded-md px-3 py-2"
+            class="group px-3 py-2"
             :class="conversation.id === activeId ? 'bg-primary-tint' : 'hover:bg-surface'"
           >
             <input
               v-if="editingId === conversation.id"
               v-model="editingTitle"
               maxlength="200"
-              class="w-full rounded-sm border border-hairline bg-canvas px-2 py-1 text-caption outline-none"
+              class="w-full border border-hairline bg-canvas px-2 py-1 text-caption outline-none"
               @keydown.enter.prevent="commitRename"
               @keydown.esc.prevent="editingId = ''"
               @blur="commitRename"
@@ -110,7 +110,7 @@ defineExpose({ reload: load })
               >
                 {{ conversation.title || '未命名会话' }}
               </button>
-              <div class="mt-1 flex items-center justify-between text-[11px] text-label-secondary">
+              <div class="mt-1 flex items-center justify-between text-note text-label-secondary">
                 <span>{{ relative(conversation.updated_at) }}</span>
                 <span class="flex gap-2 lg:hidden lg:group-hover:flex lg:group-focus-within:flex">
                   <button type="button" @click="startRename(conversation)">改名</button>

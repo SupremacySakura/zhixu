@@ -292,11 +292,20 @@
     transition-timing-function: var(--ease-settle);
   }
 
+  /* 主按钮只有一种写法：atom-btn + atom-tone-primary。
+     这个兼容类不再自带外观，只是那对原子的别名 —— 让还没迁移到
+     AppButton 的调用点（含 4 处 RouterLink，它们不是按钮元素）
+     与 AppButton 画出同一个东西，而不是各画一套。
+
+     尺寸走 AppButton 的 lg 档（36px / 14px 内边距 / --text-lead）：
+     上面共享块已经声明了 min-height 2.25rem 与 text-lead，也就是 lg 档。
+     不给这三个变量的话 atom-btn 会落 md 档默认（32px / 12px / --text-body），
+     高与字号会和共享块打架。 */
   .knowledge-button-primary {
-    border-color: var(--color-primary-pressed);
-    background-color: var(--color-primary);
-    box-shadow: var(--shadow-floating);
-    color: var(--color-surface-tertiary);
+    @apply atom-btn atom-tone-primary;
+    --atom-control-height: 36px;
+    --atom-control-padding: 14px;
+    --atom-control-font-size: var(--text-lead);
   }
 
   .knowledge-button-secondary {
@@ -315,7 +324,7 @@
   }
 
   .knowledge-icon-button {
-    @apply inline-flex h-9 w-9 items-center justify-center text-label-secondary disabled:opacity-50;
+    @apply tap-target inline-flex h-9 w-9 items-center justify-center text-label-secondary disabled:opacity-50;
     border: 1px solid var(--color-rule);
   }
 

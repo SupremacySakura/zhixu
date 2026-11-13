@@ -18,7 +18,7 @@ const skipToContent = () => {
       <!-- Skip to content 链接 - 为键盘用户提供快速导航到主内容 -->
       <a
         href="#main-content"
-        class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:font-semibold focus:text-white"
+        class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:bg-primary focus:px-4 focus:py-2 focus:font-semibold focus:text-white"
         @click.prevent="skipToContent"
       >
         跳转到主内容

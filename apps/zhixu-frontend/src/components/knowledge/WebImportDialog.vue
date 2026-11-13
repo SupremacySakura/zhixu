@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import { importKnowledgeFromWeb, type KnowledgeItem } from '../../services/apis/knowledge'
 import { knowledgeError } from '../../utils/knowledge'
 import { fadeTransition, springSnappy } from '../../utils/motion'
@@ -59,7 +60,7 @@ async function submit() {
             :initial="{ opacity: 0, scale: 0.96 }"
             :animate="{ opacity: 1, scale: 1 }"
             :transition="springSnappy"
-            class="rounded-xl bg-surface shadow-popover"
+            class="bg-surface shadow-popover"
           >
             <form @submit.prevent="submit">
               <div class="p-6 sm:p-7">
@@ -114,11 +115,7 @@ async function submit() {
                   class="knowledge-button-primary"
                   :disabled="busy || !url.trim()"
                 >
-                  <AppIcon
-                    v-if="busy"
-                    class="animate-spin"
-                    icon="material-symbols:progress-activity"
-                  />{{ busy ? '抓取中…' : '开始导入' }}
+                  <AppLoading v-if="busy" size="sm" />{{ busy ? '抓取中…' : '开始导入' }}
                 </button>
               </div>
             </form>

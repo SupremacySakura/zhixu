@@ -66,7 +66,7 @@ watch(
         :animate="{ opacity: 1 }"
         :exit="{ opacity: 0 }"
         :transition="fadeTransition"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="'dialog-title-' + title"
@@ -78,7 +78,7 @@ watch(
           :animate="{ opacity: 1, scale: 1 }"
           :exit="{ opacity: 0, scale: 0.98 }"
           :transition="springSnappy"
-          class="w-full max-w-md rounded-lg bg-surface p-6 shadow-popover"
+          class="w-full max-w-md bg-surface p-6 shadow-popover"
           @click.stop
         >
           <h3 :id="'dialog-title-' + title" class="text-title-3 mb-2">{{ title }}</h3>
@@ -89,7 +89,7 @@ watch(
             <button
               type="button"
               :disabled="loading"
-              class="h-10 rounded-full bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97] disabled:opacity-60"
+              class="h-10 bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary disabled:opacity-60"
               @click="handleClose"
             >
               {{ cancelText }}
@@ -98,8 +98,8 @@ watch(
               ref="confirmButtonRef"
               type="button"
               :disabled="loading"
-              class="flex h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 active:scale-[0.97] disabled:opacity-60"
-              :class="danger ? 'bg-danger hover:bg-danger/90' : 'bg-primary hover:bg-primary-hover'"
+              class="flex h-10 items-center gap-2 px-5 text-sm font-semibold transition-colors disabled:opacity-60"
+              :class="danger ? 'atom-btn atom-tone-danger' : 'knowledge-button-primary'"
               @click="handleConfirm"
             >
               <slot name="confirm-icon" />

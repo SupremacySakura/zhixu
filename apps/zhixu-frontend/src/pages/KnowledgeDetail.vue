@@ -2,6 +2,7 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppIcon from '../components/ui/AppIcon.vue'
+import AppLoading from '../components/ui/AppLoading.vue'
 import {
   archiveKnowledge,
   favoriteKnowledge,
@@ -133,11 +134,7 @@ function onOrganized(updated: KnowledgeItem) {
         ><span>/</span><span>知识详情</span>
       </div>
       <p v-if="loading" class="py-12 text-center" role="status">正在读取知识正文…</p>
-      <div
-        v-if="error"
-        class="mb-5 rounded-lg bg-warning-tint p-4 text-warning-strong"
-        role="alert"
-      >
+      <div v-if="error" class="mb-5 bg-warning-tint p-4 text-warning-strong" role="alert">
         {{ error }} <button class="knowledge-text-action" @click="load()">重新加载</button>
       </div>
       <template v-if="item">
@@ -168,8 +165,9 @@ function onOrganized(updated: KnowledgeItem) {
                     ? 'material-symbols:star-rounded'
                     : 'material-symbols:star-outline'
                 "
-                class="text-lg"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />{{ item.is_favorite ? '已收藏' : '收藏' }}
             </button>
             <button type="button" class="knowledge-button-secondary" @click="toggleArchive">
@@ -179,8 +177,9 @@ function onOrganized(updated: KnowledgeItem) {
                     ? 'material-symbols:unarchive-outline-rounded'
                     : 'material-symbols:archive-outline-rounded'
                 "
-                class="text-lg"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />{{ item.archived_at ? '恢复归档' : '归档' }}
             </button>
             <button
@@ -213,33 +212,36 @@ function onOrganized(updated: KnowledgeItem) {
               :disabled="evolveBusy"
               @click="recheckEvolution"
             >
+              <AppLoading v-if="evolveBusy" size="lg" />
               <AppIcon
-                :icon="
-                  evolveBusy
-                    ? 'material-symbols:progress-activity'
-                    : 'material-symbols:refresh-rounded'
-                "
-                class="text-lg"
-                :class="{ 'animate-spin': evolveBusy }"
+                v-else
+                icon="material-symbols:refresh-rounded"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />{{ evolveBusy ? '检查中…' : '重新检查' }}
             </button>
           </div>
         </header>
         <div
           v-if="item.archived_at"
-          class="mb-5 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
+          class="mb-5 bg-warning-tint p-4 text-subhead text-warning-strong"
           role="status"
         >
           该知识已归档，不会出现在默认列表与问答检索中。恢复后重新生效。
         </div>
         <div
           v-if="item.outdated_at"
-          class="mb-5 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
+          class="mb-5 bg-warning-tint p-4 text-subhead text-warning-strong"
           role="status"
         >
           <p class="flex items-center gap-2 font-semibold">
-            <AppIcon icon="material-symbols:history-rounded" class="text-lg" aria-hidden="true" />
+            <AppIcon
+              icon="material-symbols:history-rounded"
+              class="atom-glyph"
+              aria-hidden="true"
+              :style="{ '--atom-glyph-size': '18px' }"
+            />
             这条知识可能已过时
           </p>
           <p class="mt-2 leading-6">
@@ -256,7 +258,7 @@ function onOrganized(updated: KnowledgeItem) {
         </p>
         <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_15rem]">
           <article
-            class="min-w-0 rounded-lg border border-hairline bg-surface p-6 sm:p-9"
+            class="min-w-0 border border-hairline bg-surface p-6 sm:p-9"
             aria-label="知识正文"
           >
             <div
@@ -284,7 +286,7 @@ function onOrganized(updated: KnowledgeItem) {
             <KnowledgeOrganizePanel :item="item" @accepted="onOrganized" />
             <KnowledgeVectorPanel :item="item" @retried="item = $event" />
             <KnowledgeTagEditor :key="tagVersion" :knowledge-id="item.id" />
-            <aside class="rounded-lg border border-hairline bg-surface p-5">
+            <aside class="border border-hairline bg-surface p-5">
               <h2 class="mb-5 text-body font-semibold">来源信息</h2>
               <dl class="space-y-5">
                 <div v-if="item.source_file_id">
