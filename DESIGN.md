@@ -267,7 +267,21 @@ components:
 
 **横向溢出**：1440 / 1024 / 1023 / 768 / 767 / 375 全部 `document.documentElement.scrollWidth === innerWidth`，无横向滚动。
 
-**图谱边标签的避让纪律**（2026-11-13 修）：`labelLayout.hideOverlap` **必须按 `dataType` 分流** —— 节点标签走 `hideOverlap: true`（防止标题互相压住），**边标签恒不隐藏**（`hideOverlap: false`）。原因是 `LabelManager.layout()` 每次布局都对 `hideOverlap` 的标签重跑一遍判定，而判定结果**随缩放变化**：用固定 `{ hideOverlap: true }` 时，19 条边里 18 条被整个隐藏，只剩 1 条可见，且缩放后幸存者会从一条边跳到另一条边 —— 观感就是「关系文字不跟着线走」，实际是**可见的那一条换成了别的边**（标签到所属曲线的距离其实恒为 5–10px，缩放前后不变）。分流后边标签恒 19/19 全显。
+**图谱边标签的避让纪律**（2026-11-13 修，两轮）：节点标签走 `labelLayout.hideOverlap`，**边标签必须彻底退出 labelLayout 的接管**。
+
+第一轮以为「按 `dataType` 分流就够了」——错。`LabelManager.layout()` 每次布局都对 `hideOverlap` 的标签重跑判定，而判定结果**随缩放变化**：用固定 `{ hideOverlap: true }` 时，19 条边里 18 条被整个隐藏，只剩 1 条可见，缩放后幸存者还会换边，观感就是「关系文字不跟着线走」。
+
+第二轮找到真因：`LabelManager.js` 的 `updateLayoutConfig()` 会对**所有被接管的标签**无条件执行 `hostEl.setTextConfig({ local: false })`（源码注释就写着 "Force to set local false"），把标签坐标从局部坐标系改成画布全局坐标系。而边标签的 `x/y` 是 `Line.js` 写入的**曲线中点局部坐标**，`Line.js` 同时还会给它 `scaleX = 1/parentScale` 做反向缩放以保持字号恒定。两者叠加 → 越缩越远。实测缩 12 次后标签距线 **67–311px**；scale = 1 时完全隐形，所以基线一直看着正常，问题只在缩放后暴露。
+
+**唯一有效的挡板**是 ECharts 自带的 `textEl.disableLabelLayout`（`LabelManager.js` 里 `if (textEl && !textEl.disableLabelLayout)`，ECharts 自己的 treemap 就这么用）。落地顺序必须是：
+
+1. `setOption(完整配置 + labelLayout: null, true)` —— 先让图元存在；
+2. 遍历 `series.getGraph().eachEdge()` 给每条边的 `getGraphicEl().getTextContent()` 打上 `disableLabelLayout = true`；
+3. `setOption({ series: [{ labelLayout: nodeOnlyLabelLayout }] })` —— 只补这一项。
+
+顺序反了边标签就已经被改成全局坐标，事后再改 `local: true` 也救不回来（已实测）。改完后边标签在缩 6 / 缩 16 / 放大 12 / 放大 18 四档下距线恒 6–10px，`edgeLocal` 恒为 `true`，节点标签重叠 0。
+
+`KnowledgeGraphChart.test.ts` 有两条契约测试钉住这个顺序，改动前请先读它们。
 
 ### 六个布局原型（13 个页面全部归位）
 

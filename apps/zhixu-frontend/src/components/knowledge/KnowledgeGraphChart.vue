@@ -31,6 +31,16 @@ use([GraphChart, TooltipComponent, CanvasRenderer, LabelLayout])
 /** 节点描边宽：1px 在 18px 的方块上读不出线型差异，2px 才让实线/虚线/点线分得开。 */
 const NODE_BORDER_WIDTH = 2
 
+/**
+ * 标签避让只作用于节点，边标签一律跳过。
+ *
+ * 这里返回 undefined 只让边标签「不参与重叠判定」，**并不足以**让它们留在局部坐标系；
+ * 真正起作用的是 attachEdgeLabelOptOut() 里的 disableLabelLayout，见该函数的说明。
+ */
+function nodeOnlyLabelLayout(params: { dataType?: string }) {
+  return params.dataType === 'edge' ? undefined : { hideOverlap: true }
+}
+
 const props = withDefaults(
   defineProps<{
     nodes: KnowledgeGraphNode[]
@@ -163,20 +173,16 @@ function buildOption(): EChartsCoreOption {
         // 高亮只提不透明度，不改线宽 —— 改线宽会把「四轴编码」里的宽度轴抹掉。
         emphasis: { focus: 'adjacency', lineStyle: { opacity: 1 } },
         /**
-         * 标签避让必须**按 dataType 分流**，不能用固定的 { hideOverlap: true }。
+         * 节点标签防重叠。
          *
-         * 固定值的实测后果（19 条边 / 32 个节点）：边标签只剩 1 条可见，另外 18 条
-         * 被 hideOverlap 判为重叠而整个隐藏。而 hideOverlap 的判定结果**随缩放变化**
-         * —— 缩放后幸存的那一条从 di=3 跳到 di=9。用户看到的现象就是「关系文字不
-         * 跟着线走」：其实位置一直是对的（距曲线恒 5–10px，缩放前后不变），是**可见
-         * 的那一条换成了别的边**，所以文字看起来从一条线跳到了另一条线上。
-         *
-         * 分流后：边标签恒 19/19 全显（它们本来就贴着各自的线，不构成重叠困扰），
-         * 节点标签仍走 hideOverlap 防止标题互相压住。
+         * 边标签**必须**排除在外，且不能只靠回调里返回 undefined —— 那样不够。
+         * 见下方 attachEdgeLabelOptOut()：只要 series 上有非空 labelLayout，
+         * LabelManager 就会把**所有**标签的宿主元素 setTextConfig({ local: false })，
+         * 标签坐标从「局部（跟着线走）」变成「全局（画布绝对）」。边标签的 x/y 写的是
+         * 曲线中点局部坐标（Line.js 里 label.x = cp[0]），一旦被当全局解读，缩放后就会
+         * 被按 1/scale 反向放大再推到远处 —— 实测缩 12 次偏离 67–311px。
          */
-        labelLayout: (params: { dataType?: string }) => ({
-          hideOverlap: params.dataType !== 'edge',
-        }),
+        labelLayout: nodeOnlyLabelLayout,
       },
     ],
   }
@@ -205,11 +211,58 @@ function applySelection() {
   selectedIndex = next
 }
 
+/**
+ * 让边标签退出 labelLayout 的接管，保住「贴着关系线」的坐标系。
+ *
+ * 为什么需要这一步：ECharts 的 LabelManager 只要发现 series 上写了非空 labelLayout，
+ * 就会在每次布局时遍历 series group，把所有文本元素的宿主 setTextConfig({ local: false })
+ * （LabelManager.js updateLayoutConfig 里那句「Force to set local false」）。而关系线标签
+ * 原本由 Line.js 设的是 local: true，坐标是曲线中点的**局部**坐标；改成全局后，缩放时
+ * 标签既被按 1/scale 反向放大（ECharts 想让字号恒定），坐标又被当画布绝对坐标读，
+ * 于是越缩越远。实测：缩 12 次后标签距线 67–311px，用户看到的就是「关系文字飞了」。
+ *
+ * LabelManager 有个现成的跳过开关：child.getTextContent() 得到的 textEl 若带
+ * disableLabelLayout 就整个跳过（ECharts 自己的 treemap 就这么用）。所以顺序必须是
+ * **先渲染出图元 → 给边标签打标 → 再挂 labelLayout**：反过来打标时图元还没生成。
+ *
+ * 只打边标签：节点标签的宿主是 path（节点方块），边标签的宿主是 group（线组），
+ * 32 节点 / 19 边在实测中一一对应，据此区分不会误伤。
+ */
+function attachEdgeLabelOptOut() {
+  if (!chart) return
+  // getModel 在 ECharts 的公开类型里是 private，但它返回的 series 模型是取图元的唯一入口；
+  // 这里显式收窄成用到的那几个成员，避免把整棵内部类型拖进组件。
+  const model = (
+    chart as unknown as {
+      getModel?: () => { getSeries: () => unknown[] }
+    }
+  ).getModel?.()
+  if (!model) return
+  const series = model.getSeries()[0] as
+    | { getGraph?: () => { eachEdge: (cb: (edge: unknown) => void) => void } }
+    | undefined
+  const graph = series?.getGraph?.()
+  if (!graph) return
+  graph.eachEdge(edge => {
+    const el = (edge as { getGraphicEl?: () => unknown }).getGraphicEl?.() as {
+      getTextContent?: () => { disableLabelLayout?: boolean } | null
+    } | null
+    const textEl = el?.getTextContent?.()
+    if (textEl) textEl.disableLabelLayout = true
+  })
+}
+
 function render() {
   if (!chart) return
   // setOption 重建 series 后选中态清空，重新按 props.selectedId 选中。
   selectedIndex = null
-  chart.setOption(buildOption(), true)
+  // 分两步：先不带 labelLayout 渲染（此时边标签还没被打标，得先有图元才能打），
+  // 打标之后再挂 labelLayout —— 顺序反了边标签就已被 LabelManager 改成全局坐标。
+  const option = buildOption()
+  const [series] = option.series as object[]
+  chart.setOption({ ...option, series: [{ ...series, labelLayout: null }] }, true)
+  attachEdgeLabelOptOut()
+  chart.setOption({ series: [{ labelLayout: nodeOnlyLabelLayout }] })
   applySelection()
 }
 

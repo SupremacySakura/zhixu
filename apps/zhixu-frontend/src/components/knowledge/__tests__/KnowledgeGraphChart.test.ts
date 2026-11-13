@@ -83,6 +83,35 @@ function render(overrides: Record<string, unknown> = {}) {
   })
 }
 
+/**
+ * 取最近一次「完整配置」的 setOption 入参。
+ *
+ * 组件是两步渲染：第一步 notMerge 铺全部图形配置（此时还没有图元可以打标），
+ * 第二步只补 labelLayout。所以不能直接取 at(-1)，那拿到的是第二步的补丁。
+ */
+
+interface FullSeries {
+  type: string
+  layout?: string
+  roam?: boolean
+  data: any[]
+  links: any[]
+  edgeLabel: { show: boolean; fontSize: number; formatter: (params: any) => string }
+  select: { itemStyle: { borderWidth: number } }
+  labelLayout?: any
+}
+
+function lastFullOption(): { series: FullSeries[] } {
+  const calls = mocks.chart.setOption.mock.calls
+  for (let i = calls.length - 1; i >= 0; i -= 1) {
+    const arg = calls[i]?.[0] as { series?: { type?: string }[] } | undefined
+    if (arg?.series?.[0]?.type === 'graph') {
+      return arg as unknown as { series: FullSeries[] }
+    }
+  }
+  throw new Error('没有找到带完整图形配置的 setOption 调用')
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -93,7 +122,7 @@ describe('KnowledgeGraphChart', () => {
     await nextTick()
     expect(mocks.init).toHaveBeenCalledTimes(1)
     expect(mocks.use).toHaveBeenCalled()
-    const option = mocks.chart.setOption.mock.calls.at(-1)?.[0]
+    const option = lastFullOption()
     expect(option.series[0].type).toBe('graph')
     expect(option.series[0].layout).toBe('force')
     expect(option.series[0].roam).toBe(true)
@@ -137,7 +166,7 @@ describe('KnowledgeGraphChart', () => {
       })),
     })
     await nextTick()
-    const links = mocks.chart.setOption.mock.calls.at(-1)?.[0].series[0].links
+    const links = lastFullOption().series[0].links
     const fingerprint = (link: {
       lineStyle: { type: unknown; width: number; opacity: number }
       symbol: unknown
@@ -176,7 +205,7 @@ describe('KnowledgeGraphChart', () => {
   it('边按来源分色：AI 与手动不同色，矛盾无视来源用唯一彩色', async () => {
     const wrapper = render()
     await nextTick()
-    const links = mocks.chart.setOption.mock.calls.at(-1)?.[0].series[0].links
+    const links = lastFullOption().series[0].links
     const ai = links.find((link: { id: string }) => link.id === '10')
     const manual = links.find((link: { id: string }) => link.id === '11')
     expect(ai.lineStyle.color).toBe(palette.edgeAI)
@@ -189,7 +218,7 @@ describe('KnowledgeGraphChart', () => {
   it('边标签显示中文关系类型且使用小字号', async () => {
     const wrapper = render()
     await nextTick()
-    const series = mocks.chart.setOption.mock.calls.at(-1)?.[0].series[0]
+    const series = lastFullOption().series[0]
     expect(series.edgeLabel.show).toBe(true)
     expect(series.edgeLabel.fontSize).toBe(10)
     expect(series.edgeLabel.formatter({ data: { relation_type: 'related' } })).toBe('相关')
@@ -212,7 +241,7 @@ describe('KnowledgeGraphChart', () => {
       palette: { ...palette, edgeContradicts: 'rgb(22 23 24)' },
     })
     await nextTick()
-    const series = mocks.chart.setOption.mock.calls.at(-1)?.[0].series[0]
+    const series = lastFullOption().series[0]
     const link = series.links.find((item: { id: string }) => item.id === '12')
     expect(link.lineStyle.color).toBe('rgb(22 23 24)')
     expect(series.edgeLabel.formatter({ data: { relation_type: 'contradicts' } })).toBe('矛盾')
@@ -222,20 +251,21 @@ describe('KnowledgeGraphChart', () => {
   it('筛选后节点与边集合变化时重建 option，只保留剩余节点与边', async () => {
     const wrapper = render()
     await nextTick()
-    expect(mocks.chart.setOption).toHaveBeenCalledTimes(1)
+    // 两步渲染：铺图形 + 补 labelLayout。
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
 
     await wrapper.setProps({ edges: edges.filter(edge => edge.status === 'confirmed') })
     await nextTick()
-    expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
-    let option = mocks.chart.setOption.mock.calls.at(-1)?.[0]
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(4)
+    let option = lastFullOption()
     expect(option.series[0].data).toHaveLength(2)
     expect(option.series[0].links).toHaveLength(1)
     expect(option.series[0].links[0].id).toBe('10')
 
     await wrapper.setProps({ nodes: [nodes[0]], edges: [] })
     await nextTick()
-    expect(mocks.chart.setOption).toHaveBeenCalledTimes(3)
-    option = mocks.chart.setOption.mock.calls.at(-1)?.[0]
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(6)
+    option = lastFullOption()
     expect(option.series[0].data).toHaveLength(1)
     expect(option.series[0].links).toHaveLength(0)
     wrapper.unmount()
@@ -263,7 +293,7 @@ describe('KnowledgeGraphChart', () => {
   it('选中样式由 series.select 提供，节点数据内置选中标志已移除', async () => {
     const wrapper = render({ selectedId: 1 })
     await nextTick()
-    const option = mocks.chart.setOption.mock.calls.at(-1)?.[0]
+    const option = lastFullOption()
     expect(option.series[0].select.itemStyle.borderWidth).toBe(3)
     expect(
       option.series[0].data.every((item: Record<string, unknown>) => !('selected' in item)),
@@ -274,7 +304,7 @@ describe('KnowledgeGraphChart', () => {
   it('切换选中节点只派发 select/unselect，不重建图表', async () => {
     const wrapper = render({ selectedId: 1 })
     await nextTick()
-    expect(mocks.chart.setOption).toHaveBeenCalledTimes(1)
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
     expect(mocks.chart.dispatchAction).toHaveBeenCalledWith({
       type: 'select',
       seriesIndex: 0,
@@ -284,7 +314,7 @@ describe('KnowledgeGraphChart', () => {
     await wrapper.setProps({ selectedId: 2 })
     await nextTick()
     // 仍是同一张图：没有新的 setOption（重建会重置力导向布局与缩放）。
-    expect(mocks.chart.setOption).toHaveBeenCalledTimes(1)
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
     expect(mocks.chart.dispatchAction).toHaveBeenCalledWith({
       type: 'unselect',
       seriesIndex: 0,
@@ -298,7 +328,7 @@ describe('KnowledgeGraphChart', () => {
 
     await wrapper.setProps({ selectedId: null })
     await nextTick()
-    expect(mocks.chart.setOption).toHaveBeenCalledTimes(1)
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
     expect(mocks.chart.dispatchAction).toHaveBeenLastCalledWith({
       type: 'unselect',
       seriesIndex: 0,
@@ -311,6 +341,44 @@ describe('KnowledgeGraphChart', () => {
     const wrapper = render({ selectedId: 99 })
     await nextTick()
     expect(mocks.chart.dispatchAction).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('边标签退出 labelLayout 接管：先铺图元、打标 disableLabelLayout、再挂 labelLayout', async () => {
+    // 这是一条防回归契约。ECharts 的 LabelManager 只要看到非空 labelLayout，就会把所有
+    // 标签宿主的 textConfig.local 强制改成 false（LabelManager.js updateLayoutConfig）。
+    // 边标签的 x/y 是曲线中点的局部坐标，一旦按全局解读，缩放时会被按 1/scale 反向放大
+    // 再推远 —— 实测缩 12 次后偏离关系线 67–311px。唯一的挡板是给边标签打
+    // disableLabelLayout，而打标需要图元已存在，所以顺序必须是「渲染 → 打标 → 挂布局」。
+    const wrapper = render()
+    await nextTick()
+
+    const calls = mocks.chart.setOption.mock.calls
+    expect(calls).toHaveLength(2)
+
+    // 第一步：完整图形配置，且 labelLayout 为 null（此时还没有图元可打标）。
+    const first = calls[0][0]
+    expect(first.series[0].type).toBe('graph')
+    expect(first.series[0].labelLayout).toBeNull()
+
+    // 第二步：只补 labelLayout，且必须按 dataType 把边排除掉。
+    const second = calls[1][0]
+    expect(second.series).toHaveLength(1)
+    expect(second.series[0].data).toBeUndefined()
+    const labelLayout = second.series[0].labelLayout
+    expect(labelLayout({ dataType: 'edge' })).toBeUndefined()
+    expect(labelLayout({ dataType: 'node' })).toEqual({ hideOverlap: true })
+
+    wrapper.unmount()
+  })
+
+  it('图表缺少 getModel 时不崩（测试替身与旧版本 ECharts 的兜底）', async () => {
+    // attachEdgeLabelOptOut 走的是 ECharts 的 private API，替身里没有 getModel 是常态；
+    // 这条保证它只是静默跳过打标，而不是把整个图表初始化带崩。
+    const wrapper = render()
+    await nextTick()
+    expect(() => window.dispatchEvent(new Event('resize'))).not.toThrow()
+    expect(mocks.chart.setOption).toHaveBeenCalled()
     wrapper.unmount()
   })
 
