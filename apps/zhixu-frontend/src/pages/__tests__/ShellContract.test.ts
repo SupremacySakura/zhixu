@@ -187,3 +187,77 @@ describe('外壳落位契约', () => {
     )
   })
 })
+
+/**
+ * 滚动条契约（2026-11-13）
+ *
+ * 自绘滚动条不是「换个颜色」，它改了两件布局事实，两件都会被下一次改动悄悄弄坏：
+ *
+ * 1. 只要声明 `::-webkit-scrollbar` 的宽度，Chrome 就**一律**改用占位滚动条
+ *    （实测三组 overlay flag 同结果）。于是滚动容器的内容盒右边恒少 12px。
+ *    页头带与工具栏若还用对称 padding，就会比内容容器多伸 12px —— 这个错
+ *    **只在右边**出现，左对齐看起来完全正常，所以肉眼很难发现。
+ * 2. 反向的坑：`scrollbar-gutter: stable` 在不溢出的页面也占位。画布页是
+ *    满铺深色岛，多占一条槽就会在右缘露出一条浅色接缝（实测 12px）。
+ *
+ * 所以契约是三条：滚动容器必须留槽、页头带/工具栏必须做不对称补偿、
+ * 不许有第二个地方偷偷隐藏滚动条。
+ */
+describe('滚动条契约', () => {
+  /** 页面级滚动容器：要么 shell-page（自带 stable gutter），要么 shell-scroll。 */
+  const SCROLL_CONTAINERS: Record<string, string> = {
+    KnowledgeLibrary: 'shell-page',
+    KnowledgeDetail: 'shell-page',
+    KnowledgeChunks: 'shell-page',
+    KnowledgeEdit: 'shell-page',
+    EvolutionCenter: 'shell-page',
+    ModelSettings: 'shell-page',
+    DashboardPage: 'shell-page',
+    UploadFile: 'shell-page',
+    PickupCodes: 'shell-page',
+    FileManagement: 'shell-page',
+    // 对话页的滚动容器是消息区，不是整页：外壳把它压成 shell-scroll。
+    ChatPage: 'shell-scroll',
+    // 画布页是**有意的例外**：页头带是 absolute 浮层、用常量 px，
+    // 本来就不跟内容容器对齐，不需要槽位；留槽反而让深色岛右缘露缝。
+    KnowledgeGraph: 'shell-full',
+  }
+
+  it('每页的滚动容器都留了滚动条槽位（画布页例外）', () => {
+    for (const [page, expected] of Object.entries(SCROLL_CONTAINERS)) {
+      const code = SOURCES[page]!.replace(/<!--[\s\S]*?-->/g, '')
+      const classes = classAttrs(page)
+      if (expected === 'shell-full') {
+        // 例外页必须仍然手写 overflow-y-auto，且**不能**带 stable gutter。
+        expect(code, `${page} 的滚动容器丢了`).toContain('overflow-y-auto')
+        expect(classes, `${page} 不该留 stable gutter`).not.toContain('shell-scroll')
+        continue
+      }
+      expect(classes, `${page} 的滚动容器不是 ${expected}`).toContain(expected)
+    }
+  })
+
+  it('只有画布页可以裸写 overflow-y-auto 当页面级滚动容器', () => {
+    // 裸 overflow-y-auto 不会留槽位，页头带的补偿公式就会和内容盒差 12px。
+    for (const page of ALL_PAGES) {
+      if (page === 'KnowledgeGraph') continue
+      const code = SOURCES[page]!.replace(/<!--[\s\S]*?-->/g, '')
+      // 页面里允许有内嵌滚动区（上传队列 max-h-72、抽屉），但页面级
+      // 滚动容器不能裸写：它必须是 shell-page / shell-scroll 载体。
+      const bare = code.match(/class="[^"]*overflow-y-auto[^"]*"/g) ?? []
+      for (const tag of bare) {
+        expect(tag, `${page} 的页面级滚动容器裸写了 overflow-y-auto`).not.toMatch(
+          /shell-full|flex-1\b/,
+        )
+      }
+    }
+  })
+
+  it('全仓只有 SettingsModal 可以隐藏滚动条', () => {
+    const hiders = ALL_PAGES.filter(page => {
+      const code = SOURCES[page]!
+      return code.includes('scrollbar-width: none') || code.includes('::-webkit-scrollbar')
+    })
+    expect(hiders, '页面里不许隐藏滚动条').toEqual([])
+  })
+})

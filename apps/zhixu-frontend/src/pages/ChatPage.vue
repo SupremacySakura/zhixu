@@ -199,10 +199,12 @@ onMounted(() => {
       </div>
       <!-- 消息区：滚动容器留在页面（滚动跟随与 ref 都指这里），
            正文列由 ChatTranscript 承载 measure —— ShellContract 要求每页
-           恰好一个容器档，ChatPage 的是 shell-wide，所以 40em 必须下沉。 -->
+           恰好一个容器档，ChatPage 的是 shell-wide，所以 40em 必须下沉。
+           shell-scroll 提供 scrollbar-gutter: stable，与 shell-page 同口径：
+           页头带的居中公式减掉了滚动条宽度，这里不留槽位就会让标题左移 6px。 -->
       <section
         ref="transcript"
-        class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        class="shell-scroll min-h-0 flex-1 overscroll-contain"
         aria-label="对话消息"
       >
         <div

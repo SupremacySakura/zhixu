@@ -290,7 +290,9 @@ components:
 
 `wide` 的 1152px **只允许出现在表格行与卡片行上**；页内一旦出现连续正文段落，那段必须收进 `measure`。容器水平内边距：桌面 24px、平板 20px、移动 16px，与页头带同一条左边线。
 
-**内边距三档实测断点在 640 / 1024，不是 768**（`padding-inline: max(16px, (100% - var(--container-wide)) / 2)` 的实际行为）：视口 375 与 639 → **16px**；640 到 1023 → **20px**；1024 及以上 → **24px**。所以「平板 20px」覆盖的是 640–1023，比 §Responsive 的 `md`（768–1023）宽了 128px —— 这是 `max()` 计算的副产物，不是刻意设计，但**实测如此，按实测记录**。三档容器在 1440 视口的实际渲染宽度：`measure` **640px**、`panel` **896px**、`wide` **1152px**；在 1024 视口 `wide` 只剩 **776px**（视口 − 2×24 − 200 侧栏）。
+**内边距三档实测断点在 640 / 1024，不是 768**（`padding-inline: max(16px, (100% - var(--container-wide)) / 2)` 的实际行为）：视口 375 与 639 → **16px**；640 到 1023 → **20px**；1024 及以上 → **24px**。所以「平板 20px」覆盖的是 640–1023，比 §Responsive 的 `md`（768–1023）宽了 128px —— 这是 `max()` 计算的副产物，不是刻意设计，但**实测如此，按实测记录**。三档容器在 1440 视口的实际渲染宽度：`measure` **640px**、`panel` **896px**、`wide` **1152px**；在 1024 视口 `wide` 只剩 **764px**（视口 − 2×24 − 200 侧栏 − 12 滚动条）。
+
+> **12px 滚动条已经计入这些数字**（2026-11-13 实测）：`wide` 在 1024 视口是 764 而非原先记的 776——自绘滚动条恒占 12px 布局宽（见 §Shapes → 滚动条），容器可用宽度随之少 12px。1440 下 `wide` 仍是 1152，因为那时 `max()` 取的是 24px 下限、不取居中值，滚动条被吸收在两侧留白里。**页头带的 `padding-inline` 已改成左右不对称**（左减 12、右加 12），否则它会与容器错开一个滚动条宽度——实测 1440 下 `bandPadL=38 / bandPadR=50`，容器左右缘与页头带内容边**逐像素对齐**。
 
 ### 四段结构
 
@@ -368,6 +370,35 @@ components:
 - **方章**：16px，1px 蓝描边 + 蓝底 + 反白「序」字。用于品牌位与 favicon（16/32/180 三尺寸同源，`fill-rule` 不加——实测 Chrome 走 `nonzero`，与其渲染仅差 0.36%）。
 - **规则线母题**：1px 的短横，出现在分组小标签下方、引文带上下、页脚之上。这是**唯一的第二识别元素**——不做纸纹、不做噪点、不做纹理叠加（`mode-operate.md`：「A variant that adds world material, texture, or ornament goes further in the wrong direction」）。
 - **纸条**：`surface-tertiary` 底 + 1px `hairline` 描边 + `1px 1px 0` 偏移，17px 高，逐张 `+5px` 阶梯缩进叠放。
+
+### 滚动条
+
+**滚动条属于形语言，不是浏览器的私事。** macOS 原生滚动条是**灰色圆角胶囊**——圆角、灰、无纸面，与这个世界的三条硬规则（圆角恒 0 / 纸色表面 / 浮起只有硬偏移）同时冲突，所以必须自绘。
+
+**做法：12px 槽位里浮一条 8px 纸条。**
+
+| 部分 | 取值 | 为什么 |
+|---|---|---|
+| 槽位 | `--scrollbar-size: 12px` | 它同时是**外壳几何**（页头带的居中公式要减掉它） |
+| thumb 底 | `--color-surface-tertiary` | 与交叉引用纸条同一个纸面 |
+| thumb 描边 | `--color-rule`（48%，3.01:1） | thumb 是**控件**不是装饰纹理；hairline 只有 1.72，不够当边界 |
+| 浮起 | 左右各 2px 透明边（`background-clip: padding-box`） | 露出的那圈底色就是世界里唯一的浮起手段——**错开的那 2 像素**，与 `shadow-popover` 同一句话 |
+| hover | 底换 `surface-secondary` + 描边转 `primary` | 与「选中」同一套语汇 |
+| active | 底换 `primary-tint` + 描边 `primary-pressed` | 同上 |
+| 圆角 | 0 | 无例外 |
+
+**两条路径互斥，不许同时声明。** WebKit/Blink 走 `::-webkit-scrollbar` 全套；Firefox 只有 `scrollbar-width: thin` + `scrollbar-color` 两个属性（画不出 1px 描边，退到「纸色 thumb + 透明槽」）。用 `@supports selector(::-webkit-scrollbar)` 分流。
+
+**实测警告（Chrome 141，2026-11-13）**：一旦声明 `scrollbar-width` 或 `scrollbar-color`，`::-webkit-scrollbar` 的**全部**自定义会被静默丢弃、退回原生圆角胶囊。这不是优先级问题，是特性开关——写错就是「看起来什么都没做」。
+
+**副作用：滚动条恒占 12px 布局宽。** 只要声明了 `::-webkit-scrollbar` 的宽度，Chrome 就一律改用占位滚动条，`--enable-features=OverlayScrollbar` 也不覆盖（三组 flag 实测同结果）。因此：
+
+1. 主滚动容器一律 `scrollbar-gutter: stable`（`shell-page` / `shell-scroll` 已内置），让槽位恒存在——否则同一套居中公式会在「有滚动」和「没滚动」两种状态下给出两个结果。
+2. 页头带的 `padding-left` 减 `--scrollbar-size`、`padding-right` 加 `--scrollbar-size`（见 §Layout）。只修左边会让「左边对齐、右边多出 12px」，比两边都错更难发现。
+
+**唯一的例外**：`SettingsModal` 的 dialog 壳自己会滚，但它挂在**遮罩**上、没有纸面承载，纸色 thumb 在那里会显得悬空，所以那一处保留隐藏。**这是全仓唯一允许隐藏滚动条的地方。**
+
+**已知未覆盖**：横向滚动条用的是同一套样式（已实测 8px 纸条 + 2px 留白），但代码块 `pre`、表格 `table` 这些 `overflow-x-auto` 的内嵌容器在窄屏下的实际观感**未逐页截图复核**。
 
 ## Components
 

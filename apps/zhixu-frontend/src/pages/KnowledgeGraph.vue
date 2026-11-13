@@ -139,6 +139,11 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
       </div>
     </header>
 
+    <!-- 这里**不用** shell-scroll：画布页的页头带是 absolute 浮层、用常量
+         px-4/sm:px-5/lg:px-6，本来就不跟内容容器对齐，所以不需要
+         scrollbar-gutter: stable 那条恒占位的槽。留着反而会让深色岛
+         右缘恒露一条 12px 的 canvas 接缝（实测 1440×900 下内容不溢出时
+         那条缝也在）。滚动条本身的样式仍由全局 @layer base 提供。 -->
     <main class="shell-full flex-1 overflow-y-auto pt-band">
       <div class="shell-full">
         <p class="px-4 pt-4 text-body text-label-secondary sm:px-5 lg:px-6">

@@ -50,6 +50,15 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 这层壳自己会滚（atom-dialog-shell 带 overflow-y: auto），
+   但它的滚动条挂在**遮罩**上、不在纸面上：全局的纸色 thumb 压在这层
+   透明壳上会显得悬空，所以这里让它退回不可见。
+
+   与全局方案的关系：全局样式在 @layer base，scoped 样式在 Vue 的
+   [data-v-*] 属性选择器上，特异性更高，两者不打架；Firefox 那条
+   scrollbar-width: none 也是同理覆盖 @supports not selector() 那段。
+   这是全仓**唯一**允许隐藏滚动条的地方 —— 因为这里根本没有「纸面」
+   可以承载纸条。 */
 .settings-dialog {
   scrollbar-width: none;
 }

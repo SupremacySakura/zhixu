@@ -198,6 +198,14 @@
   --spacing-hard-card: 118px;
   --spacing-slip: 17px;
   --spacing-slip-step: 5px;
+
+  /* —— 滚动条宽度 ——
+     12px 是这套滚动条的唯一真值，像素构成（DPR 2 实测）：
+       2px 透明边 + 1px 描边 + 6px 纸面 + 1px 描边 + 2px 透明边 = 12。
+     它同时是**外壳几何**：页头带是滚动容器的兄弟节点、不吃滚动条的占位，
+     所以它的居中公式必须减掉这 12px，否则标题会比内容容器右移半个滚动条
+     （实测基线错 7px，改后若不减会错 6px）。见下方 shell-band 的注释。 */
+  --scrollbar-size: 12px;
 }
 
 /* ============================================================
@@ -244,6 +252,76 @@
   :focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
+  }
+
+  /* —— 滚动条：12px 槽位里浮一条 8px 纸条 ——
+     为什么必须自绘：macOS 原生滚动条是**灰色圆角胶囊**，与这个世界
+     「圆角恒 0 / 纸色表面 / 浮起只有硬偏移」三条同时冲突。它属于
+     DESIGN.md §Shapes 的形语言，不是浏览器的私事。
+
+     做法直接复用三件套里的**纸条**：surface-tertiary 打底 + 1px rule 描边、
+     直角。12px 槽位里左右各留 2px 透明边，露出的那圈底色就是世界里唯一的
+     浮起手段——错开的那 2 像素（与 shadow-popover 同一句话）。
+     描边用 rule（48%，3.01:1）而不是 hairline（26%，1.72）：thumb 是控件，
+     不是装饰纹理，1.72 不够当边界。
+
+     两条路径**互斥**，不能同时声明：
+     · WebKit / Blink 走 ::-webkit-scrollbar 全套；
+     · Firefox 走 scrollbar-width / scrollbar-color 两属性。
+     实测（Chrome 141）：一旦声明 scrollbar-width 或 scrollbar-color，
+     ::-webkit-scrollbar 的全部自定义被静默丢弃、退回原生圆角胶囊
+     （截图对照 /tmp/zhixu-shots/sw-compare.png：webkit only 是直角纸块，
+     thin+color 与 both 都变回圆角深灰胶囊）。所以用 @supports selector()
+     分流，两者永远只有一个生效。
+
+     顺带一个必须知道的副作用：只要声明了 ::-webkit-scrollbar 的宽度，
+     Chrome 就**一律**改用占位滚动条，即使 --enable-features=OverlayScrollbar
+     也不覆盖（三组 flag 实测同结果）。也就是说滚动条从此恒吃 12px 布局宽，
+     页头带的对齐公式必须减掉它——见 shell-band 的注释。 */
+  @supports selector(::-webkit-scrollbar) {
+    ::-webkit-scrollbar {
+      width: var(--scrollbar-size);
+      height: var(--scrollbar-size);
+    }
+
+    ::-webkit-scrollbar-track {
+      background-color: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background-color: var(--color-surface-tertiary);
+      /* 2px 透明边 + padding-box：把 12px 槽位收成 8px 纸条。
+         不加 background-clip 的话 border 会被底色填满，纸条会贴死右缘。 */
+      background-clip: padding-box;
+      border: 2px solid transparent;
+      box-shadow: inset 0 0 0 1px var(--color-rule);
+    }
+
+    /* 悬停：纸条换深一档纸面 + 描边转蓝。不写 transition —— Chrome 不对
+       滚动条伪元素插值，声明了也只是空话。 */
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: var(--color-surface-secondary);
+      box-shadow: inset 0 0 0 1px var(--color-primary);
+    }
+
+    /* 拖拽中：蓝 tint 底 + 最深的蓝描边，与「选中」同一套语汇 */
+    ::-webkit-scrollbar-thumb:active {
+      background-color: var(--color-primary-tint);
+      box-shadow: inset 0 0 0 1px var(--color-primary-pressed);
+    }
+
+    ::-webkit-scrollbar-corner {
+      background-color: transparent;
+    }
+  }
+
+  /* Firefox：只有两个属性可调，画不出 1px 描边。退到「纸色 thumb + 透明槽」，
+     thin ≈ 8px，几何上与 WebKit 路径同宽，换浏览器不跳。 */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-surface-tertiary) transparent;
+    }
   }
 }
 
@@ -358,16 +436,37 @@
   gap: calc(var(--spacing) * 4);
   border-bottom: 1px solid var(--color-hairline);
   background-color: var(--color-surface);
-  /* 左内边距不是常量：wide 是居中的 max-width 盒子，页头带是全宽条，
-     两者左缘只有在「页头带也按同一条居中线留白」时才重合。
+  /* 左右内边距不是常量：wide 是居中的 max-width 盒子，页头带是全宽条，
+     两者边缘只有在「页头带也按同一条居中线留白」时才重合。
      max(基础留白, (宽度 − 容器)/2) 恰好等于「居中容器在留白区里的左缘」：
-     宽度富余时它等于居中偏移，宽度不足时退回基础留白（16/20/24）。 */
-  padding-inline: max(calc(var(--spacing) * 4), calc((100% - var(--container-wide)) / 2));
+     宽度富余时它等于居中偏移，宽度不足时退回基础留白（16/20/24）。
+
+     为什么左减 --scrollbar-size、右加 --scrollbar-size：
+     页头带是滚动容器的**兄弟节点**，它的 100% 含滚动条槽位，而滚动容器
+     的内容盒不含。滚动容器一律 scrollbar-gutter: stable（见 shell-page），
+     槽位恒存在，所以：
+       · 左边要减掉它 —— 否则标题比内容容器右移半个滚动条；
+       · 右边要加上它 —— 否则右侧操作按钮比内容容器右缘多伸出 12px。
+     只修左边会让「左边对齐、右边多出 12px」，比两边都错更难发现。
+     实测（1440×900，/home/knowledge）：改前左缘 244 vs 内容 237（错 7）；
+     改后两边都是 238。 */
+  --shell-band-gutter: max(
+    calc(var(--spacing) * 4),
+    calc((100% - var(--scrollbar-size) - var(--container-wide)) / 2)
+  );
+  padding-left: var(--shell-band-gutter);
+  padding-right: calc(var(--shell-band-gutter) + var(--scrollbar-size));
   @media (width >= 40rem) {
-    padding-inline: max(calc(var(--spacing) * 5), calc((100% - var(--container-wide)) / 2));
+    --shell-band-gutter: max(
+      calc(var(--spacing) * 5),
+      calc((100% - var(--scrollbar-size) - var(--container-wide)) / 2)
+    );
   }
   @media (width >= 64rem) {
-    padding-inline: max(calc(var(--spacing) * 6), calc((100% - var(--container-wide)) / 2));
+    --shell-band-gutter: max(
+      calc(var(--spacing) * 6),
+      calc((100% - var(--scrollbar-size) - var(--container-wide)) / 2)
+    );
   }
 }
 
@@ -382,12 +481,23 @@
   gap: calc(var(--spacing) * 4);
   border-bottom: 1px solid var(--color-hairline);
   background-color: var(--color-surface);
-  padding-inline: max(calc(var(--spacing) * 4), calc((100% - var(--container-panel)) / 2));
+  --shell-band-gutter: max(
+    calc(var(--spacing) * 4),
+    calc((100% - var(--scrollbar-size) - var(--container-panel)) / 2)
+  );
+  padding-left: var(--shell-band-gutter);
+  padding-right: calc(var(--shell-band-gutter) + var(--scrollbar-size));
   @media (width >= 40rem) {
-    padding-inline: max(calc(var(--spacing) * 5), calc((100% - var(--container-panel)) / 2));
+    --shell-band-gutter: max(
+      calc(var(--spacing) * 5),
+      calc((100% - var(--scrollbar-size) - var(--container-panel)) / 2)
+    );
   }
   @media (width >= 64rem) {
-    padding-inline: max(calc(var(--spacing) * 6), calc((100% - var(--container-panel)) / 2));
+    --shell-band-gutter: max(
+      calc(var(--spacing) * 6),
+      calc((100% - var(--scrollbar-size) - var(--container-panel)) / 2)
+    );
   }
 }
 
@@ -399,9 +509,28 @@
 
 /* 画布页的页头带用 shell-band-float（容器是 full，没有居中线要对）。 */
 
-/* 页面滚动容器：水平内边距与页头带同一条左边线（16 / 20 / 24）。 */
+/* 页面滚动容器：水平内边距与页头带同一条左边线（16 / 20 / 24）。
+
+   scrollbar-gutter: stable 是**必须**的，不是优化：
+   页头带的居中公式减掉了 --scrollbar-size（它要跟滚动容器的内容盒对齐），
+   而内容盒只有在槽位恒存在时才是「宽度 − 12」。不声明 stable 的话，
+   内容不够高的页面没有槽位，页头带标题就会左移 6px —— 同一套公式
+   在「有滚动」和「没滚动」两种状态下给出两个结果，这比错 6px 更糟。
+   代价是右缘恒留一条 12px 的透明槽：槽底色 transparent，露出的是 canvas，
+   所以看不出接缝（实测 1440×900 下 shell-page 的 track 与 canvas 同色）。 */
 @utility shell-page {
   @apply flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-6 lg:px-6 lg:py-8;
+  scrollbar-gutter: stable;
+}
+
+/* 与页头带并列、但不是 shell-page 的滚动容器（目前只有对话页的消息区）：
+   只要它上面压着一条 shell-band / shell-band-panel，就必须留槽位，
+   否则页头带的居中公式会和内容盒差 12px。见 shell-band 的注释。
+   画布页**不用**这个：它的页头带是 absolute 浮层、用常量 px，本来就不对齐，
+   留槽反而让深色岛右缘恒露一条 12px 浅色接缝（实测）。 */
+@utility shell-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 /* 工具栏 48px：搜索 + 筛选 + 右端命中计数。吸顶，z-toolbar，下沿一条 hairline。 */
@@ -427,15 +556,29 @@
   }
 }
 
-/* 满宽场景（外层没有 shell-page 提供 gutter，例如对话页的工具栏）。 */
+/* 满宽场景（外层没有 shell-page 提供 gutter，例如对话页的工具栏）。
+   与 shell-band 同一套不对称补偿：这个工具栏压在消息区的滚动容器上方，
+   内容盒右边被 12px 槽位占掉，对称 padding 会让工具栏右缘正好多伸 12px
+   （实测 1440 下工具栏右 1416 vs 消息列右 1404）。 */
 @utility shell-toolbar-gutter {
   @apply sticky top-0 z-toolbar flex min-h-12 flex-wrap items-center gap-2 border-b border-hairline bg-surface py-2;
-  padding-inline: max(calc(var(--spacing) * 4), calc((100% - var(--container-wide)) / 2));
+  --shell-toolbar-gutter-x: max(
+    calc(var(--spacing) * 4),
+    calc((100% - var(--scrollbar-size) - var(--container-wide)) / 2)
+  );
+  padding-left: var(--shell-toolbar-gutter-x);
+  padding-right: calc(var(--shell-toolbar-gutter-x) + var(--scrollbar-size));
   @media (width >= 40rem) {
-    padding-inline: max(calc(var(--spacing) * 5), calc((100% - var(--container-wide)) / 2));
+    --shell-toolbar-gutter-x: max(
+      calc(var(--spacing) * 5),
+      calc((100% - var(--scrollbar-size) - var(--container-wide)) / 2)
+    );
   }
   @media (width >= 64rem) {
-    padding-inline: max(calc(var(--spacing) * 6), calc((100% - var(--container-wide)) / 2));
+    --shell-toolbar-gutter-x: max(
+      calc(var(--spacing) * 6),
+      calc((100% - var(--scrollbar-size) - var(--container-wide)) / 2)
+    );
   }
 }
 
