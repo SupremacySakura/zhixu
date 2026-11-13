@@ -195,6 +195,28 @@
 }
 
 /* ============================================================
+   深色岛：知识图谱画布（任务单 #42）
+   —— 这是**新造**的一条画布带，不是保留。本仓历史里画布一直是纸色。
+   岛底 `#16191c` 与岛上文字 `#8b939c` 取自原型 prototype/graph-encoding
+   的 ISLAND_BG / ISLAND_TEXT；其余岛内色为满足对比度地板重算所得，
+   每个值后面的数字是在 `#16191c` 上的实测对比度（非文本下限 3:1）。
+
+   岛上的墨色必须与纸世界分开：`--color-label` 是 `#181818`，
+   在 `#16191c` 上只有 1.01:1，等于隐形。所以这里另立 `--color-graph-island-label*`。
+   ============================================================ */
+@theme {
+  --color-graph-island: #16191c;
+  --color-graph-island-rule: #3a424b; /* 1.73 —— 装饰线，与纸世界 hairline 1.72 同口径 */
+  --color-graph-island-label: #a8b0b8; /* 8.04 */
+  --color-graph-island-label-secondary: #8b939c; /* 5.67 */
+  --color-graph-node-border: #605949; /* 纸白节点上 6.00 */
+  --color-graph-select-ring: #4a8ac0; /* 岛上 4.78 / 纸白节点上 3.19 */
+  --color-graph-edge-ai: #b2cae1;
+  --color-graph-edge-manual: #c3c8cb;
+  --color-graph-edge-contradicts: #d16559;
+}
+
+/* ============================================================
    迁移期兼容层（deprecated）
    现有 17 个页面仍在用旧令牌名与旧组件类。这一层把它们映射到上面的
    冻结取值，使「令牌先落地、页面分批改」期间界面不会整体塌掉。

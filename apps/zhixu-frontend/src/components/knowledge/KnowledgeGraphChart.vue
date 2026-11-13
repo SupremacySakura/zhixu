@@ -17,7 +17,8 @@ import type {
   RelationType,
 } from '../../services/apis/knowledge'
 import {
-  graphEdgeColor,
+  graphEdgeStyle,
+  graphNodeBorderType,
   graphNodeSize,
   resolveGraphPalette,
   type GraphPalette,
@@ -26,6 +27,9 @@ import { relationTypeLabel } from '../../utils/relation'
 
 // 按需注册：只打包力导向图、提示框、Canvas 渲染器与标签布局，避免整包引入 echarts。
 use([GraphChart, TooltipComponent, CanvasRenderer, LabelLayout])
+
+/** 节点描边宽：1px 在 18px 的方块上读不出线型差异，2px 才让实线/虚线/点线分得开。 */
+const NODE_BORDER_WIDTH = 2
 
 const props = withDefaults(
   defineProps<{
@@ -59,39 +63,57 @@ function buildOption(): EChartsCoreOption {
     id: String(node.id),
     name: node.title,
     value: node.degree,
+    // 方形节点（AC③）：尺寸仍由度数决定，只是把圆形换成方形。
+    symbol: 'rect',
     symbolSize: graphNodeSize(node.degree),
     itemStyle: {
-      color: palette.source[node.source_type] || palette.source.default,
-      borderColor: palette.primary || palette.label,
-      borderWidth: 0,
+      // 填充统一纸白 —— 深底上 15.23:1。语义不靠填充色（8 种来源只有 4 个可见色，
+      // 这条路已经用到极限），靠描边样式承载。
+      color: palette.nodeFill,
+      borderColor: palette.nodeBorder,
+      borderWidth: NODE_BORDER_WIDTH,
+      borderType: graphNodeBorderType(node.source_type),
     },
+    // 标签在方块右侧的深底上，用岛上文字色；纸世界的 #181818 在 #16191c 上只有 1.01:1。
     label: {
       show: true,
+      position: 'right',
+      distance: 5,
       color: palette.label,
       fontSize: 12,
       width: 120,
       overflow: 'truncate',
     },
   }))
-  const links = props.edges.map(edge => ({
-    id: String(edge.id),
-    source: String(edge.source_id),
-    target: String(edge.target_id),
-    relation_type: edge.relation_type,
-    lineStyle: {
-      color: graphEdgeColor(palette, edge.source, edge.relation_type),
-      width: edge.status === 'suggested' ? 1.5 : 2,
-      type: edge.status === 'suggested' ? 'dashed' : 'solid',
-      opacity: edge.status === 'suggested' ? 0.65 : 0.9,
-      curveness: 0.08,
-    },
-  }))
+  const links = props.edges.map(edge => {
+    const style = graphEdgeStyle(palette, edge)
+    return {
+      id: String(edge.id),
+      source: String(edge.source_id),
+      target: String(edge.target_id),
+      relation_type: edge.relation_type,
+      // 箭头必须逐边给：edgeSymbol 是 series 级，没法一条边无箭头、另一条双向。
+      symbol: style.symbol,
+      lineStyle: {
+        color: style.color,
+        width: style.width,
+        // 数值数组才是 ECharts 的 dash 写法；'1 3' 是 SVG 的 stroke-dasharray，会被静默忽略。
+        type: style.type,
+        // 用 opacity 让 canvas 自己混色，而不是预合成一个更暗的 hex
+        // —— 预合成会让「调透明度」这个轴在 option 里彻底消失。
+        opacity: style.opacity,
+        curveness: 0.08,
+      },
+    }
+  })
   return {
+    // 深色岛由 canvas 自己铺底，避免图表与容器之间出现一帧纸色。
+    backgroundColor: palette.island,
     tooltip: {
       trigger: 'item',
-      backgroundColor: palette.surface,
-      borderColor: palette.hairline,
-      textStyle: { color: palette.label, fontSize: 12 },
+      backgroundColor: palette.nodeFill,
+      borderColor: palette.nodeBorder,
+      textStyle: { color: palette.nodeInk, fontSize: 12 },
       formatter: (params: {
         dataType?: string
         data?: { name?: string; value?: number; relation_type?: string }
@@ -114,9 +136,10 @@ function buildOption(): EChartsCoreOption {
         select: {
           itemStyle: {
             borderWidth: 3,
-            borderColor: palette.primary || palette.label,
+            borderColor: palette.selectRing,
           },
         },
+        // series 级箭头只作为兜底；真正的箭头形状由每条 link 的 symbol 决定。
         edgeSymbol: ['none', 'arrow'],
         edgeSymbolSize: 6,
         // 边上直接标注中文关系类型，用较小字号；节点标签由 labelLayout 隐藏重叠。
@@ -137,7 +160,8 @@ function buildOption(): EChartsCoreOption {
           gravity: 0.08,
           layoutAnimation: true,
         },
-        emphasis: { focus: 'adjacency', lineStyle: { width: 3 } },
+        // 高亮只提不透明度，不改线宽 —— 改线宽会把「四轴编码」里的宽度轴抹掉。
+        emphasis: { focus: 'adjacency', lineStyle: { opacity: 1 } },
         labelLayout: { hideOverlap: true },
       },
     ],

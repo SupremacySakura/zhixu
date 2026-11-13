@@ -6,9 +6,10 @@ import { Motion } from 'motion-v'
 import KnowledgeGraphChart from '../components/knowledge/KnowledgeGraphChart.vue'
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import AppFilterBar from '../components/ui/AppFilterBar.vue'
-import type { RelationStatus } from '../services/apis/knowledge'
+import type { RelationStatus, RelationType } from '../services/apis/knowledge'
 import { KNOWLEDGE_FORMATS, knowledgeSourceLabel } from '../utils/knowledge'
 import { RELATION_TYPE_OPTIONS, relationTypeLabel } from '../utils/relation'
+import { GRAPH_EDGE_TYPES, graphEdgeEncoding } from '../utils/knowledgeGraph'
 import { springSnappy } from '../utils/motion'
 import { useKnowledgeGraph } from '../composables/useKnowledgeGraph'
 
@@ -82,6 +83,40 @@ const relationFilterLabel = computed(() =>
 /** 图例只在图里真的出现矛盾边时补一项，避免给不存在的样式留说明。 */
 const hasContradiction = computed(() =>
   visibleEdges.value.some(edge => edge.relation_type === 'contradicts'),
+)
+
+/** ECharts 的 dash 数组 → CSS 的 border-style：点线段长 1 用 dotted，长 5 用 dashed。 */
+const dashToCss = (dash: 'solid' | number[]): 'solid' | 'dotted' | 'dashed' =>
+  dash === 'solid' ? 'solid' : dash[0] <= 1 ? 'dotted' : 'dashed'
+
+/**
+ * 六类关系的图例样例。
+ *
+ * 样例线与图表里的线取自**同一份**编码（utils/knowledgeGraph 的 graphEdgeEncoding），
+ * 不是这里另抄一套数值——否则以后调一次线宽，图例和图上说的就不是一回事了。
+ */
+const edgeLegend = computed<
+  Array<{
+    relationType: RelationType
+    label: string
+    borderStyle: 'solid' | 'dotted' | 'dashed'
+    borderWidth: `${number}px`
+    opacity: number
+    arrow: string
+  }>
+>(() =>
+  GRAPH_EDGE_TYPES.map(type => {
+    const encoding = graphEdgeEncoding(type)
+    return {
+      relationType: type,
+      label: relationTypeLabel(type),
+      borderStyle: dashToCss(encoding.type),
+      borderWidth: `${encoding.width}px` as const,
+      opacity: encoding.opacity,
+      // 箭头方向也进图例：它是四轴之一，光看线段分不出单向与双向。
+      arrow: encoding.symbol[0] === 'arrow' ? ' ↔' : encoding.symbol[1] === 'arrow' ? ' →' : '',
+    }
+  }),
 )
 
 const STATUS_LABELS: Record<RelationStatus, string> = {
@@ -286,7 +321,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
           >
             当前图谱里没有「{{ relationFilterLabel }}」的边，换个关系类型或清空筛选看看。
           </p>
-          <section class="border border-hairline bg-surface p-2 shadow-card">
+          <section class="border border-hairline bg-graph-island shadow-card">
             <KnowledgeGraphChart
               :nodes="graph.nodes"
               :edges="visibleEdges"
@@ -294,34 +329,69 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
               @node-click="selectedId = $event"
             />
             <div
-              class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-hairline px-2 pb-1 pt-3 text-caption text-label-secondary"
+              class="border-t border-graph-island-rule px-4 pb-3 pt-3"
               data-test="graph-legend"
               aria-label="图例"
             >
-              <span class="flex items-center gap-2">
-                <span class="h-0 w-6 border-t-2 border-solid border-label-secondary" />
-                已确认关系
-              </span>
-              <span class="flex items-center gap-2">
-                <span class="h-0 w-6 border-t-2 border-dashed border-label-secondary" />
-                建议关系
-              </span>
-              <span class="flex items-center gap-2">
-                <span class="size-2 bg-info" />
-                AI 关联
-              </span>
-              <span class="flex items-center gap-2">
-                <span class="size-2 bg-label-tertiary" />
-                手动关联
-              </span>
-              <span
-                v-if="hasContradiction"
-                class="flex items-center gap-2"
-                data-test="legend-contradicts"
+              <!-- 关系类型：六条线的形状差异（线型 + 箭头 + 线宽 + 透明度）。
+                   样例取自 graphEdgeStyle，和图表里的编码是同一份数据，不会走样。 -->
+              <ul class="flex flex-wrap items-center gap-x-5 gap-y-2 text-micro">
+                <li
+                  v-for="item in edgeLegend"
+                  :key="item.relationType"
+                  class="flex items-center gap-2"
+                >
+                  <span
+                    class="h-0 w-8 shrink-0 border-t"
+                    :class="
+                      item.relationType === 'contradicts'
+                        ? 'border-graph-edge-contradicts'
+                        : 'border-graph-edge-ai'
+                    "
+                    :style="{
+                      borderTopStyle: item.borderStyle,
+                      borderTopWidth: item.borderWidth,
+                      opacity: item.opacity,
+                    }"
+                  />
+                  <span class="text-graph-island-label">
+                    {{ item.label }}<template v-if="item.arrow">{{ item.arrow }}</template>
+                  </span>
+                </li>
+              </ul>
+              <!-- 状态与来源：颜色只分这两轴；矛盾是唯一的彩色例外。 -->
+              <div
+                class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-graph-island-rule pt-3 text-micro text-graph-island-label-secondary"
               >
-                <span class="h-0 w-6 border-t-2 border-solid border-danger" />
-                矛盾关系
-              </span>
+                <span class="flex items-center gap-2">
+                  <span class="h-0 w-8 shrink-0 border-t-2 border-solid border-graph-edge-ai" />
+                  已确认关系
+                </span>
+                <span class="flex items-center gap-2">
+                  <span
+                    class="h-0 w-8 shrink-0 border-t-2 border-dashed border-graph-edge-ai opacity-60"
+                  />
+                  建议关系
+                </span>
+                <span class="flex items-center gap-2">
+                  <span class="size-2 shrink-0 bg-graph-edge-ai" />
+                  AI 关联
+                </span>
+                <span class="flex items-center gap-2">
+                  <span class="size-2 shrink-0 bg-graph-edge-manual" />
+                  手动关联
+                </span>
+                <span
+                  v-if="hasContradiction"
+                  class="flex items-center gap-2"
+                  data-test="legend-contradicts"
+                >
+                  <span
+                    class="h-0 w-8 shrink-0 border-t-2 border-dashed border-graph-edge-contradicts"
+                  />
+                  矛盾关系
+                </span>
+              </div>
             </div>
           </section>
         </template>

@@ -22,18 +22,19 @@ vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }))
 vi.mock('echarts/features', () => ({ LabelLayout: {} }))
 
 const palette = {
-  source: {
-    manual: 'rgb(1 2 3)',
-    pdf: 'rgb(4 5 6)',
-    default: 'rgb(7 8 9)',
-  },
+  island: 'rgb(0 0 0)',
+  islandRule: 'rgb(1 1 1)',
+  label: 'rgb(16 17 18)',
+  labelSecondary: 'rgb(19 20 21)',
+  nodeFill: 'rgb(240 238 228)',
+  nodeInk: 'rgb(24 24 24)',
+  nodeBorder: 'rgb(96 89 73)',
+  selectRing: 'rgb(74 138 192)',
   edgeAI: 'rgb(10 11 12)',
   edgeManual: 'rgb(13 14 15)',
   edgeContradicts: 'rgb(25 26 27)',
-  label: 'rgb(16 17 18)',
-  labelSecondary: 'rgb(19 20 21)',
-  surface: 'rgb(255 255 255)',
-  hairline: 'rgb(0 0 0 / 0.08)',
+  tooltipBg: 'rgb(255 255 255)',
+  tooltipInk: 'rgb(24 24 24)',
 }
 
 const nodes = [
@@ -87,7 +88,7 @@ beforeEach(() => {
 })
 
 describe('KnowledgeGraphChart', () => {
-  it('初始化力导向图配置：节点大小按度数、颜色按来源类型', async () => {
+  it('初始化力导向图配置：节点大小按度数、来源类型靠描边样式区分', async () => {
     const wrapper = render()
     await nextTick()
     expect(mocks.init).toHaveBeenCalledTimes(1)
@@ -101,21 +102,85 @@ describe('KnowledgeGraphChart', () => {
     const neighbor = data.find((item: { id: string }) => item.id === '2')
     expect(center.symbolSize).toBe(18)
     expect(neighbor.symbolSize).toBe(26)
-    expect(center.itemStyle.color).toBe(palette.source.manual)
-    expect(neighbor.itemStyle.color).toBe(palette.source.pdf)
+    // 方形节点：票面 AC③ 要求节点是方形纸白块，不再是圆形色点。
+    expect(center.symbol).toBe('rect')
+    expect(neighbor.symbol).toBe('rect')
+    // 填充统一纸白（深底上才看得见），语义由描边承载。
+    expect(center.itemStyle.color).toBe(palette.nodeFill)
+    expect(neighbor.itemStyle.color).toBe(palette.nodeFill)
+    // 标签画在方块外侧的深底上，必须用岛上文字色（纸世界墨色 #181818 在深底上等于隐形）。
+    expect(center.label.color).toBe(palette.label)
+    // 来源类型靠描边样式区分：手动创建是实线，PDF 是虚线。
+    expect(center.itemStyle.borderType).toBe('solid')
+    expect(neighbor.itemStyle.borderType).toBe('dashed')
     wrapper.unmount()
   })
 
-  it('边区分 ai/manual，建议边使用虚线', async () => {
+  it('六类关系两两可辨：线型、箭头、线宽、透明度四轴组合互不相同', async () => {
+    const allTypes = [
+      'related',
+      'depends_on',
+      'supplements',
+      'contrasts',
+      'updates',
+      'contradicts',
+    ] as const
+    const wrapper = render({
+      edges: allTypes.map((relation_type, index) => ({
+        id: 100 + index,
+        source_id: 1,
+        target_id: 2,
+        relation_type,
+        status: 'confirmed' as const,
+        source: 'ai' as const,
+        confidence: 1,
+      })),
+    })
+    await nextTick()
+    const links = mocks.chart.setOption.mock.calls.at(-1)?.[0].series[0].links
+    const fingerprint = (link: {
+      lineStyle: { type: unknown; width: number; opacity: number }
+      symbol: unknown
+    }) =>
+      JSON.stringify([
+        link.lineStyle.type,
+        link.symbol,
+        link.lineStyle.width,
+        link.lineStyle.opacity,
+      ])
+
+    // 四轴指纹两两不等 —— 这是 AC① 的可观察形态，与具体取值无关。
+    const prints = links.map(fingerprint)
+    expect(new Set(prints).size).toBe(allTypes.length)
+
+    // 线型必须是数值数组（'1 3' 是 SVG 写法，ECharts 会当成无效值静默忽略）。
+    for (const link of links) {
+      const type = link.lineStyle.type
+      if (type === 'solid') continue
+      expect(Array.isArray(type)).toBe(true)
+      expect((type as number[]).every((part: unknown) => typeof part === 'number')).toBe(true)
+    }
+
+    // 箭头逐边设置，不是 series 级统一值。
+    const byType = (type: string) =>
+      links.find((link: { relation_type: string }) => link.relation_type === type)
+    expect(byType('related').symbol).toEqual(['none', 'none'])
+    expect(byType('contrasts').symbol).toEqual(['arrow', 'arrow'])
+    expect(byType('contradicts').symbol).toEqual(['arrow', 'arrow'])
+    for (const type of ['depends_on', 'supplements', 'updates']) {
+      expect(byType(type).symbol).toEqual(['none', 'arrow'])
+    }
+    wrapper.unmount()
+  })
+
+  it('边按来源分色：AI 与手动不同色，矛盾无视来源用唯一彩色', async () => {
     const wrapper = render()
     await nextTick()
     const links = mocks.chart.setOption.mock.calls.at(-1)?.[0].series[0].links
     const ai = links.find((link: { id: string }) => link.id === '10')
     const manual = links.find((link: { id: string }) => link.id === '11')
     expect(ai.lineStyle.color).toBe(palette.edgeAI)
-    expect(ai.lineStyle.type).toBe('solid')
     expect(manual.lineStyle.color).toBe(palette.edgeManual)
-    expect(manual.lineStyle.type).toBe('dashed')
     expect(ai.source).toBe('1')
     expect(ai.target).toBe('2')
     wrapper.unmount()
