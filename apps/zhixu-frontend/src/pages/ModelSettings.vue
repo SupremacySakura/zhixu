@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import AppBadge from '../components/ui/AppBadge.vue'
+import AppButton from '../components/ui/AppButton.vue'
+import AppEmptyState from '../components/ui/AppEmptyState.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
+import AppLoading from '../components/ui/AppLoading.vue'
+import AppPanel from '../components/ui/AppPanel.vue'
 import FilterMenu from '../components/ui/FilterMenu.vue'
 import SettingsModal from '../components/ui/SettingsModal.vue'
 import ProviderEditor from '../components/ui/ProviderEditor.vue'
@@ -180,6 +185,8 @@ function reloadConfirmation() {
         <p class="mb-5 text-subhead text-label-secondary">
           连接你信任的模型服务，为知识整理与语义检索做好准备。
         </p>
+        <!-- 分类切换：仍是 <nav> 里的 <button>（ModelSettings.test.ts:83 按此查询）。
+             世界里的选中态是「下沿 2px 蓝线」，不是胶囊底。 -->
         <nav class="mb-7 flex gap-7 border-b border-hairline" aria-label="设置分类">
           <button
             v-for="entry in [
@@ -209,16 +216,21 @@ function reloadConfirmation() {
           @refresh="refreshServices"
         />
         <section v-else>
-          <p v-if="loading" role="status" class="py-8 text-subhead text-label-secondary">
-            正在加载模型设置…
+          <!-- 加载态：线环 + 既有 role="status" 文案（文案一字未改） -->
+          <p
+            v-if="loading"
+            role="status"
+            class="flex items-center gap-2 py-8 text-subhead text-label-secondary"
+          >
+            <AppLoading size="sm" />正在加载模型设置…
           </p>
           <div
             v-if="error"
             role="alert"
-            class="mb-5 bg-warning-tint p-4 text-subhead text-warning-strong"
+            class="mb-5 flex flex-wrap items-center gap-3 bg-warning-tint p-4 text-subhead text-warning-strong"
           >
             {{ error }}
-            <button type="button" class="knowledge-text-action" @click="load">重新加载</button>
+            <AppButton size="sm" @click="load">重新加载</AppButton>
           </div>
           <template v-if="configuration">
             <fieldset :disabled="busy || loading" class="min-w-0">
@@ -233,7 +245,8 @@ function reloadConfirmation() {
                   dirty ? '有未保存的选择' : '配置版本 ' + configuration.settings.config_version
                 }}</span>
               </div>
-              <div class="bg-surface shadow-card">
+              <!-- 双列对照卡：左右各一档任务，中间一条竖 hairline（列间不画线会读成一张大表） -->
+              <AppPanel style="--atom-panel-padding: 0px">
                 <div class="grid md:grid-cols-2">
                   <div class="min-w-0 border-b border-hairline p-6 md:border-b-0 md:border-r">
                     <h3 class="text-headline">对话与整理</h3>
@@ -265,14 +278,18 @@ function reloadConfirmation() {
                           : '尚未选择，暂不可执行向量化。'
                       }}
                     </p>
-                    <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <!-- 字段间距 24px（DESIGN §Layout ④表单）。这两个字段必须保留裸
+                         <input id="rag-top-k"> —— AppInput 会把 id 同时落到外层
+                         div 上，ModelSettings.test.ts:140 的 get('#rag-top-k')
+                         就会取到 DIV，setValue 直接抛。 -->
+                    <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
                       <div>
                         <label for="rag-top-k" class="mb-2 block text-caption font-semibold"
                           >参考条数 TopK</label
                         ><input
                           id="rag-top-k"
                           v-model.number="ragTopK"
-                          class="knowledge-input w-full"
+                          class="atom-field w-full"
                           type="number"
                           min="1"
                           max="50"
@@ -285,7 +302,7 @@ function reloadConfirmation() {
                         ><input
                           id="rag-min-score"
                           v-model.number="ragMinScore"
-                          class="knowledge-input w-full"
+                          class="atom-field w-full"
                           type="number"
                           min="0.05"
                           max="1"
@@ -305,16 +322,9 @@ function reloadConfirmation() {
                   <p class="text-caption text-label-secondary">
                     更换 Embedding 模型需要重建向量，不会自动执行。
                   </p>
-                  <button
-                    type="button"
-                    class="knowledge-button-secondary"
-                    :disabled="!dirty"
-                    @click="requestDefaults"
-                  >
-                    保存默认模型
-                  </button>
+                  <AppButton :disabled="!dirty" @click="requestDefaults">保存默认模型</AppButton>
                 </footer>
-              </div>
+              </AppPanel>
               <p
                 v-if="configuration.settings.needs_reindex"
                 role="status"
@@ -322,7 +332,10 @@ function reloadConfirmation() {
               >
                 Embedding 配置已变更，关联向量需要重建。向量化与重建功能尚未接入，知识正文不受影响。
               </p>
-              <div class="mb-4 mt-8 flex flex-wrap items-center justify-between gap-4">
+              <!-- 分节 48px + 一节一条 hairline（DESIGN §Layout ④表单） -->
+              <div
+                class="mb-4 mt-12 flex flex-wrap items-center justify-between gap-6 border-t border-hairline pt-12"
+              >
                 <div>
                   <h2 class="text-title-3">模型供应商</h2>
                   <p class="mt-2 text-caption text-label-secondary">
@@ -330,33 +343,20 @@ function reloadConfirmation() {
                   </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    class="knowledge-button-secondary"
-                    @click="catalogOpen = true"
-                  >
-                    ＋ 添加供应商</button
-                  ><button type="button" class="knowledge-button-primary" @click="openEditor()">
-                    添加自定义 API
-                  </button>
+                  <AppButton @click="catalogOpen = true">＋ 添加供应商</AppButton>
+                  <AppButton tone="primary" @click="openEditor()">添加自定义 API</AppButton>
                 </div>
               </div>
-              <div
+              <AppEmptyState
                 v-if="!configuration.providers.length"
-                class="bg-surface p-10 text-center shadow-card"
-              >
-                <h3 class="text-title-3">连接你的第一个模型服务</h3>
-                <p class="mt-3 text-subhead text-label-secondary">
-                  选择第三方供应商，或使用自己的 API 网关与本地模型。
-                </p>
-              </div>
-              <div class="space-y-3">
-                <article
-                  v-for="provider in configuration.providers"
-                  :key="provider.id"
-                  class="bg-surface p-5 shadow-card sm:p-6"
-                >
-                  <div class="flex flex-wrap items-center gap-4">
+                title="连接你的第一个模型服务"
+                description="选择第三方供应商，或使用自己的 API 网关与本地模型。"
+                icon="material-symbols:link-rounded"
+                size="lg"
+              />
+              <div class="space-y-6">
+                <AppPanel v-for="provider in configuration.providers" :key="provider.id" size="lg">
+                  <div class="flex flex-wrap items-center gap-6">
                     <span
                       class="flex h-11 w-11 shrink-0 items-center justify-center bg-surface-secondary text-headline font-bold"
                       >{{ provider.catalog_id ? provider.name.charAt(0) : '&lt;/&gt;' }}</span
@@ -364,12 +364,12 @@ function reloadConfirmation() {
                     <div class="min-w-0 flex-1">
                       <div class="flex flex-wrap items-center gap-2">
                         <h3 class="text-headline">{{ provider.name }}</h3>
-                        <span
-                          class="px-3 py-1 text-caption"
-                          :class="
+                        <AppBadge
+                          size="sm"
+                          :tone="
                             provider.auth_type === 'none' || provider.credential_configured
-                              ? 'bg-primary-tint text-primary-pressed'
-                              : 'bg-warning-tint text-warning-strong'
+                              ? 'primary'
+                              : 'warning'
                           "
                           >{{
                             provider.auth_type === 'none'
@@ -377,7 +377,7 @@ function reloadConfirmation() {
                               : provider.credential_configured
                                 ? '密钥已配置'
                                 : '待配置密钥'
-                          }}</span
+                          }}</AppBadge
                         >
                       </div>
                       <p class="mt-2 break-all text-caption text-label-secondary">
@@ -387,21 +387,15 @@ function reloadConfirmation() {
                       </p>
                     </div>
                     <div class="flex gap-3">
-                      <button
-                        type="button"
-                        class="knowledge-button-secondary"
-                        :aria-label="`配置 ${provider.name}`"
-                        @click="openEditor(provider)"
+                      <AppButton :aria-label="`配置 ${provider.name}`" @click="openEditor(provider)"
+                        >配置</AppButton
                       >
-                        配置</button
-                      ><button
-                        type="button"
-                        class="knowledge-text-action text-danger"
+                      <AppButton
+                        tone="danger"
                         :aria-label="`删除 ${provider.name}`"
                         @click="chooseDelete(provider)"
+                        >删除</AppButton
                       >
-                        删除
-                      </button>
                     </div>
                   </div>
                   <div class="mt-4 flex flex-wrap gap-2 border-t border-hairline pt-4">
@@ -418,23 +412,16 @@ function reloadConfirmation() {
                       ></span
                     >
                   </div>
-                </article>
+                </AppPanel>
               </div>
             </fieldset>
             <div
               v-if="mutationError && !editorOpen && !deleteTarget && !confirmDefaults"
               role="alert"
-              class="mt-5 text-subhead text-danger"
+              class="mt-5 flex flex-wrap items-center gap-3 text-subhead text-danger"
             >
-              {{ mutationError
-              }}<button
-                v-if="conflict"
-                type="button"
-                class="knowledge-text-action ml-3"
-                @click="load"
-              >
-                重新加载最新配置
-              </button>
+              {{ mutationError }}
+              <AppButton v-if="conflict" size="sm" @click="load">重新加载最新配置</AppButton>
             </div>
             <p class="mt-6 flex gap-3 text-caption leading-6 text-label-secondary">
               <AppIcon
@@ -453,11 +440,13 @@ function reloadConfirmation() {
           预设填入基础地址与协议，模型 ID 需自行添加。
         </p>
         <div class="space-y-3">
+          <!-- 预设项是可点的行，不是按钮语气档：保留原生 button，只把
+               禁用态从 opacity 降级改成描边 + 三级字（DESIGN 明禁 opacity 降级）。 -->
           <button
             v-for="preset in catalog"
             :key="preset.provider_id"
             type="button"
-            class="flex w-full items-center justify-between border border-hairline p-4 text-left hover:bg-surface-secondary disabled:opacity-50"
+            class="flex w-full items-center justify-between border border-hairline p-4 text-left transition-colors hover:bg-surface-secondary disabled:border-hairline disabled:text-label-tertiary disabled:hover:bg-transparent"
             :disabled="configuration?.providers.some(p => p.provider_id === preset.provider_id)"
             @click="openEditor(null, preset)"
           >
@@ -472,9 +461,7 @@ function reloadConfirmation() {
             }}</span>
           </button>
         </div>
-        <button type="button" class="knowledge-button-primary mt-5" @click="openEditor()">
-          添加自定义 API
-        </button>
+        <AppButton tone="primary" class="mt-5" @click="openEditor()">添加自定义 API</AppButton>
       </SettingsModal>
       <ProviderEditor
         v-if="editorOpen && configuration"
@@ -505,31 +492,18 @@ function reloadConfirmation() {
         <p v-if="mutationError" role="alert" class="mb-4 text-subhead text-danger">
           {{ mutationError }}
         </p>
-        <button
-          v-if="conflict"
-          type="button"
-          class="knowledge-text-action mb-4"
-          :disabled="busy"
-          @click="reloadConfirmation"
+        <AppButton v-if="conflict" class="mb-4" :disabled="busy" @click="reloadConfirmation"
+          >关闭并加载最新配置</AppButton
         >
-          关闭并加载最新配置
-        </button>
         <div class="flex justify-end gap-3">
-          <button
-            type="button"
-            class="knowledge-button-secondary"
-            :disabled="busy"
-            @click="closeConfirmation"
-          >
-            取消</button
-          ><button
-            type="button"
-            class="knowledge-button-primary"
+          <AppButton :disabled="busy" @click="closeConfirmation">取消</AppButton>
+          <AppButton
+            tone="primary"
             :disabled="busy"
             @click="deleteTarget ? confirmDelete() : submitDefaults(true)"
           >
             {{ busy ? '处理中…' : deleteTarget ? '删除供应商' : '确认切换' }}
-          </button>
+          </AppButton>
         </div>
       </SettingsModal>
     </main>

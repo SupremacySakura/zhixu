@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import AppBadge from './AppBadge.vue'
+import AppButton from './AppButton.vue'
 import FilterMenu from './FilterMenu.vue'
 import SettingsModal from './SettingsModal.vue'
 import type {
@@ -141,14 +143,21 @@ defineExpose({ acceptVersion })
       填写连接信息，再手动添加可用模型。保存配置不会调用模型。
     </p>
     <form @submit.prevent="submit">
-      <fieldset :disabled="busy" class="grid min-w-0 gap-5 sm:grid-cols-2">
+      <!-- 字段间距 24px（DESIGN §Layout ④表单）。
+           这些字段全部保留裸 <input>：AppInput 会把 id 同时落到外层 div，
+           ProviderEditor 的三条 get('#provider-key') 与
+           get('#provider-id') 就会取到 DIV，setValue 直接抛。 -->
+      <fieldset :disabled="busy" class="grid min-w-0 gap-6 sm:grid-cols-2">
         <div>
-          <label for="provider-id" class="mb-2 block text-subhead font-semibold">Provider ID</label>
+          <label for="provider-id" class="mb-2 block text-subhead font-semibold">
+            Provider ID<span class="ml-1 text-danger" aria-hidden="true">*</span>
+          </label>
           <input
             id="provider-id"
             v-model="providerID"
-            class="knowledge-input w-full font-mono"
+            class="atom-field w-full font-mono"
             required
+            aria-required="true"
             pattern="[a-z][a-z0-9_-]{0,63}"
             :disabled="!!provider || !!preset"
             placeholder="my-gateway"
@@ -156,26 +165,30 @@ defineExpose({ acceptVersion })
           <p class="mt-2 text-caption text-label-secondary">小写字母开头；保存后不可修改。</p>
         </div>
         <div>
-          <label for="provider-name" class="mb-2 block text-subhead font-semibold">显示名称</label
-          ><input
+          <label for="provider-name" class="mb-2 block text-subhead font-semibold">
+            显示名称<span class="ml-1 text-danger" aria-hidden="true">*</span>
+          </label>
+          <input
             id="provider-name"
             v-model="name"
-            class="knowledge-input w-full"
+            class="atom-field w-full"
             required
+            aria-required="true"
             maxlength="60"
             placeholder="我的模型网关"
           />
         </div>
         <div class="sm:col-span-2">
-          <label for="provider-url" class="mb-2 block text-subhead font-semibold"
-            >API 基础地址</label
-          >
+          <label for="provider-url" class="mb-2 block text-subhead font-semibold">
+            API 基础地址<span class="ml-1 text-danger" aria-hidden="true">*</span>
+          </label>
           <input
             id="provider-url"
             v-model="baseURL"
-            class="knowledge-input w-full font-mono"
+            class="atom-field w-full font-mono"
             type="url"
             required
+            aria-required="true"
             maxlength="2048"
             :disabled="!!catalogID"
             placeholder="https://gateway.example.com/v1"
@@ -214,33 +227,36 @@ defineExpose({ acceptVersion })
             @update:model-value="changeAuth"
           />
         </div>
+        <!-- 高级项：密钥是唯一「只写不回显」的字段，整行铺满并单独分组 -->
         <div v-if="auth === 'key'" class="sm:col-span-2">
-          <label for="provider-key" class="mb-2 block text-subhead font-semibold"
-            >API Key ·
-            {{
-              clearKey
-                ? '保存后清除'
-                : provider?.credential_configured
-                  ? '已配置，不回显'
-                  : '尚未配置'
-            }}</label
+          <label
+            for="provider-key"
+            class="mb-2 flex flex-wrap items-center gap-2 text-subhead font-semibold"
           >
+            <span>API Key ·</span>
+            <AppBadge
+              size="sm"
+              :tone="clearKey ? 'warning' : provider?.credential_configured ? 'primary' : 'neutral'"
+              >{{
+                clearKey
+                  ? '保存后清除'
+                  : provider?.credential_configured
+                    ? '已配置，不回显'
+                    : '尚未配置'
+              }}</AppBadge
+            >
+          </label>
           <div class="flex gap-2">
             <input
               id="provider-key"
               v-model="apiKey"
-              class="knowledge-input min-w-0 flex-1 font-mono"
+              class="atom-field min-w-0 flex-1 font-mono"
               type="password"
               autocomplete="new-password"
               maxlength="8192"
               placeholder="留空保留，输入新密钥替换"
-            /><button
-              type="button"
-              class="knowledge-button-secondary shrink-0"
-              @click="clearCredential"
-            >
-              清除凭据
-            </button>
+            />
+            <AppButton class="shrink-0" @click="clearCredential">清除凭据</AppButton>
           </div>
           <p class="mt-2 text-caption text-label-secondary">
             密钥仅提交给服务端，不写入浏览器存储。无密钥也可保存为待配置状态。
@@ -256,16 +272,10 @@ defineExpose({ acceptVersion })
             Embedding 使用独立的 /embeddings 接口，维度需与模型一致。
           </p>
         </div>
-        <button
-          type="button"
-          disabled
-          class="knowledge-button-secondary"
-          title="后端暂未提供模型发现接口"
-        >
-          获取可用模型（待接入）
-        </button>
+        <AppButton disabled title="后端暂未提供模型发现接口"> 获取可用模型（待接入） </AppButton>
       </div>
-      <fieldset :disabled="busy" class="space-y-3">
+      <!-- 模型行列表：行间距 24px（字段 24 / 分节 48） -->
+      <fieldset :disabled="busy" class="space-y-6">
         <div
           v-for="(entry, index) in models"
           :key="entry.key"
@@ -273,12 +283,13 @@ defineExpose({ acceptVersion })
         >
           <div>
             <label :for="`model-${entry.key}`" class="mb-2 block text-caption font-semibold"
-              >模型 ID</label
+              >模型 ID<span class="ml-1 text-danger" aria-hidden="true">*</span></label
             ><input
               :id="`model-${entry.key}`"
               v-model="entry.model_id"
-              class="knowledge-input w-full"
+              class="atom-field w-full"
               required
+              aria-required="true"
               maxlength="200"
               placeholder="填写服务商的模型 ID"
             />
@@ -306,7 +317,7 @@ defineExpose({ acceptVersion })
             ><input
               :id="`dimension-${entry.key}`"
               v-model.number="entry.dimension"
-              class="knowledge-input w-full"
+              class="atom-field w-full"
               type="number"
               min="1"
               max="65536"
@@ -315,23 +326,16 @@ defineExpose({ acceptVersion })
               :required="entry.kind === 'embedding'"
             />
           </div>
-          <button
-            type="button"
-            class="knowledge-icon-button sm:mt-6"
+          <AppButton
+            tone="quiet"
+            icon-only
+            icon="material-symbols:close"
+            class="sm:mt-6"
             :aria-label="`移除模型 ${index + 1}`"
             @click="models.splice(index, 1)"
-          >
-            ×
-          </button>
+          />
         </div>
-        <button
-          type="button"
-          class="knowledge-text-action"
-          :disabled="models.length >= 100"
-          @click="addModel"
-        >
-          ＋ 手动添加模型
-        </button>
+        <AppButton :disabled="models.length >= 100" @click="addModel"> ＋ 手动添加模型 </AppButton>
       </fieldset>
       <label
         v-if="needsConfirmation"
@@ -346,25 +350,18 @@ defineExpose({ acceptVersion })
       <p v-if="localError || error" role="alert" class="mt-4 text-subhead text-danger">
         {{ localError || error }}
       </p>
-      <button
-        v-if="conflict"
-        type="button"
-        class="knowledge-text-action mt-3"
-        :disabled="busy"
-        @click="reload"
-      >
+      <AppButton v-if="conflict" class="mt-3" :disabled="busy" @click="reload">
         重新加载最新配置（保留表单，清空密钥）
-      </button>
+      </AppButton>
       <footer
         class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-5"
       >
         <p class="text-caption text-label-secondary">模型调用与连接测试尚未接入。</p>
         <div class="flex gap-2">
-          <button type="button" disabled class="knowledge-button-secondary">
-            测试连接（待接入）</button
-          ><button type="submit" class="knowledge-button-primary" :disabled="busy">
+          <AppButton disabled>测试连接（待接入）</AppButton>
+          <AppButton type="submit" tone="primary" :disabled="busy">
             {{ busy ? '保存中…' : '保存供应商' }}
-          </button>
+          </AppButton>
         </div>
       </footer>
     </form>
