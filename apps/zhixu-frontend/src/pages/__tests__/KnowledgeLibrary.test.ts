@@ -430,4 +430,49 @@ describe('KnowledgeLibrary', () => {
     expect(listKnowledge).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
+
+  /**
+   * 表格视图（#35 用户故事 4 / #40 AC 第 3 条）。
+   *
+   * 断言落在**用户看到的东西**上：切过去之后屏幕上是不是真的有一屏 20 行。
+   * 同时钉住「换视图不是换查询」——切视图不许再打一次列表接口，
+   * 否则 60 req/min/IP 的后端限流会在快速来回切时把页面打成 429。
+   */
+  it('切到表格视图后一屏 20 行，且不重新请求列表', async () => {
+    const rows = Array.from({ length: 20 }, (_, index) => ({
+      id: index + 1,
+      title: `第 ${index + 1} 条`,
+      status: 'ready',
+      created_at: '',
+      chunks_total: 0,
+    }))
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: rows as never,
+      total: 20,
+      page: 1,
+      page_size: 20,
+    })
+    vi.mocked(listKnowledgeRelations).mockResolvedValue({
+      confirmed: [],
+      suggested: [],
+      task: null,
+    })
+    const wrapper = await render()
+    // 默认是卡片视图：此时没有表格。
+    expect(wrapper.find('table').exists()).toBe(false)
+
+    await wrapper.get('[aria-label="表格"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('table').exists()).toBe(true)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(20)
+    // 切视图复用已有 items：列表接口只被调用过首次那一次。
+    expect(listKnowledge).toHaveBeenCalledTimes(1)
+
+    // 切回卡片视图：表格消失，卡片回来。
+    await wrapper.get('[aria-label="卡片"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('table').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })

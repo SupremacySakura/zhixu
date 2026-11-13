@@ -532,7 +532,7 @@
 }
 
 /* 窄屏弹窗转贴底抽屉的规则跟着原子走了：
-   见 src/styles/atoms.css 里 @media (max-width: 640px) 的 .atom-dialog 段。 */
+   见 src/styles/atoms.css 里 @media (max-width: 767px) 的 .atom-dialog 段。 */
 
 /* ============================================================
    四个 prefers-* 降级

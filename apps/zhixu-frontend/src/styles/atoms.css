@@ -280,8 +280,16 @@
      浏览器给的是 default。图标按钮跟随同一条口径，否则同一个页面里
      指针形状会分两套。 */
 
+  /* 禁用态：颜色降级，**不用 opacity**（DESIGN.md §可访问性地板）。
+     `opacity: .5` 会把 label-secondary（5.12:1）压到 2.5 以下 —— 图标虽然
+     不承载长文，但它是「这个动作现在能不能点」的唯一线索，读不清就等于
+     没有禁用态。这里与 atom-btn / atom-dialog-close 走同一套三行降级：
+     底换成 surface-secondary、边收到 hairline、字留在 label-secondary。 */
   &:disabled {
-    opacity: 0.5;
+    background-color: var(--color-surface-secondary);
+    border-color: var(--color-hairline);
+    color: var(--color-label-secondary);
+    cursor: not-allowed;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -665,8 +673,12 @@
   margin-top: 20px;
 }
 
-/* 窄屏：贴底抽屉（直角、无偏移、上边框用控件边界色） */
-@media (max-width: 640px) {
+/* 窄屏：贴底抽屉（直角、无偏移、上边框用控件边界色）。
+   断点是 767px 而不是 640px —— DESIGN.md §Responsive 定死「三档分叉，不多不少：
+   base <768 / md 768–1023 / lg ≥1024」。弹窗在 base 档转贴底抽屉，判据必须与
+   同一份规范的 md 起点对齐；写成 640 会在 641–767 这段（仍是 base 档、仍是
+   单列窄屏）留一个「宽屏弹窗」的孤岛，与页面其余部分的降级不同步。 */
+@media (max-width: 767px) {
   .atom-dialog {
     padding: 0;
   }
@@ -713,8 +725,9 @@
     background-color: var(--color-scrim);
   }
 
-  /* 窄屏：转贴底抽屉，直角、无偏移、上边框用控件边界色 */
-  @media (max-width: 640px) {
+  /* 窄屏：转贴底抽屉，直角、无偏移、上边框用控件边界色。
+     与上面 .atom-dialog 段同一个判据（base 档 <768），改一处必须改两处。 */
+  @media (max-width: 767px) {
     bottom: 0;
     top: auto;
     margin-bottom: 0;
