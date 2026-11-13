@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import type { KnowledgeItem } from '../../services/apis/knowledge'
 import { fadeTransition } from '../../utils/motion'
@@ -19,7 +19,7 @@ const open = ref(false)
 const id = useId()
 const position = ref({ top: 0, left: 0, above: false })
 const itemClass =
-  'flex min-h-11 w-full items-center gap-2.5 rounded-sm px-3 py-2.5 text-left text-subhead focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2 active:bg-surface-tertiary'
+  'flex min-h-11 w-full items-center gap-2.5 px-3 py-2.5 text-left text-body active:bg-surface-tertiary'
 const canRetryVector = computed(
   () => props.item.status === 'ready' && props.item.vector_state === 'partial',
 )
@@ -159,12 +159,17 @@ onBeforeUnmount(removeListeners)
       aria-haspopup="menu"
       :aria-expanded="open"
       :aria-controls="id"
-      class="knowledge-more-button flex h-11 w-11 items-center justify-center rounded-sm border border-hairline text-label-secondary transition-transform duration-150 active:scale-[0.97]"
+      class="knowledge-more-button flex h-11 w-11 items-center justify-center border border-hairline text-label-secondary transition-transform"
       :class="open ? 'bg-surface-secondary text-label' : 'bg-surface'"
       @click="toggle"
       @keydown="onTriggerKeydown"
     >
-      <Icon icon="material-symbols:more-horiz" class="text-2xl" aria-hidden="true" />
+      <AppIcon
+        icon="material-symbols:more-horiz"
+        class="atom-glyph"
+        aria-hidden="true"
+        :style="{ '--atom-glyph-size': '24px' }"
+      />
     </button>
     <Teleport to="body">
       <AnimatePresence>
@@ -175,7 +180,7 @@ onBeforeUnmount(removeListeners)
           :animate="{ opacity: 1 }"
           :exit="{ opacity: 0 }"
           :transition="fadeTransition"
-          class="fixed z-40 w-[200px] max-w-[calc(100vw-24px)] rounded-lg border border-hairline bg-material-thick shadow-popover backdrop-blur-xl backdrop-saturate-180"
+          class="fixed z-40 w-[200px] max-w-[calc(100vw-24px)] border border-hairline bg-surface shadow-popover"
           :style="{
             top: `${position.top}px`,
             left: `${position.left}px`,
@@ -191,10 +196,11 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="close(true)"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:menu-book-outline"
-                class="text-lg"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />查看知识
             </RouterLink>
             <button
@@ -205,9 +211,12 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="track"
             >
-              <Icon icon="material-symbols:info-outline" class="text-lg" aria-hidden="true" />{{
-                item.status === 'failed' ? '查看失败原因' : '查看进度'
-              }}
+              <AppIcon
+                icon="material-symbols:info-outline"
+                class="atom-glyph"
+                aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
+              />{{ item.status === 'failed' ? '查看失败原因' : '查看进度' }}
             </button>
             <RouterLink
               v-if="item.chunks_total > 0"
@@ -217,10 +226,11 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="close(true)"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:layers-outline"
-                class="text-lg"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />分块结构
             </RouterLink>
             <button
@@ -232,10 +242,11 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="retryVector"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:refresh-rounded"
-                class="text-lg"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />重试向量化
             </button>
             <button
@@ -247,10 +258,11 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="unarchive"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:unarchive-outline-rounded"
-                class="text-lg"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />恢复归档
             </button>
             <button
@@ -262,10 +274,11 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item text-label']"
               @click="archive"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:archive-outline-rounded"
-                class="text-lg"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />归档知识
             </button>
             <div role="separator" class="mx-1.5 my-[5px] h-px bg-hairline"></div>
@@ -277,10 +290,11 @@ onBeforeUnmount(removeListeners)
               :class="[itemClass, 'knowledge-menu-item knowledge-menu-danger text-danger']"
               @click="selectDelete"
             >
-              <Icon
+              <AppIcon
                 icon="material-symbols:delete-outline"
-                class="text-lg"
+                class="atom-glyph"
                 aria-hidden="true"
+                :style="{ '--atom-glyph-size': '18px' }"
               />删除知识
             </button>
           </div>

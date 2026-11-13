@@ -1,23 +1,11 @@
 import axios from 'axios'
 import { useUserStore } from '../stores/user'
+import { toast } from '../utils/toastBus'
 
-// 简单的全局 toast 展示，尽量复用现有应用的 toast 机制
+// 全局错误提示走唯一的总线链路：由应用外壳里唯一挂载的提示条渲染。
+// 同时保留控制台警告——它不依赖任何 UI，是排查线上问题时的最后一份证据。
 function showToast(message: string) {
-  try {
-    const anyWindow: any = window
-    // 常见的全局 toast API 兜底方案
-    if (anyWindow.$toast && typeof anyWindow.$toast === 'function') {
-      anyWindow.$toast(message)
-      return
-    }
-    if (anyWindow.$toastStore && typeof anyWindow.$toastStore === 'function') {
-      anyWindow.$toastStore(message)
-      return
-    }
-  } catch {
-    // 忽略自定义 toast 加载失败的情况
-  }
-  // 兜底：尽量不打断体验，使用 console 日志，必要时可改成 alert/页面导航
+  toast(message, 'error')
   console.warn('Toast: ', message)
 }
 

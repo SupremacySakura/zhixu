@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import FilterMenu from '../ui/FilterMenu.vue'
 import {
   confirmKnowledgeRelation,
@@ -307,54 +308,50 @@ onScopeDispose(() => {
 </script>
 
 <template>
-  <section class="rounded-lg border border-hairline bg-surface p-5">
+  <section class="border border-hairline bg-surface p-5">
     <div class="mb-3 flex items-start justify-between gap-2">
       <div class="min-w-0">
         <h2 class="text-body font-semibold">相关知识</h2>
-        <p class="mt-0.5 flex items-center gap-2 text-caption text-label-tertiary">
+        <p class="mt-0.5 flex items-center gap-2 text-note text-label-tertiary">
           <span>AI 推荐与手动维护</span>
-          <span
-            v-if="total"
-            class="rounded-full bg-surface-secondary px-2 py-0.5 text-label-secondary"
+          <span v-if="total" class="bg-surface-secondary px-2 py-0.5 text-label-secondary"
             >{{ total }} 条</span
           >
         </p>
       </div>
       <RouterLink
         :to="`/home/knowledge/graph?center=${item.id}`"
-        class="knowledge-text-action min-h-8 shrink-0 text-caption"
+        class="atom-text-action min-h-8 shrink-0 text-note"
         >在图谱中查看</RouterLink
       >
     </div>
 
-    <div class="rounded-md border border-hairline bg-surface-secondary p-3">
+    <div class="border border-hairline bg-surface-secondary p-3">
       <div class="flex items-center gap-2">
-        <span
-          class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary"
-        >
-          <Icon icon="material-symbols:auto-awesome" class="text-[14px]" />
+        <span class="flex size-6 shrink-0 items-center justify-center bg-primary-tint text-primary">
+          <AppIcon
+            icon="material-symbols:auto-awesome"
+            class="atom-glyph"
+            :style="{ '--atom-glyph-size': '14px' }"
+          />
         </span>
-        <p class="min-w-0 flex-1 text-caption font-semibold text-label">让 AI 找相关知识</p>
+        <p class="min-w-0 flex-1 text-note font-semibold text-label">让 AI 找相关知识</p>
       </div>
-      <p class="mt-2 text-caption leading-5 text-label-secondary">
+      <p class="mt-2 text-note leading-5 text-label-secondary">
         按标题与摘要比对知识库，只生成待确认建议；你确认后才建立关系。
       </p>
       <button
         type="button"
-        class="knowledge-button-tint mt-3 min-h-9 w-full px-3 text-caption"
+        class="atom-btn atom-tone-tint atom-btn-wide mt-3 min-h-9 w-full px-3 text-note"
         :disabled="running || busy === 'regenerate'"
         @click="regenerate"
       >
-        <Icon
-          :icon="
-            running
-              ? 'material-symbols:progress-activity'
-              : hasSuggestions
-                ? 'material-symbols:refresh'
-                : 'material-symbols:search'
-          "
-          class="text-[16px]"
-          :class="running ? 'animate-spin' : ''"
+        <AppLoading v-if="running" size="md" />
+        <AppIcon
+          v-else
+          :icon="hasSuggestions ? 'material-symbols:refresh' : 'material-symbols:search'"
+          class="atom-glyph"
+          :style="{ '--atom-glyph-size': '16px' }"
         />
         {{
           running
@@ -366,20 +363,16 @@ onScopeDispose(() => {
                 : '查找相关知识'
         }}
       </button>
-      <p v-if="running" class="mt-2 text-caption leading-5 text-label-tertiary" role="status">
+      <p v-if="running" class="mt-2 text-note leading-5 text-label-tertiary" role="status">
         AI 正在比对知识库，通常需要 10–30 秒，结果会自动刷新。
       </p>
-      <div
-        v-if="task?.status === 'failed'"
-        class="mt-2.5 rounded-sm bg-danger-tint p-2.5"
-        role="alert"
-      >
-        <p class="break-words text-caption leading-5 text-danger">
+      <div v-if="task?.status === 'failed'" class="mt-2.5 bg-danger-tint p-2.5" role="alert">
+        <p class="break-words text-note leading-5 text-danger">
           {{ task.error_message || '查找失败，请稍后重试。' }}
         </p>
         <button
           type="button"
-          class="knowledge-text-action min-h-8 text-caption"
+          class="atom-text-action min-h-8 text-note"
           :disabled="busy === 'regenerate'"
           @click="regenerate"
         >
@@ -388,20 +381,20 @@ onScopeDispose(() => {
       </div>
     </div>
 
-    <p v-if="loading" class="text-caption text-label-secondary" role="status">正在读取关系…</p>
+    <p v-if="loading" class="text-note text-label-secondary" role="status">正在读取关系…</p>
     <template v-else>
       <section class="mt-4" aria-label="待确认建议">
         <div class="mb-2 flex items-center gap-2">
-          <h3 class="text-caption font-semibold text-label">待确认建议</h3>
+          <h3 class="text-note font-semibold text-label">待确认建议</h3>
           <span
             v-if="suggested.length"
-            class="rounded-full bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
+            class="bg-surface-secondary px-2 py-0.5 text-note text-label-secondary"
             >{{ suggested.length }} 条</span
           >
         </div>
         <p
           v-if="!suggested.length"
-          class="rounded-md border border-dashed border-hairline px-3 py-3 text-caption leading-5 text-label-secondary"
+          class="border border-dashed border-hairline px-3 py-3 text-note leading-5 text-label-secondary"
         >
           暂无待确认建议。点上方「查找相关知识」，AI 找到的建议会出现在这里。
         </p>
@@ -409,56 +402,53 @@ onScopeDispose(() => {
           <li
             v-for="relation in suggested"
             :key="relation.id"
-            class="rounded-md border border-hairline p-3"
+            class="border border-hairline p-3"
             :data-suggestion-id="relation.id"
           >
             <div class="flex items-center justify-between gap-2">
-              <span
-                class="rounded-full bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
-                >{{ relationTypeLabel(relation.relation_type) }}</span
-              >
-              <span v-if="relation.confidence > 0" class="text-caption text-label-tertiary"
+              <span class="bg-surface-secondary px-2 py-0.5 text-note text-label-secondary">{{
+                relationTypeLabel(relation.relation_type)
+              }}</span>
+              <span v-if="relation.confidence > 0" class="text-note text-label-tertiary"
                 >置信度 {{ confidencePercent(relation) }}</span
               >
             </div>
             <RouterLink
               :to="`/home/knowledge/${relation.counterpart_id}`"
-              class="mt-1.5 block break-words text-subhead font-medium leading-6 text-label hover:text-primary-pressed"
+              class="mt-1.5 block break-words text-body font-medium leading-6 text-label hover:text-primary-pressed"
               >{{ relation.counterpart_title }}</RouterLink
             >
 
             <template v-if="evidenceOf(relation)">
               <button
                 type="button"
-                class="knowledge-text-action min-h-8 text-caption"
+                class="atom-text-action min-h-8 text-note"
                 @click="toggleEvidence(relation.id)"
               >
-                <Icon
+                <AppIcon
                   :icon="
                     expandedId === relation.id
                       ? 'material-symbols:expand-less'
                       : 'material-symbols:expand-more'
                   "
-                  class="text-[14px]"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '14px' }"
                 />
                 {{ expandedId === relation.id ? '收起理由' : '查看理由' }}
               </button>
-              <div
-                v-if="expandedId === relation.id"
-                class="space-y-2 rounded-sm bg-surface-secondary p-2.5"
-              >
-                <p v-if="evidenceOf(relation)!.reason" class="break-words text-caption leading-5">
+              <div v-if="expandedId === relation.id" class="space-y-2 bg-surface-secondary p-2.5">
+                <p v-if="evidenceOf(relation)!.reason" class="break-words text-note leading-5">
                   {{ evidenceOf(relation)!.reason }}
                 </p>
                 <blockquote
                   v-if="evidenceOf(relation)!.source_quote"
-                  class="line-clamp-3 break-words border-l-2 border-hairline pl-2 text-caption leading-5 text-label-secondary"
+                  class="line-clamp-3 break-words border-l-2 border-hairline pl-2 text-note leading-5 text-label-secondary"
                 >
                   本文：{{ evidenceOf(relation)!.source_quote }}
                 </blockquote>
                 <blockquote
                   v-if="evidenceOf(relation)!.target_quote"
-                  class="line-clamp-3 break-words border-l-2 border-hairline pl-2 text-caption leading-5 text-label-secondary"
+                  class="line-clamp-3 break-words border-l-2 border-hairline pl-2 text-note leading-5 text-label-secondary"
                 >
                   对端：{{ evidenceOf(relation)!.target_quote }}
                 </blockquote>
@@ -468,7 +458,7 @@ onScopeDispose(() => {
             <div class="mt-2 flex items-center gap-2">
               <button
                 type="button"
-                class="knowledge-button-primary min-h-8 flex-1 px-3 text-caption"
+                class="atom-btn atom-tone-primary atom-btn-lg min-h-8 flex-1 px-3 text-note"
                 :disabled="busy === `confirm:${relation.id}`"
                 @click="confirm(relation)"
               >
@@ -476,7 +466,7 @@ onScopeDispose(() => {
               </button>
               <button
                 type="button"
-                class="knowledge-button-secondary min-h-8 shrink-0 px-3 text-caption"
+                class="atom-btn atom-tone-secondary atom-btn-wide min-h-8 shrink-0 px-3 text-note"
                 :disabled="busy === `reject:${relation.id}`"
                 @click="reject(relation)"
               >
@@ -489,42 +479,42 @@ onScopeDispose(() => {
 
       <section class="mt-4 border-t border-hairline pt-3" aria-label="已确认关系">
         <div class="mb-2 flex items-center gap-2">
-          <h3 class="text-caption font-semibold text-label">已确认</h3>
+          <h3 class="text-note font-semibold text-label">已确认</h3>
           <span
             v-if="confirmed.length"
-            class="rounded-full bg-surface-secondary px-2 py-0.5 text-caption text-label-secondary"
+            class="bg-surface-secondary px-2 py-0.5 text-note text-label-secondary"
             >{{ confirmed.length }} 条</span
           >
         </div>
         <p
           v-if="!confirmed.length && !suggested.length"
-          class="text-caption leading-6 text-label-secondary"
+          class="text-note leading-6 text-label-secondary"
         >
           还没有建立关系。手动添加一条，把这条知识和相关内容连起来。
         </p>
-        <p v-else-if="!confirmed.length" class="text-caption leading-6 text-label-secondary">
+        <p v-else-if="!confirmed.length" class="text-note leading-6 text-label-secondary">
           还没有已确认的关系。确认上面的建议，或手动添加一条。
         </p>
         <ul v-else class="space-y-2">
-          <li
-            v-for="relation in confirmed"
-            :key="relation.id"
-            class="rounded-md border border-hairline p-2.5"
-          >
+          <li v-for="relation in confirmed" :key="relation.id" class="border border-hairline p-2.5">
             <div class="flex items-start justify-between gap-2">
               <RouterLink
                 :to="`/home/knowledge/${relation.counterpart_id}`"
-                class="min-w-0 break-all text-subhead font-medium leading-6 text-label hover:text-primary-pressed"
+                class="min-w-0 break-all text-body font-medium leading-6 text-label hover:text-primary-pressed"
                 >{{ relation.counterpart_title }}</RouterLink
               >
               <button
                 v-if="pendingDelete !== relation.id"
                 type="button"
-                class="knowledge-icon-button -mr-1 -mt-1 size-8 shrink-0"
+                class="atom-icon-btn -mr-1 -mt-1 size-8 shrink-0"
                 :aria-label="`删除与${relation.counterpart_title}的关系`"
                 @click="pendingDelete = relation.id"
               >
-                <Icon icon="material-symbols:delete-outline" class="text-[16px]" />
+                <AppIcon
+                  icon="material-symbols:delete-outline"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '16px' }"
+                />
               </button>
             </div>
             <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -537,7 +527,7 @@ onScopeDispose(() => {
                 :icon="false"
                 @update:model-value="changeType(relation, $event)"
               />
-              <span class="text-caption text-label-tertiary">{{
+              <span class="text-note text-label-tertiary">{{
                 relation.source === 'manual' ? '手动添加' : 'AI 建议'
               }}</span>
             </div>
@@ -547,7 +537,7 @@ onScopeDispose(() => {
             >
               <button
                 type="button"
-                class="knowledge-text-action min-h-8 text-caption text-danger"
+                class="atom-text-action min-h-8 text-note text-danger"
                 :disabled="busy === `delete:${relation.id}`"
                 @click="remove(relation)"
               >
@@ -555,7 +545,7 @@ onScopeDispose(() => {
               </button>
               <button
                 type="button"
-                class="knowledge-text-action min-h-8 text-caption"
+                class="atom-text-action min-h-8 text-note"
                 @click="pendingDelete = null"
               >
                 取消
@@ -566,16 +556,16 @@ onScopeDispose(() => {
       </section>
 
       <section class="mt-4 border-t border-hairline pt-3" aria-label="手动添加关系">
-        <h3 class="text-caption font-semibold text-label">手动添加</h3>
+        <h3 class="text-note font-semibold text-label">手动添加</h3>
         <div class="mt-2 flex gap-2">
           <div class="relative min-w-0 flex-1">
-            <Icon
+            <AppIcon
               class="pointer-events-none absolute left-2.5 top-3 text-label-tertiary"
               icon="material-symbols:search"
             />
             <input
               v-model="query"
-              class="knowledge-input w-full pl-8 text-caption"
+              class="atom-field min-h-9 w-full pl-8 text-note"
               placeholder="搜索知识标题"
               aria-label="搜索知识标题"
               @keydown.enter.prevent="search"
@@ -583,7 +573,7 @@ onScopeDispose(() => {
           </div>
           <button
             type="button"
-            class="knowledge-button-secondary shrink-0 px-3 text-caption"
+            class="atom-btn atom-tone-secondary atom-btn-wide shrink-0 px-3 text-note"
             :disabled="searching"
             @click="search"
           >
@@ -592,33 +582,32 @@ onScopeDispose(() => {
         </div>
         <div
           v-if="results.length"
-          class="mt-2 overflow-hidden rounded-md border border-hairline bg-surface shadow-card"
+          class="mt-2 overflow-hidden border border-hairline bg-surface shadow-card"
         >
           <button
             v-for="candidate in results"
             :key="candidate.id"
             type="button"
-            class="block w-full truncate px-2.5 py-2 text-left text-caption transition-colors hover:bg-surface-secondary"
+            class="block w-full truncate px-2.5 py-2 text-left text-note transition-colors hover:bg-surface-secondary"
             @click="choose(candidate)"
           >
             {{ candidate.title }}
           </button>
         </div>
-        <p v-if="searchHint" class="mt-2 text-caption text-label-secondary">{{ searchHint }}</p>
-        <div
-          v-if="target"
-          class="mt-2 flex items-center gap-2 rounded-md bg-surface-secondary px-2.5 py-2"
-        >
-          <span class="min-w-0 flex-1 truncate text-caption text-label"
-            >已选：{{ target.title }}</span
-          >
+        <p v-if="searchHint" class="mt-2 text-note text-label-secondary">{{ searchHint }}</p>
+        <div v-if="target" class="mt-2 flex items-center gap-2 bg-surface-secondary px-2.5 py-2">
+          <span class="min-w-0 flex-1 truncate text-note text-label">已选：{{ target.title }}</span>
           <button
             type="button"
-            class="text-label-secondary transition-colors hover:text-label"
+            class="text-label-secondary transition-colors tap-target hover:text-label"
             aria-label="清除已选知识"
             @click="resetForm"
           >
-            <Icon icon="material-symbols:close" class="text-[14px]" />
+            <AppIcon
+              icon="material-symbols:close"
+              class="atom-glyph"
+              :style="{ '--atom-glyph-size': '14px' }"
+            />
           </button>
         </div>
         <FilterMenu
@@ -632,7 +621,7 @@ onScopeDispose(() => {
         />
         <button
           type="button"
-          class="knowledge-button-primary mt-2 w-full"
+          class="atom-btn atom-tone-primary atom-btn-lg mt-2 w-full"
           :disabled="!target || busy === 'create'"
           @click="add"
         >
@@ -640,6 +629,6 @@ onScopeDispose(() => {
         </button>
       </section>
     </template>
-    <p v-if="error" class="mt-3 text-caption leading-5 text-danger" role="alert">{{ error }}</p>
+    <p v-if="error" class="mt-3 text-note leading-5 text-danger" role="alert">{{ error }}</p>
   </section>
 </template>

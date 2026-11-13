@@ -214,6 +214,29 @@ export async function getKnowledgeChunks(id: number, signal?: AbortSignal) {
     ).data,
   )
 }
+/**
+ * 侧栏底部计数（索引 N · 分块 M）。
+ *
+ * 为什么不复用 listKnowledge：它的 page_size 硬编码 20，而计数要覆盖全部知识，
+ * 后端 page_size 上限是 100（超过报 400）。改它的签名会波及 3 个调用点与
+ * 若干断言实参的测试，所以这里单独发一次请求，只取 total 与各条 chunks_total。
+ *
+ * 注意：total 是「索引条数」的权威值；chunks 只能由当前页的 chunks_total 累加得出。
+ * 知识超过 100 条时分块数会偏低 —— 这是没有统计端点时的已知上限，
+ * 比显示假数据好，且侧栏计数只是方位感，不是账目。
+ */
+export async function getKnowledgeCounts(signal?: AbortSignal) {
+  const page = unwrap(
+    (
+      await request.get<ResponseData<KnowledgePage>>('/api/knowledge', {
+        params: { page: 1, page_size: 100 },
+        signal,
+      })
+    ).data,
+  )
+  const chunks = page.items.reduce((sum, item) => sum + (item.chunks_total || 0), 0)
+  return { index: page.total, chunks }
+}
 export async function listKnowledgeVersions(id: number, signal?: AbortSignal) {
   return unwrap(
     (

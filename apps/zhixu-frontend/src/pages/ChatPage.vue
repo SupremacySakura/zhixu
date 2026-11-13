@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppButton from '../components/ui/AppButton.vue'
+import AppEmptyState from '../components/ui/AppEmptyState.vue'
+import AppLoading from '../components/ui/AppLoading.vue'
+import AppPanel from '../components/ui/AppPanel.vue'
+import ChatLanding from '../components/chat/ChatLanding.vue'
+import ChatTranscript from '../components/chat/ChatTranscript.vue'
 import { AnimatePresence, Motion, animate, type PanInfo } from 'motion-v'
 import { springBouncy, springSnappy, fadeTransition } from '../utils/motion'
 import FilterMenu from '../components/ui/FilterMenu.vue'
@@ -8,7 +13,6 @@ import SettingsModal from '../components/ui/SettingsModal.vue'
 import ConversationSidebar from '../components/chat/ConversationSidebar.vue'
 import { useAISettings } from '../composables/useAISettings'
 import { useChat } from '../composables/useChat'
-import type { ChatSource } from '../services/apis/chat'
 const { configuration, loading, error, load } = useAISettings()
 const {
   messages,
@@ -31,11 +35,6 @@ const transcript = ref<HTMLElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
 const confirmation = ref<string | null>(null)
 const copyStatus = ref('')
-// Citations point at the exact chunk preview when the turn recorded a chunk number.
-function citationTarget(source: ChatSource) {
-  const path = `/home/knowledge/${source.knowledge_id}/chunks`
-  return source.seq ? { path, query: { chunk: String(source.seq) } } : path
-}
 const options = computed(
   () =>
     configuration.value?.providers.flatMap(p =>
@@ -151,7 +150,9 @@ onMounted(() => {
 })
 </script>
 <template>
-  <div class="flex h-[calc(100dvh-60px)] min-h-0 lg:h-auto">
+  <!-- 外壳高度：100dvh 减掉移动端全局条。这里用 --spacing-topbar 令牌而不是写死 60，
+       外壳高度一变，这一处跟着变。桌面端没有全局条，lg:h-auto 交还给父级 flex。 -->
+  <div class="flex h-[calc(100dvh-var(--spacing-topbar))] min-h-0 lg:h-auto">
     <div class="hidden h-full lg:block">
       <ConversationSidebar
         ref="sidebarDesktop"
@@ -161,31 +162,32 @@ onMounted(() => {
       />
     </div>
     <main class="flex min-w-0 flex-1 flex-col bg-surface">
-      <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8 lg:py-5">
-        <div class="flex items-center gap-2">
-          <button
-            type="button"
+      <!-- 页头带 64px（与其它九页统一）。面包屑已取消：对话页不在
+           「三层以上」那三处里，位置由侧栏的「对话」组说明。 -->
+      <header class="shell-band">
+        <div class="flex min-w-0 flex-1 items-center gap-2">
+          <AppButton
+            icon-only
+            tone="quiet"
+            icon="material-symbols:history-rounded"
             aria-label="打开会话历史"
-            class="flex h-10 w-10 items-center justify-center rounded-sm border border-hairline bg-surface text-label transition-[transform,background-color] duration-150 hover:bg-surface-secondary active:scale-[0.92] lg:hidden"
+            class="lg:hidden"
             @click="historyOpen = true"
-          >
-            <Icon icon="material-symbols:history-rounded" class="text-[20px]" />
-          </button>
-          <div>
-            <p class="mb-1 hidden text-caption text-label-secondary lg:block">工作空间 / 对话</p>
-            <h1 class="text-title-3">普通对话</h1>
+          />
+          <div class="min-w-0 flex-1">
+            <h1 class="text-title">普通对话</h1>
+            <p class="font-type text-micro text-label-tertiary">只发送本次会话中的文字</p>
           </div>
         </div>
-        <div class="flex items-center gap-4 text-caption">
-          <RouterLink to="/home/settings" class="text-primary-pressed">模型设置 ↗</RouterLink
-          ><button type="button" class="knowledge-button-secondary" @click="newChat">
-            ＋ 新对话
+        <div class="flex flex-none items-center gap-2">
+          <RouterLink to="/home/settings" class="shell-band-action" title="模型设置"
+            >模型设置<span class="hidden sm:inline"> ↗</span></RouterLink
+          ><button type="button" class="shell-band-action-primary" @click="newChat">
+            ＋<span class="hidden sm:inline"> 新对话</span>
           </button>
         </div>
       </header>
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 border-y border-hairline px-5 py-3 sm:px-8"
-      >
+      <div class="shell-toolbar-gutter">
         <fieldset :disabled="running || loading" class="min-w-0">
           <FilterMenu
             :model-value="model"
@@ -195,146 +197,62 @@ onMounted(() => {
           />
         </fieldset>
       </div>
+      <!-- 消息区：滚动容器留在页面（滚动跟随与 ref 都指这里），
+           正文列由 ChatTranscript 承载 measure —— ShellContract 要求每页
+           恰好一个容器档，ChatPage 的是 shell-wide，所以 40em 必须下沉。 -->
       <section
         ref="transcript"
         class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
         aria-label="对话消息"
       >
-        <div v-if="loading" role="status" class="p-8 text-subhead text-label-secondary">
-          正在读取模型配置…
+        <div
+          v-if="loading"
+          role="status"
+          class="flex items-center gap-2 p-8 text-body text-label-secondary"
+        >
+          <AppLoading size="sm" />正在读取模型配置…
         </div>
-        <div v-else-if="loadingHistory" role="status" class="p-8 text-subhead text-label-secondary">
-          正在读取对话历史…
+        <div
+          v-else-if="loadingHistory"
+          role="status"
+          class="flex items-center gap-2 p-8 text-body text-label-secondary"
+        >
+          <AppLoading size="sm" />正在读取对话历史…
         </div>
-        <div v-else-if="error" role="alert" class="p-8 text-subhead text-danger">
-          {{ error
-          }}<button type="button" class="knowledge-text-action ml-3" @click="load">重新加载</button>
+        <div v-else-if="error" role="alert" class="p-8 text-body text-danger">
+          {{ error }}<AppButton size="sm" class="ml-3" @click="load">重新加载</AppButton>
         </div>
-        <div v-else-if="!selected" class="mx-auto max-w-2xl px-6 py-16 text-center">
-          <h2 class="text-title-2">先连接一个对话模型</h2>
-          <p class="my-5 text-subhead leading-7 text-label-secondary">
-            请选择可用对话模型，或前往设置添加模型与凭据。<br />普通对话不需要 Embedding 配置。
-          </p>
-          <RouterLink to="/home/settings" class="knowledge-button-primary">前往模型设置</RouterLink>
-        </div>
-        <div v-else-if="!messages.length" class="mx-auto max-w-3xl px-6 py-12 sm:px-10">
-          <p class="mb-5 text-caption tracking-widest text-primary-pressed">从一句话开始</p>
-          <h2 class="text-[32px] font-semibold leading-snug tracking-tight sm:text-[42px]">
-            先聊聊，<br />看看模型是否回应。
-          </h2>
-          <p class="mt-5 text-subhead leading-7 text-label-secondary">
-            使用你在设置中连接的模型。<br />这里只发送本次会话中的文字，不调用任何工具。
-          </p>
-          <div class="mt-8 max-w-lg border-t border-hairline">
-            <button
-              v-for="suggestion in [
-                '你好，请用一句话介绍你能做什么。',
-                '用简单的语言解释什么是向量数据库。',
-                '我的项目叫知序，请在本次对话中记住。',
-              ]"
-              :key="suggestion"
-              type="button"
-              class="flex w-full justify-between gap-4 border-b border-hairline py-4 text-left text-subhead hover:text-primary-pressed"
-              @click="fillPrompt(suggestion)"
-            >
-              {{ suggestion }}<span>↗</span>
-            </button>
-          </div>
-          <p class="mt-5 text-caption text-label-secondary">对话自动保存，可在左侧历史记录中回看</p>
-        </div>
-        <div v-else class="mx-auto max-w-3xl space-y-8 px-6 py-7 sm:px-10">
-          <article
-            v-for="(message, index) in messages"
-            :key="index"
-            :class="message.role === 'user' ? 'flex flex-col items-end' : ''"
+        <div v-else-if="!selected" class="shell-wide px-6 py-16">
+          <AppEmptyState
+            title="先连接一个对话模型"
+            description="请选择可用对话模型，或前往设置添加模型与凭据。普通对话不需要 Embedding 配置。"
+            icon="material-symbols:link-rounded"
+            size="lg"
           >
-            <p
-              class="mb-3 text-caption"
-              :class="message.role === 'user' ? 'text-label-secondary' : 'text-primary-pressed'"
-            >
-              {{ message.role === 'user' ? '你' : message.model }}
-            </p>
-            <div
-              class="whitespace-pre-wrap break-words text-body leading-8"
-              :class="
-                message.role === 'user'
-                  ? 'max-w-[90%] rounded-lg bg-surface-secondary px-5 py-3'
-                  : ''
-              "
-            >
-              {{
-                message.content ||
-                (message.status === 'generating' ? '等待首段回复…' : '未收到文字回复')
-              }}
-            </div>
-            <div
-              v-if="message.role === 'assistant'"
-              class="mt-3 flex flex-wrap items-center gap-4 text-caption text-label-secondary"
-            >
-              <span>{{
-                message.status === 'generating'
-                  ? '正在生成…'
-                  : message.status === 'completed'
-                    ? '回复完成'
-                    : message.status === 'stopped'
-                      ? '已停止 · 部分内容'
-                      : '调用未完成'
-              }}</span
-              ><button
-                v-if="message.content && message.status !== 'generating'"
-                type="button"
-                @click="copy(message.content)"
+            <template #actions>
+              <RouterLink to="/home/settings" class="atom-btn atom-tone-primary atom-btn-lg"
+                >前往模型设置</RouterLink
               >
-                复制回复</button
-              ><button
-                v-if="['failed', 'stopped'].includes(message.status || '')"
-                type="button"
-                :disabled="running || loadingHistory"
-                class="text-primary-pressed"
-                @click="retry(index, Number(model), selected!.label)"
-              >
-                重试这条消息
-              </button>
-            </div>
-            <details
-              v-if="message.sources?.length"
-              class="mt-3 rounded-md border border-hairline bg-surface-secondary px-4 py-3 text-caption"
-            >
-              <summary class="cursor-pointer text-label-primary">
-                参考来源（{{ message.sources.length }}）<span
-                  v-if="message.query"
-                  class="text-label-secondary"
-                >
-                  · 检索词「{{ message.query }}」</span
-                >
-              </summary>
-              <ol class="mt-3 space-y-3">
-                <li v-for="(source, order) in message.sources" :key="order">
-                  <RouterLink :to="citationTarget(source)" class="text-primary-pressed"
-                    >[{{ order + 1 }}] {{ source.title || '未命名文档' }}</RouterLink
-                  >
-                  <span class="ml-2 text-label-secondary">{{ source.section }}</span>
-                  <p class="mt-1 whitespace-pre-wrap break-words leading-6 text-label-secondary">
-                    {{ source.content }}
-                  </p>
-                </li>
-              </ol>
-            </details>
-            <p
-              v-if="message.error"
-              role="alert"
-              class="mt-3 rounded-sm border-l-2 border-danger bg-danger-tint p-4 text-subhead leading-7 text-danger"
-            >
-              {{ message.error
-              }}<RouterLink to="/home/settings" class="ml-3 underline">检查模型设置</RouterLink>
-            </p>
-          </article>
+            </template>
+          </AppEmptyState>
+        </div>
+        <!-- 空态：正文列同样下沉到子组件（measure 只能有一处，且页面档是 wide） -->
+        <div v-else-if="!messages.length" class="shell-wide px-6 py-12 sm:px-10">
+          <ChatLanding @pick="fillPrompt" />
+        </div>
+        <div v-else class="shell-wide px-6 py-7 sm:px-10">
+          <ChatTranscript
+            :messages="messages"
+            :running="running"
+            :loading-history="loadingHistory"
+            :model-label="selected.label"
+            @copy="copy"
+            @retry="index => retry(index, Number(model), selected!.label)"
+          />
         </div>
       </section>
-      <div
-        class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8"
-      >
-        <p role="status" class="min-h-7 text-caption text-label-secondary">
+      <div class="shell-wide shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
+        <p role="status" class="min-h-7 text-note text-label-secondary">
           {{
             running
               ? '正在生成 · 可停止'
@@ -343,48 +261,57 @@ onMounted(() => {
                 : copyStatus
           }}
         </p>
-        <form
-          class="rounded-xl border border-hairline bg-canvas p-4 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary-tint"
-          @submit.prevent="submit"
+        <!-- 输入区：世界里是一张「可写的纸」。用 AppPanel 的 quiet 档承载，
+             只覆写两个变量 —— 底色换成 canvas（纸面比卡面更浅一档），
+             描边换成 rule（48%，3:1，够当控件边界；hairline 只有 1.72，不行）。
+             焦点时描边升到 primary。 -->
+        <AppPanel
+          tone="quiet"
+          size="md"
+          class="focus-within:border-primary"
+          :style="{
+            '--atom-tint-surface': 'var(--color-canvas)',
+            '--atom-tint-border': 'var(--color-rule)',
+          }"
         >
-          <label for="chat-prompt" class="sr-only">发送给模型的消息</label
-          ><textarea
-            id="chat-prompt"
-            ref="input"
-            v-model="prompt"
-            maxlength="2000"
-            rows="2"
-            class="w-full resize-none bg-transparent text-subhead leading-7 outline-none"
-            :disabled="!selected || running || loadingHistory || incomplete"
-            placeholder="发送一条消息，测试你的模型连接…"
-            @keydown="keydown"
-          />
-          <div
-            class="mt-2 flex items-center justify-between gap-2 text-caption text-label-secondary"
-          >
-            <span class="hidden sm:inline">Enter 发送 · Shift + Enter 换行</span>
-            <div class="ml-auto flex items-center gap-3">
-              <span>{{ prompt.length }} / 2000</span
-              ><button
-                v-if="running"
-                type="button"
-                class="knowledge-button-secondary"
-                @click="stop"
-              >
-                ■ 停止生成</button
-              ><button
-                v-else
-                type="submit"
-                aria-label="发送消息"
-                class="flex h-9 w-9 items-center justify-center rounded-full bg-primary-pressed text-xl text-white disabled:opacity-40"
-                :disabled="!selected || !prompt.trim() || loadingHistory || incomplete"
-              >
-                ↑
-              </button>
+          <form @submit.prevent="submit">
+            <label for="chat-prompt" class="sr-only">发送给模型的消息</label
+            ><textarea
+              id="chat-prompt"
+              ref="input"
+              v-model="prompt"
+              maxlength="2000"
+              rows="2"
+              class="w-full resize-none bg-transparent text-body leading-7 outline-none"
+              :disabled="!selected || running || loadingHistory || incomplete"
+              placeholder="发送一条消息，测试你的模型连接…"
+              @keydown="keydown"
+            />
+            <div
+              class="mt-2 flex items-center justify-between gap-2 text-note text-label-secondary"
+            >
+              <span class="hidden sm:inline">Enter 发送 · Shift + Enter 换行</span>
+              <div class="ml-auto flex items-center gap-3">
+                <span>{{ prompt.length }} / 2000</span>
+                <AppButton v-if="running" @click="stop">■ 停止生成</AppButton>
+                <!-- R12：这个按钮必须保持原生 <button disabled>。
+                   AppButton 忙态用 aria-busy + click 早退，不设原生 disabled，
+                   而 ChatPage.test.ts:82 断言这里的 disabled 是 defined。
+                   禁用态用规则线降级 + 颜色降级，不用 opacity（DESIGN 明禁）。 -->
+                <button
+                  v-else
+                  type="submit"
+                  aria-label="发送消息"
+                  class="flex h-9 w-9 items-center justify-center bg-primary-pressed text-xl text-white tap-target transition-colors hover:bg-primary disabled:border disabled:border-hairline disabled:bg-surface-secondary disabled:text-label-tertiary"
+                  :disabled="!selected || !prompt.trim() || loadingHistory || incomplete"
+                >
+                  ↑
+                </button>
+              </div>
             </div>
-          </div>
-        </form>
-        <p class="mt-3 text-center text-[10px] leading-5 text-label-secondary">
+          </form>
+        </AppPanel>
+        <p class="mt-3 text-center text-note leading-5 text-label-secondary">
           文字将发送至当前模型供应商；请勿输入敏感信息。模型回复可能不准确。
         </p>
       </div>
@@ -397,10 +324,10 @@ onMounted(() => {
           :animate="{ opacity: 1 }"
           :exit="{ opacity: 0 }"
           :transition="fadeTransition"
-          class="fixed inset-0 z-40 flex lg:hidden"
+          class="fixed inset-0 z-menu flex lg:hidden"
           @click="historyOpen = false"
         >
-          <div class="absolute inset-0 bg-scrim backdrop-blur-[6px]"></div>
+          <div class="absolute inset-0 bg-scrim"></div>
           <Motion
             :ref="setDrawerPanelRef"
             :initial="{ x: '-100%' }"
@@ -408,27 +335,29 @@ onMounted(() => {
             :exit="{ x: '-100%' }"
             :transition="springBouncy"
             drag="x"
-            :drag-constraints="{ left: -320, right: 0 }"
+            :drag-constraints="{ left: -240, right: 0 }"
             :drag-elastic="{ left: 0.2, right: 0 }"
             :drag-momentum="false"
-            class="relative flex h-full w-[min(18rem,86vw)] flex-col bg-surface shadow-popover"
+            role="dialog"
+            aria-modal="true"
+            aria-label="会话历史"
+            class="relative flex h-full w-drawer flex-col bg-surface-secondary shadow-popover"
             @click.stop
             @pan-end="handleDrawerPanEnd"
           >
             <div
               class="flex flex-none items-center justify-between border-b border-hairline px-3 py-2.5"
             >
-              <h2 class="px-1 text-caption font-semibold tracking-wide text-label-secondary">
+              <h2 class="px-1 text-note font-semibold tracking-wide text-label-secondary">
                 会话历史
               </h2>
-              <button
-                type="button"
+              <AppButton
+                icon-only
+                tone="quiet"
+                icon="material-symbols:close-rounded"
                 aria-label="关闭会话历史"
-                class="flex h-10 w-10 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-secondary hover:text-label"
                 @click="historyOpen = false"
-              >
-                <Icon icon="material-symbols:close-rounded" class="text-[20px]" />
-              </button>
+              />
             </div>
             <div class="min-h-0 flex-1">
               <ConversationSidebar
@@ -442,13 +371,12 @@ onMounted(() => {
         </Motion>
       </AnimatePresence>
       <SettingsModal v-if="confirmation" title="开始新对话？" @close="confirmation = null"
-        ><p class="mb-6 text-subhead leading-7 text-label-secondary">
+        ><p class="mb-6 text-body leading-7 text-label-secondary">
           当前消息和草稿将清空，正在生成的回复会停止，无法恢复。切换模型只影响本次会话，不修改默认模型。
         </p>
         <div class="flex justify-end gap-3">
-          <button type="button" class="knowledge-button-secondary" @click="confirmation = null">
-            取消</button
-          ><button type="button" class="knowledge-button-primary" @click="confirm">确认新建</button>
+          <AppButton @click="confirmation = null">取消</AppButton>
+          <AppButton tone="primary" @click="confirm">确认新建</AppButton>
         </div></SettingsModal
       >
     </main>

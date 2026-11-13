@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import type { FileDisplayItem, FileItemKey } from '../../types/file'
 import { formatBytes } from '../../utils/file'
 import { ownerInitials } from '../../utils/file-management'
 import FileEmptyState from './FileEmptyState.vue'
 import FileKnowledgeAction from '../knowledge/FileKnowledgeAction.vue'
+import FileSelectBox from './FileSelectBox.vue'
 import type { KnowledgeItem } from '../../services/apis/knowledge'
 
 const props = withDefaults(
@@ -38,99 +40,64 @@ const emit = defineEmits<{
 const ownerBadge = computed(() => ownerInitials(props.ownerName))
 
 const handleItemClick = (file: FileDisplayItem) => emit('open-item', file)
-const handleToggleAll = (event: Event) => {
-  const input = event.currentTarget
-  if (input instanceof HTMLInputElement) emit('toggle-all', input.checked)
-}
-const handleToggleSelect = (file: FileDisplayItem, event: Event) => {
-  const input = event.currentTarget
-  if (input instanceof HTMLInputElement) emit('toggle-select', file, input.checked)
-}
 const handleOpenMenu = (file: FileDisplayItem, event: MouseEvent) => {
   const anchor = event.currentTarget
   if (anchor instanceof HTMLElement) emit('open-menu', file, anchor)
 }
 
-// 列网格（FileListView.html）：选择 / 图标 / 名称 / 类型 / 大小 / 所有者 / 修改时间 / 操作
+// 列网格：选择 / 图标 / 名称 / 类型 / 大小 / 所有者 / 修改时间 / 操作
 const rowGridClass =
   'grid min-h-12 items-center gap-3 px-4 ' +
-  'grid-cols-[28px_40px_minmax(140px,1fr)_72px_88px_92px_140px_36px] min-w-[760px]'
+  'grid-cols-[28px_40px_minmax(140px,1fr)_72px_88px_92px_140px_36px]'
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-md bg-surface shadow-card">
-    <div class="overflow-x-auto">
+  <div class="overflow-hidden bg-surface shadow-card">
+    <!-- ≥lg：八列行网格。这一行在 375px 下要 760px 才装得下，只能靠横向滚动，
+         而 DESIGN.md:514 明确「表格变两列卡列表，不做横向滚动」——
+         所以表格只在 lg 及以上出现，窄屏换成下面的卡片列表。 -->
+    <div class="hidden lg:block">
       <!-- 表头 -->
       <div :class="[rowGridClass, 'min-h-10 border-b border-hairline bg-surface-secondary']">
-        <label class="inline-flex cursor-pointer" @click.stop>
-          <input
-            type="checkbox"
-            class="peer sr-only"
-            aria-label="选择当前页全部文件"
-            :checked="allSelected"
-            @change="handleToggleAll"
-          />
-          <span
-            class="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-label-tertiary bg-surface transition-all duration-100 hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 active:scale-[0.88]"
-          >
-            <svg
-              v-if="allSelected"
-              class="h-[11px] w-[11px]"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="m5 12.5 5 5L19 8"
-                stroke="#fff"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </span>
-        </label>
+        <FileSelectBox
+          label="选择当前页全部文件"
+          :checked="allSelected"
+          @change="checked => emit('toggle-all', checked)"
+        />
         <span></span>
-        <span class="text-caption font-semibold tracking-[0.06em] text-label-secondary">名称</span>
-        <span class="text-caption font-semibold tracking-[0.06em] text-label-secondary">类型</span>
-        <span class="text-caption font-semibold tracking-[0.06em] text-label-secondary">大小</span>
-        <span class="text-caption font-semibold tracking-[0.06em] text-label-secondary"
-          >所有者</span
-        >
-        <span class="text-caption font-semibold tracking-[0.06em] text-label-secondary"
-          >最近修改</span
-        >
-        <span class="text-caption text-right font-semibold tracking-[0.06em] text-label-secondary">
-          操作
-        </span>
+        <span class="text-micro font-normal uppercase text-label-tertiary">名称</span>
+        <span class="text-micro font-normal uppercase text-label-tertiary">类型</span>
+        <span class="text-micro font-normal uppercase text-label-tertiary">大小</span>
+        <span class="text-micro font-normal uppercase text-label-tertiary">所有者</span>
+        <span class="text-micro font-normal uppercase text-label-tertiary">最近修改</span>
+        <span class="text-right text-micro font-normal uppercase text-label-tertiary">操作</span>
       </div>
 
       <!-- 「..」返回上一级目录行 -->
       <div
         v-if="hasParentFolder"
-        :class="[
-          rowGridClass,
-          'cursor-pointer transition-colors duration-150 hover:bg-surface-secondary',
-        ]"
+        :class="[rowGridClass, 'cursor-pointer transition-colors hover:bg-surface-secondary']"
         role="button"
         tabindex="0"
         @click="emit('go-parent')"
         @keyup.enter.self="emit('go-parent')"
       >
         <span></span>
-        <span
-          class="flex h-10 w-10 items-center justify-center rounded-sm bg-warning-tint text-warning"
-        >
-          <Icon class="text-[20px]" icon="material-symbols:folder" />
+        <span class="flex h-10 w-10 items-center justify-center bg-warning-tint text-warning">
+          <AppIcon
+            class="atom-glyph"
+            icon="material-symbols:folder"
+            :style="{ '--atom-glyph-size': '20px' }"
+          />
         </span>
         <span class="truncate">
-          <span class="text-[15px] font-semibold text-label">..</span>
-          <span class="text-subhead text-label-secondary">　返回上一级目录</span>
+          <span class="text-lead text-label">..</span>
+          <span class="text-note text-label-secondary">　返回上一级目录</span>
         </span>
-        <span class="text-subhead text-label-secondary">文件夹</span>
-        <span class="text-subhead text-label-secondary">-</span>
-        <span class="text-subhead text-label-secondary">-</span>
-        <span class="text-subhead text-label-secondary">-</span>
+        <span class="text-note text-label-secondary">文件夹</span>
+        <span class="text-note text-label-secondary">-</span>
+        <span class="text-note text-label-secondary">-</span>
+        <span class="text-note text-label-secondary">-</span>
         <span></span>
       </div>
       <div v-if="hasParentFolder" class="ml-[108px] h-px bg-hairline" />
@@ -140,7 +107,7 @@ const rowGridClass =
         <div
           :class="[
             rowGridClass,
-            'transition-colors duration-150',
+            'transition-colors',
             file.type === 'folder' ? 'cursor-pointer' : '',
             selectedIds.has(file.key)
               ? 'bg-primary-tint hover:bg-primary-tint'
@@ -151,89 +118,143 @@ const rowGridClass =
           @click="handleItemClick(file)"
           @keyup.enter.self="handleItemClick(file)"
         >
-          <label class="inline-flex cursor-pointer" @click.stop>
-            <input
-              type="checkbox"
-              class="peer sr-only"
-              :aria-label="`选择 ${file.name}`"
-              :checked="selectedIds.has(file.key)"
-              @change="handleToggleSelect(file, $event)"
-            />
-            <span
-              class="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-label-tertiary bg-surface transition-all duration-100 hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 active:scale-[0.88]"
-            >
-              <svg
-                v-if="selectedIds.has(file.key)"
-                class="h-[11px] w-[11px]"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="m5 12.5 5 5L19 8"
-                  stroke="#fff"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </span>
-          </label>
+          <FileSelectBox
+            :label="`选择 ${file.name}`"
+            :checked="selectedIds.has(file.key)"
+            @change="checked => emit('toggle-select', file, checked)"
+          />
           <span
-            class="flex h-10 w-10 items-center justify-center rounded-sm"
+            class="flex h-10 w-10 items-center justify-center"
             :class="`${file.iconBg} ${file.iconFg}`"
           >
-            <Icon class="text-[20px]" :icon="file.icon" />
+            <AppIcon
+              class="atom-glyph"
+              :icon="file.icon"
+              :style="{ '--atom-glyph-size': '20px' }"
+            />
           </span>
           <div class="min-w-0 py-2">
-            <p class="truncate text-[15px] font-semibold text-label">{{ file.name }}</p>
+            <p class="truncate text-lead text-label">{{ file.name }}</p>
             <FileKnowledgeAction
               :file="file"
               :revision="knowledgeRevision"
               @action="(target, item) => emit('knowledge', target, item)"
             />
           </div>
-          <span class="truncate text-subhead text-label-secondary">{{ file.typeLabel }}</span>
-          <span class="truncate text-subhead text-label-secondary">
+          <span class="truncate text-note text-label-secondary">{{ file.typeLabel }}</span>
+          <span class="truncate text-note text-label-secondary">
             {{ file.type === 'folder' ? '-' : formatBytes(file.size) }}
           </span>
           <span class="flex min-w-0 items-center gap-2">
             <span
-              class="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-surface-tertiary text-[10px] font-bold tracking-[0.02em] text-label-secondary"
+              class="flex h-6 w-6 flex-none items-center justify-center bg-surface-tertiary text-note font-bold tracking-[0.02em] text-label-secondary"
             >
               {{ ownerBadge }}
             </span>
-            <span class="truncate text-subhead text-label-secondary">{{ ownerName }}</span>
+            <span class="truncate text-note text-label-secondary">{{ ownerName }}</span>
           </span>
-          <span class="whitespace-nowrap text-subhead text-label-secondary">
+          <span class="whitespace-nowrap text-note text-label-secondary">
             {{ file.lastModifiedText }}
           </span>
           <button
-            class="flex h-9 w-9 items-center justify-center justify-self-end rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-label"
+            class="flex h-9 w-9 items-center justify-center justify-self-end text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
             type="button"
             :aria-label="`${file.name} 操作菜单`"
             @click.stop="handleOpenMenu(file, $event)"
           >
-            <Icon icon="material-symbols:more-vert" aria-hidden="true" />
+            <AppIcon icon="material-symbols:more-vert" aria-hidden="true" />
           </button>
         </div>
         <div v-if="index < files.length - 1" class="ml-[108px] h-px bg-hairline" />
       </template>
+    </div>
 
-      <!-- 加载中 -->
-      <div v-if="loading" class="flex flex-col items-center justify-center gap-2.5 py-11">
-        <Icon
-          icon="material-symbols:progress-activity"
-          class="animate-spin text-[28px] text-primary"
-        />
-        <p class="text-subhead text-label-tertiary">加载中...</p>
+    <!-- <lg：卡片列表，零横向滚动。行网格的八列在窄屏塞不下，
+         折成「图标 + 名称 + 一行摘要 + 选择框/菜单」，一件事都不丢。 -->
+    <div v-if="!loading && files.length > 0" class="divide-y divide-hairline lg:hidden">
+      <div
+        v-if="hasParentFolder"
+        class="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-secondary"
+        role="button"
+        tabindex="0"
+        @click="emit('go-parent')"
+        @keyup.enter.self="emit('go-parent')"
+      >
+        <span
+          class="flex h-10 w-10 flex-none items-center justify-center bg-warning-tint text-warning"
+        >
+          <AppIcon
+            class="atom-glyph"
+            icon="material-symbols:folder"
+            :style="{ '--atom-glyph-size': '20px' }"
+          />
+        </span>
+        <span class="min-w-0">
+          <span class="block truncate text-lead text-label">..</span>
+          <span class="block truncate text-note text-label-secondary">返回上一级目录</span>
+        </span>
       </div>
 
-      <!-- 空状态 -->
-      <div v-if="files.length === 0 && !loading" class="px-6 py-20">
-        <FileEmptyState :query="query" @upload="emit('upload')" />
+      <div
+        v-for="file in files"
+        :key="file.key"
+        class="flex items-start gap-3 px-4 py-3 transition-colors"
+        :class="[
+          file.type === 'folder' ? 'cursor-pointer' : '',
+          selectedIds.has(file.key) ? 'bg-primary-tint' : 'hover:bg-surface-secondary',
+        ]"
+        :role="file.type === 'folder' ? 'button' : undefined"
+        :tabindex="file.type === 'folder' ? 0 : undefined"
+        @click="handleItemClick(file)"
+        @keyup.enter.self="handleItemClick(file)"
+      >
+        <span
+          class="flex h-10 w-10 flex-none items-center justify-center"
+          :class="`${file.iconBg} ${file.iconFg}`"
+        >
+          <AppIcon class="atom-glyph" :icon="file.icon" :style="{ '--atom-glyph-size': '20px' }" />
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-lead text-label">{{ file.name }}</p>
+          <p class="mt-0.5 truncate text-note text-label-secondary">
+            {{ file.typeLabel }} · {{ file.type === 'folder' ? '-' : formatBytes(file.size) }} ·
+            {{ file.lastModifiedText }}
+          </p>
+          <FileKnowledgeAction
+            :file="file"
+            :revision="knowledgeRevision"
+            @action="(target, item) => emit('knowledge', target, item)"
+          />
+        </div>
+        <div class="flex flex-none items-center gap-1 pointer-coarse:gap-3">
+          <FileSelectBox
+            :label="`选择 ${file.name}`"
+            :checked="selectedIds.has(file.key)"
+            @change="checked => emit('toggle-select', file, checked)"
+          />
+          <button
+            class="flex h-9 w-9 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
+            type="button"
+            :aria-label="`${file.name} 操作菜单`"
+            @click.stop="handleOpenMenu(file, $event)"
+          >
+            <AppIcon icon="material-symbols:more-vert" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
+
+    <!-- 加载中 -->
+    <div v-if="loading" class="flex flex-col items-center justify-center gap-2.5 py-11">
+      <AppLoading :size="28" class="text-primary" />
+      <p class="text-note text-label-tertiary">加载中...</p>
+    </div>
+
+    <!-- 空状态 -->
+    <div v-if="files.length === 0 && !loading" class="px-6 py-20">
+      <FileEmptyState :query="query" @upload="emit('upload')" />
+    </div>
+
     <slot name="footer" />
   </div>
 </template>

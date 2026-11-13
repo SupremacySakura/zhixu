@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import AppButton from '../ui/AppButton.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import {
   deleteConversation,
   listConversations,
@@ -73,28 +75,34 @@ defineExpose({ reload: load })
     aria-label="会话历史"
   >
     <div class="flex items-center justify-between px-4 py-4">
-      <h2 class="text-caption font-semibold tracking-wide text-label-secondary">会话历史</h2>
-      <button type="button" class="knowledge-text-action" @click="emit('new')">＋ 新对话</button>
+      <h2 class="text-note font-semibold tracking-wide text-label-secondary">会话历史</h2>
+      <AppButton tone="quiet" size="sm" @click="emit('new')">＋ 新对话</AppButton>
     </div>
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-      <p v-if="loading" role="status" class="px-2 py-4 text-caption text-label-secondary">
-        加载中…
+      <!-- 加载态：线环 + 既有 role="status" 文案。AppLoading 不传 label ——
+           传了它会渲染第二个 [role="status"]，与这里的语义重复。 -->
+      <p
+        v-if="loading"
+        role="status"
+        class="flex items-center gap-2 px-2 py-4 text-note text-label-secondary"
+      >
+        <AppLoading size="sm" />加载中…
       </p>
-      <p v-else-if="error" role="alert" class="px-2 py-4 text-caption text-danger">{{ error }}</p>
-      <p v-else-if="!conversations.length" class="px-2 py-4 text-caption text-label-secondary">
+      <p v-else-if="error" role="alert" class="px-2 py-4 text-note text-danger">{{ error }}</p>
+      <p v-else-if="!conversations.length" class="px-2 py-4 text-note text-label-secondary">
         还没有历史会话，发起第一轮对话后自动保存。
       </p>
       <ul v-else class="space-y-1">
         <li v-for="conversation in conversations" :key="conversation.id">
           <div
-            class="group rounded-md px-3 py-2"
+            class="group px-3 py-2"
             :class="conversation.id === activeId ? 'bg-primary-tint' : 'hover:bg-surface'"
           >
             <input
               v-if="editingId === conversation.id"
               v-model="editingTitle"
               maxlength="200"
-              class="w-full rounded-sm border border-hairline bg-canvas px-2 py-1 text-caption outline-none"
+              class="w-full border border-hairline bg-canvas px-2 py-1 text-note outline-none"
               @keydown.enter.prevent="commitRename"
               @keydown.esc.prevent="editingId = ''"
               @blur="commitRename"
@@ -102,7 +110,7 @@ defineExpose({ reload: load })
             <template v-else>
               <button
                 type="button"
-                class="block w-full truncate text-left text-subhead"
+                class="block w-full truncate text-left text-body"
                 :class="
                   conversation.id === activeId ? 'text-primary-pressed' : 'text-label-primary'
                 "
@@ -110,11 +118,21 @@ defineExpose({ reload: load })
               >
                 {{ conversation.title || '未命名会话' }}
               </button>
-              <div class="mt-1 flex items-center justify-between text-[11px] text-label-secondary">
+              <div class="mt-1 flex items-center justify-between text-note text-label-secondary">
                 <span>{{ relative(conversation.updated_at) }}</span>
                 <span class="flex gap-2 lg:hidden lg:group-hover:flex lg:group-focus-within:flex">
-                  <button type="button" @click="startRename(conversation)">改名</button>
-                  <button type="button" class="text-danger" @click="remove(conversation.id)">
+                  <button
+                    type="button"
+                    class="transition-colors hover:text-label"
+                    @click="startRename(conversation)"
+                  >
+                    改名
+                  </button>
+                  <button
+                    type="button"
+                    class="text-danger transition-colors hover:underline"
+                    @click="remove(conversation.id)"
+                  >
                     删除
                   </button>
                 </span>

@@ -11,11 +11,9 @@ const colors = {
 </script>
 <template>
   <span
-    class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-caption font-medium"
+    class="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 text-note font-medium"
     :class="colors[status]"
   >
-    <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />{{
-      knowledgeLabels[status]
-    }}
+    <span class="h-1.5 w-1.5 bg-current" aria-hidden="true" />{{ knowledgeLabels[status] }}
   </span>
 </template>

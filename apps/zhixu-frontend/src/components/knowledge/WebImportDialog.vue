@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { AnimatePresence, Motion } from 'motion-v'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import { importKnowledgeFromWeb, type KnowledgeItem } from '../../services/apis/knowledge'
 import { knowledgeError } from '../../utils/knowledge'
 import { fadeTransition, springSnappy } from '../../utils/motion'
@@ -48,7 +49,7 @@ async function submit() {
   <Teleport to="body">
     <dialog
       ref="dialog"
-      class="knowledge-dialog"
+      class="atom-dialog-shell"
       :aria-labelledby="id"
       @cancel.prevent="close"
       @click.self="close"
@@ -59,23 +60,23 @@ async function submit() {
             :initial="{ opacity: 0, scale: 0.96 }"
             :animate="{ opacity: 1, scale: 1 }"
             :transition="springSnappy"
-            class="rounded-xl bg-surface shadow-popover"
+            class="bg-surface shadow-popover"
           >
             <form @submit.prevent="submit">
               <div class="p-6 sm:p-7">
                 <div class="mb-5 flex items-center justify-between gap-3">
-                  <h2 :id="id" class="text-title-3">从网页导入</h2>
+                  <h2 :id="id" class="text-title">从网页导入</h2>
                   <button
                     type="button"
-                    class="knowledge-icon-button"
+                    class="atom-icon-btn"
                     :disabled="busy"
                     aria-label="关闭弹窗"
                     @click="close"
                   >
-                    <Icon icon="material-symbols:close-rounded" />
+                    <AppIcon icon="material-symbols:close-rounded" />
                   </button>
                 </div>
-                <label :for="`${id}-url`" class="mb-2 block text-subhead font-semibold"
+                <label :for="`${id}-url`" class="mb-2 block text-body font-semibold"
                   >网页链接</label
                 >
                 <input
@@ -83,19 +84,19 @@ async function submit() {
                   ref="input"
                   v-model="url"
                   type="url"
-                  class="knowledge-input w-full"
+                  class="atom-field min-h-9 w-full"
                   placeholder="https://example.com/article"
                   :disabled="busy"
                   :aria-invalid="Boolean(error)"
                   :aria-describedby="`${id}-help`"
                 />
-                <p :id="`${id}-help`" class="mt-2 text-caption text-label-secondary">
+                <p :id="`${id}-help`" class="mt-2 text-note text-label-secondary">
                   仅支持公开可访问的 http/https 网页；标题自动取自网页。
                 </p>
-                <p v-if="error" role="alert" class="mt-3 text-subhead text-warning-strong">
+                <p v-if="error" role="alert" class="mt-3 text-body text-warning-strong">
                   {{ error }}
                 </p>
-                <p class="mt-5 text-subhead leading-7 text-label-secondary">
+                <p class="mt-5 text-body leading-7 text-label-secondary">
                   系统会抓取网页正文并转为 Markdown，再自动分块与向量化。<br />内网地址、需要登录的页面与超过
                   10MB 的页面无法导入。
                 </p>
@@ -103,7 +104,7 @@ async function submit() {
               <div class="flex justify-end gap-2 border-t border-hairline p-5">
                 <button
                   type="button"
-                  class="knowledge-button-secondary"
+                  class="atom-btn atom-tone-secondary atom-btn-wide"
                   :disabled="busy"
                   @click="close"
                 >
@@ -111,14 +112,10 @@ async function submit() {
                 </button>
                 <button
                   type="submit"
-                  class="knowledge-button-primary"
+                  class="atom-btn atom-tone-primary atom-btn-lg"
                   :disabled="busy || !url.trim()"
                 >
-                  <Icon
-                    v-if="busy"
-                    class="animate-spin"
-                    icon="material-symbols:progress-activity"
-                  />{{ busy ? '抓取中…' : '开始导入' }}
+                  <AppLoading v-if="busy" size="sm" />{{ busy ? '抓取中…' : '开始导入' }}
                 </button>
               </div>
             </form>

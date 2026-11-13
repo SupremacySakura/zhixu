@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Motion } from 'motion-v'
 import FilterMenu from '../components/ui/FilterMenu.vue'
+import AppFilterBar from '../components/ui/AppFilterBar.vue'
 import FilePagination from '../components/file-management/FilePagination.vue'
 import { EVOLUTION_PAGE_SIZE, useEvolutionAlerts } from '../composables/useEvolutionAlerts'
 import { pendingTotal } from '../services/apis/evolution'
@@ -147,314 +148,351 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="overflow-y-auto p-4 sm:p-6 lg:p-8">
-    <div class="mx-auto max-w-6xl">
-      <p class="mb-4 text-subhead text-label-secondary">知识库 / 演化中心</p>
-
-      <header class="mb-7 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 class="text-title-1">演化中心</h1>
-          <p class="mt-2 text-subhead text-label-secondary">
-            逐条处理重复、过时与冲突提醒；每条裁决只影响提醒涉及的知识。
-          </p>
-        </div>
-        <p class="text-subhead text-label-secondary">
+  <div class="flex min-h-0 flex-1 flex-col">
+    <!-- 页头带 64px：左标题 + 等宽计数行（待处理数 = pending + deferred，
+         与首页提醒卡片只算 pending 是两套口径，这里沿用页头的待办视野）。
+         面包屑已取消 —— 索引页不再重复侧栏已经说明的位置。 -->
+    <header class="shell-band">
+      <div class="min-w-0 flex-1">
+        <h1 class="text-title">演化中心</h1>
+        <p class="font-type text-micro text-label-tertiary">
           待处理 <span class="font-semibold text-label">{{ pendingCount }}</span> 条
         </p>
-      </header>
-
-      <div class="mb-4 flex gap-1" role="tablist" aria-label="演化提醒视图">
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="tab === 'pending'"
-          :class="[
-            'rounded-full px-4 py-1.5 text-subhead transition-colors',
-            tab === 'pending'
-              ? 'bg-primary-tint font-semibold text-primary-pressed'
-              : 'text-label-secondary hover:bg-surface-secondary',
-          ]"
-          @click="tab = 'pending'"
-        >
-          待处理
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="tab === 'records'"
-          :class="[
-            'rounded-full px-4 py-1.5 text-subhead transition-colors',
-            tab === 'records'
-              ? 'bg-primary-tint font-semibold text-primary-pressed'
-              : 'text-label-secondary hover:bg-surface-secondary',
-          ]"
-          @click="tab = 'records'"
-        >
-          处理记录
-        </button>
       </div>
+    </header>
 
-      <section class="mb-4 flex flex-wrap items-center gap-3">
-        <FilterMenu
-          v-model="type"
-          :options="typeOptions"
-          label="提醒类型"
-          data-test="type-filter"
-        />
-        <FilterMenu v-model="status" :options="statusOptions" label="提醒状态" />
-        <span class="text-caption text-label-secondary">共 {{ total }} 条</span>
-      </section>
-
-      <p
-        v-if="error"
-        class="mb-4 rounded-lg bg-warning-tint p-4 text-subhead text-warning-strong"
-        role="alert"
-      >
-        {{ error }}
-      </p>
-
-      <p v-if="loading" class="mb-4 text-subhead text-label-secondary" role="status">
-        正在加载提醒…
-      </p>
-
-      <div
-        v-else-if="!error && items.length === 0 && filtered"
-        class="rounded-lg border border-hairline bg-surface px-6 py-16 text-center"
-        data-test="empty-filtered"
-      >
-        <h2 class="text-title-3">没有符合筛选条件的提醒</h2>
-        <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
-          换一个类型或状态试试，也可以清空筛选看全部提醒。
+    <main class="shell-page">
+      <div class="shell-wide">
+        <p class="mb-4 text-body text-label-secondary">
+          逐条处理重复、过时与冲突提醒；每条裁决只影响提醒涉及的知识。
         </p>
-        <button type="button" class="knowledge-button-secondary mt-6" @click="clearFilters">
-          清空筛选
-        </button>
-      </div>
-
-      <div
-        v-else-if="!error && items.length === 0"
-        class="rounded-lg border border-hairline bg-surface px-6 py-16 text-center"
-        data-test="empty-none"
-      >
-        <h2 class="text-title-3">
-          {{ tab === 'pending' ? '当前没有需要处理的演化提醒' : '还没有处理记录' }}
-        </h2>
-        <p class="mx-auto mt-3 max-w-sm text-subhead leading-7 text-label-secondary">
-          {{
-            tab === 'pending'
-              ? '导入或编辑知识后，系统会自动检查重复、过时与冲突，发现问题会出现在这里。'
-              : '处理过的提醒会按时间倒序留在这里，方便回看当时的裁决与备注。'
-          }}
-        </p>
-      </div>
-
-      <template v-else-if="!error">
-        <ul class="space-y-3">
-          <li
-            v-for="alert in items"
-            :key="alert.id"
-            class="cursor-pointer rounded-lg border border-hairline bg-surface p-5 transition-shadow hover:shadow-popover"
-            data-test="alert-card"
-            tabindex="0"
-            @click="openDetail(alert)"
-            @keydown.enter="openDetail(alert)"
-          >
-            <div class="flex flex-wrap items-center gap-2 text-caption">
-              <span
-                class="rounded-full bg-primary-tint px-2.5 py-1 font-medium text-primary-pressed"
-              >
-                {{ TYPE_LABELS[alert.alert_type] }}
-              </span>
-              <span class="text-label-secondary">{{ STATUS_LABELS[alert.status] }}</span>
-              <span v-if="alert.severity === 'strong'" class="text-warning-strong"
-                >需要优先处理</span
-              >
-              <span class="text-label-tertiary">{{ knowledgeDate(alert.created_at) }}</span>
-            </div>
-            <h3 class="mt-2 truncate text-headline">
-              {{ alert.subjects[0]?.title || '演化提醒' }}
-            </h3>
-            <p class="mt-1 text-subhead leading-7 text-label-secondary">
-              {{ alert.payload.reason }}
-            </p>
-            <p
-              v-if="archived(alert)"
-              class="mt-2 rounded-sm bg-warning-tint px-3 py-1.5 text-caption text-warning-strong"
-            >
-              涉及知识已归档
-            </p>
-            <div
-              v-if="tab === 'records'"
-              class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-caption text-label-secondary"
-            >
-              <span>{{ evolutionActionLabel(alert.resolved_action) }}</span>
-              <span>{{ knowledgeDate(alert.resolved_at) }}</span>
-              <span v-if="alert.resolution_note">备注：{{ alert.resolution_note }}</span>
-            </div>
-          </li>
-        </ul>
-
-        <FilePagination
-          v-if="total > EVOLUTION_PAGE_SIZE"
-          class="mt-4"
-          :page="page"
-          :total-pages="totalPages"
-          :start-index="(page - 1) * EVOLUTION_PAGE_SIZE + 1"
-          :end-index="Math.min(page * EVOLUTION_PAGE_SIZE, total)"
-          :total-count="total"
-          :loading="loading"
-          @change="changePage"
-        />
-      </template>
-    </div>
-
-    <div
-      v-if="selectedAlert"
-      class="fixed inset-0 z-40"
-      role="dialog"
-      aria-modal="true"
-      aria-label="演化提醒详情"
-    >
-      <div class="absolute inset-0 bg-scrim" @click="closeDetail" />
-      <Motion
-        :initial="{ x: 32, opacity: 0 }"
-        :animate="{ x: 0, opacity: 1 }"
-        :transition="springSnappy"
-        class="absolute inset-y-0 right-0 flex w-full max-w-md flex-col overflow-y-auto border-l border-hairline bg-surface p-6 shadow-floating"
-      >
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <p class="text-caption text-label-secondary">
-              {{ TYPE_LABELS[selectedAlert.alert_type] }}提醒 ·
-              {{ STATUS_LABELS[selectedAlert.status] }}
-            </p>
-            <h2 class="mt-1 text-title-3">{{ selectedAlert.subjects[0]?.title || '演化提醒' }}</h2>
-          </div>
+        <div class="mb-4 flex gap-1" role="tablist" aria-label="演化提醒视图">
           <button
             type="button"
-            class="knowledge-icon-button shrink-0"
-            aria-label="关闭"
-            @click="closeDetail"
+            role="tab"
+            :aria-selected="tab === 'pending'"
+            :class="[
+              ' px-4 py-1.5 text-body transition-colors',
+              tab === 'pending'
+                ? 'bg-primary-tint font-semibold text-primary-pressed'
+                : 'text-label-secondary hover:bg-surface-secondary',
+            ]"
+            @click="tab = 'pending'"
           >
-            ×
+            待处理
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="tab === 'records'"
+            :class="[
+              ' px-4 py-1.5 text-body transition-colors',
+              tab === 'records'
+                ? 'bg-primary-tint font-semibold text-primary-pressed'
+                : 'text-label-secondary hover:bg-surface-secondary',
+            ]"
+            @click="tab = 'records'"
+          >
+            处理记录
           </button>
         </div>
 
-        <p class="mt-4 text-subhead leading-7 text-label-secondary">
-          {{ selectedAlert.payload.reason }}
+        <section class="mb-4 flex flex-wrap items-center gap-3">
+          <!-- 角标只数两个下拉：那才是「筛选条件」。共 N 条是结果计数，不是筛选。 -->
+          <AppFilterBar :active-count="(type ? 1 : 0) + (status ? 1 : 0)">
+            <FilterMenu
+              v-model="type"
+              :options="typeOptions"
+              label="提醒类型"
+              data-test="type-filter"
+            />
+            <FilterMenu v-model="status" :options="statusOptions" label="提醒状态" />
+          </AppFilterBar>
+          <span class="text-note text-label-secondary">共 {{ total }} 条</span>
+        </section>
+
+        <p v-if="error" class="mb-4 bg-warning-tint p-4 text-body text-warning-strong" role="alert">
+          {{ error }}
         </p>
 
-        <p
-          v-if="archived(selectedAlert)"
-          class="mt-3 rounded-sm bg-warning-tint px-3 py-2 text-caption text-warning-strong"
-        >
-          涉及知识已归档，只能忽略或标记已核实
-        </p>
-        <p
-          v-if="selectedAlert.alert_type === 'conflict' && !hasRevision(selectedAlert)"
-          class="mt-3 rounded-sm bg-surface-secondary px-3 py-2 text-caption text-label-secondary"
-        >
-          该提醒没有修订稿，暂不能采纳修订
+        <p v-if="loading" class="mb-4 text-body text-label-secondary" role="status">
+          正在加载提醒…
         </p>
 
-        <section class="mt-5">
-          <h3 class="text-headline">证据对照</h3>
-          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div
-              v-for="index in [0, 1]"
-              :key="index"
-              class="rounded-md border border-hairline p-3"
-              :data-test="`evidence-${index}`"
+        <div
+          v-else-if="!error && items.length === 0 && filtered"
+          class="border border-hairline bg-surface px-6 py-16 text-center"
+          data-test="empty-filtered"
+        >
+          <h2 class="text-title">没有符合筛选条件的提醒</h2>
+          <p class="mx-auto mt-3 max-w-sm text-body leading-7 text-label-secondary">
+            换一个类型或状态试试，也可以清空筛选看全部提醒。
+          </p>
+          <button
+            type="button"
+            class="atom-btn atom-tone-secondary atom-btn-wide mt-6"
+            @click="clearFilters"
+          >
+            清空筛选
+          </button>
+        </div>
+
+        <div
+          v-else-if="!error && items.length === 0"
+          class="border border-hairline bg-surface px-6 py-16 text-center"
+          data-test="empty-none"
+        >
+          <h2 class="text-title">
+            {{ tab === 'pending' ? '当前没有需要处理的演化提醒' : '还没有处理记录' }}
+          </h2>
+          <p class="mx-auto mt-3 max-w-sm text-body leading-7 text-label-secondary">
+            {{
+              tab === 'pending'
+                ? '导入或编辑知识后，系统会自动检查重复、过时与冲突，发现问题会出现在这里。'
+                : '处理过的提醒会按时间倒序留在这里，方便回看当时的裁决与备注。'
+            }}
+          </p>
+        </div>
+
+        <template v-else-if="!error">
+          <ul class="space-y-3">
+            <!-- 演化中心的「一个小动作」不是硬卡 + 纸条（那是知识库独占），
+                 而是**建议动作印在卡面**：扫一屏 20 条就能看出每条想让你做什么，
+                 不必逐条点开。建议来自后端 payload.suggested_action，不是前端猜的。 -->
+            <li
+              v-for="alert in items"
+              :key="alert.id"
+              class="flex cursor-pointer items-center gap-3 border border-hairline bg-surface px-4 py-3 shadow-card transition-colors hover:bg-surface-secondary"
+              data-test="alert-card"
+              tabindex="0"
+              @click="openDetail(alert)"
+              @keydown.enter="openDetail(alert)"
             >
-              <p class="text-caption text-label-secondary">
-                {{ index === 0 ? '本次检查的知识' : '被比对的知识' }}
-              </p>
-              <RouterLink
-                v-if="subjectAt(selectedAlert, index)"
-                :to="`/home/knowledge/${subjectAt(selectedAlert, index)!.id}`"
-                class="mt-1 block truncate text-subhead font-medium text-primary hover:underline"
-              >
-                {{ subjectAt(selectedAlert, index)!.title }}
-              </RouterLink>
-              <p class="mt-1 text-caption text-label-tertiary">
-                {{ knowledgeSourceLabel(subjectAt(selectedAlert, index)?.source_type || '') }}
-              </p>
-              <blockquote class="mt-2 text-subhead leading-7 text-label">
-                <template
-                  v-for="(segment, segmentIndex) in highlightQuote(
-                    quoteAt(selectedAlert, index),
-                    sharedPhrase(selectedAlert),
-                  )"
-                  :key="segmentIndex"
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2 font-type text-micro">
+                  <span
+                    class="flex-none bg-primary-tint px-1.5 py-0.5 font-semibold text-primary-pressed"
+                  >
+                    {{ TYPE_LABELS[alert.alert_type] }}
+                  </span>
+                  <span class="flex-none text-label-secondary">{{
+                    STATUS_LABELS[alert.status]
+                  }}</span>
+                  <span v-if="alert.severity === 'strong'" class="flex-none text-warning-strong"
+                    >需要优先处理</span
+                  >
+                  <span class="flex-none text-label-tertiary">{{
+                    knowledgeDate(alert.created_at)
+                  }}</span>
+                </div>
+                <h3 class="mt-1 truncate text-lead text-label">
+                  {{ alert.subjects[0]?.title || '演化提醒' }}
+                </h3>
+                <p class="mt-0.5 truncate text-body text-label-secondary">
+                  {{ alert.payload.reason }}
+                </p>
+                <p
+                  v-if="archived(alert)"
+                  class="mt-1 inline-block bg-warning-tint px-2 py-0.5 font-type text-micro text-warning-strong"
                 >
-                  <mark v-if="segment.hit" class="rounded-sm bg-warning-tint text-warning-strong">{{
-                    segment.text
-                  }}</mark>
-                  <template v-else>{{ segment.text }}</template>
-                </template>
-              </blockquote>
-            </div>
-          </div>
-        </section>
+                  涉及知识已归档
+                </p>
+                <div
+                  v-if="tab === 'records'"
+                  class="mt-1 flex flex-wrap gap-x-3 font-type text-micro text-label-secondary"
+                >
+                  <span>{{ evolutionActionLabel(alert.resolved_action) }}</span>
+                  <span>{{ knowledgeDate(alert.resolved_at) }}</span>
+                  <span v-if="alert.resolution_note">备注：{{ alert.resolution_note }}</span>
+                </div>
+              </div>
+              <!-- 建议动作：右端一枚固定宽度的「按钮位」。
+                   宽度固定是为了让 20 条卡的动作标签排成一列 —— 值扫读时
+                   眼睛只走一条竖线，不用每张重新定位。 -->
+              <span
+                v-if="tab === 'pending' && alert.payload.suggested_action"
+                class="flex-none border border-hairline bg-surface-tertiary px-2 py-1 text-center text-note font-semibold text-primary sm:w-32"
+              >
+                {{ evolutionActionLabel(alert.payload.suggested_action) }}
+              </span>
+            </li>
+          </ul>
 
-        <section v-if="hasRevision(selectedAlert)" class="mt-5">
-          <h3 class="text-headline">修订稿</h3>
-          <p class="mt-2 text-subhead font-medium text-label">
-            {{ selectedAlert.payload.revised_title }}
-          </p>
-          <p class="mt-1 text-subhead leading-7 text-label-secondary">
-            {{ selectedAlert.payload.revised_content }}
-          </p>
-        </section>
-
-        <section v-if="tab === 'pending'" class="mt-5">
-          <label class="text-caption text-label-secondary" for="evolution-note"
-            >备注（随裁决一并记录）</label
-          >
-          <textarea
-            id="evolution-note"
-            v-model="note"
-            class="knowledge-textarea mt-2"
-            rows="3"
-            placeholder="可选，例如：两条内容重复但来源不同，先保留"
+          <FilePagination
+            v-if="total > EVOLUTION_PAGE_SIZE"
+            class="mt-4"
+            :page="page"
+            :total-pages="totalPages"
+            :start-index="(page - 1) * EVOLUTION_PAGE_SIZE + 1"
+            :end-index="Math.min(page * EVOLUTION_PAGE_SIZE, total)"
+            :total-count="total"
+            :loading="loading"
+            @change="changePage"
           />
-        </section>
+        </template>
+      </div>
 
-        <p
-          v-if="resolveError"
-          class="mt-3 rounded-lg bg-warning-tint p-3 text-subhead text-warning-strong"
-          role="alert"
+      <div
+        v-if="selectedAlert"
+        class="fixed inset-0 z-40"
+        role="dialog"
+        aria-modal="true"
+        aria-label="演化提醒详情"
+      >
+        <div class="absolute inset-0 bg-scrim" @click="closeDetail" />
+        <Motion
+          :initial="{ x: 32, opacity: 0 }"
+          :animate="{ x: 0, opacity: 1 }"
+          :transition="springSnappy"
+          class="absolute inset-y-0 right-0 flex w-full max-w-md flex-col overflow-y-auto border-l border-hairline bg-surface p-6 shadow-floating"
         >
-          {{ resolveError }}
-        </p>
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-note text-label-secondary">
+                {{ TYPE_LABELS[selectedAlert.alert_type] }}提醒 ·
+                {{ STATUS_LABELS[selectedAlert.status] }}
+              </p>
+              <h2 class="mt-1 text-title">
+                {{ selectedAlert.subjects[0]?.title || '演化提醒' }}
+              </h2>
+            </div>
+            <button
+              type="button"
+              class="atom-icon-btn shrink-0"
+              aria-label="关闭"
+              @click="closeDetail"
+            >
+              ×
+            </button>
+          </div>
 
-        <div v-if="tab === 'pending'" class="mt-5 flex flex-wrap gap-3">
-          <button
-            v-for="action in actionsOf(selectedAlert)"
-            :key="action"
-            type="button"
-            :data-action="action"
-            :disabled="Boolean(disabledReason(selectedAlert, action)) || resolving"
-            :title="disabledReason(selectedAlert, action) || undefined"
-            :class="
-              action === 'dismiss' ? 'knowledge-button-secondary' : 'knowledge-button-primary'
-            "
-            @click="submit(selectedAlert, action)"
-          >
-            {{ evolutionActionLabel(action) }}
-          </button>
-        </div>
+          <p class="mt-4 text-body leading-7 text-label-secondary">
+            {{ selectedAlert.payload.reason }}
+          </p>
 
-        <div v-else class="mt-5 flex flex-wrap gap-3">
-          <RouterLink
-            v-if="subjectAt(selectedAlert, 0)"
-            :to="`/home/knowledge/${subjectAt(selectedAlert, 0)!.id}`"
-            class="knowledge-button-secondary"
+          <p
+            v-if="archived(selectedAlert)"
+            class="mt-3 bg-warning-tint px-3 py-2 text-note text-warning-strong"
           >
-            查看知识
-          </RouterLink>
-        </div>
-      </Motion>
-    </div>
-  </main>
+            涉及知识已归档，只能忽略或标记已核实
+          </p>
+          <p
+            v-if="selectedAlert.alert_type === 'conflict' && !hasRevision(selectedAlert)"
+            class="mt-3 bg-surface-secondary px-3 py-2 text-note text-label-secondary"
+          >
+            该提醒没有修订稿，暂不能采纳修订
+          </p>
+
+          <section class="mt-5">
+            <h3 class="text-lead">证据对照</h3>
+            <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div
+                v-for="index in [0, 1]"
+                :key="index"
+                class="border border-hairline p-3"
+                :data-test="`evidence-${index}`"
+              >
+                <p class="text-note text-label-secondary">
+                  {{ index === 0 ? '本次检查的知识' : '被比对的知识' }}
+                </p>
+                <RouterLink
+                  v-if="subjectAt(selectedAlert, index)"
+                  :to="`/home/knowledge/${subjectAt(selectedAlert, index)!.id}`"
+                  class="mt-1 block truncate text-body font-medium text-primary hover:underline"
+                >
+                  {{ subjectAt(selectedAlert, index)!.title }}
+                </RouterLink>
+                <p class="mt-1 text-note text-label-tertiary">
+                  {{ knowledgeSourceLabel(subjectAt(selectedAlert, index)?.source_type || '') }}
+                </p>
+                <blockquote class="mt-2 text-body leading-7 text-label">
+                  <template
+                    v-for="(segment, segmentIndex) in highlightQuote(
+                      quoteAt(selectedAlert, index),
+                      sharedPhrase(selectedAlert),
+                    )"
+                    :key="segmentIndex"
+                  >
+                    <mark v-if="segment.hit" class="bg-warning-tint text-warning-strong">{{
+                      segment.text
+                    }}</mark>
+                    <template v-else>{{ segment.text }}</template>
+                  </template>
+                </blockquote>
+              </div>
+            </div>
+          </section>
+
+          <section v-if="hasRevision(selectedAlert)" class="mt-5">
+            <h3 class="text-lead">修订稿</h3>
+            <p class="mt-2 text-body font-medium text-label">
+              {{ selectedAlert.payload.revised_title }}
+            </p>
+            <p class="mt-1 text-body leading-7 text-label-secondary">
+              {{ selectedAlert.payload.revised_content }}
+            </p>
+          </section>
+
+          <section v-if="tab === 'pending'" class="mt-5">
+            <label class="text-note text-label-secondary" for="evolution-note"
+              >备注（随裁决一并记录）</label
+            >
+            <textarea
+              id="evolution-note"
+              v-model="note"
+              class="atom-field min-h-0 resize-y py-3 mt-2"
+              rows="3"
+              placeholder="可选，例如：两条内容重复但来源不同，先保留"
+            />
+          </section>
+
+          <p
+            v-if="resolveError"
+            class="mt-3 bg-warning-tint p-3 text-body text-warning-strong"
+            role="alert"
+          >
+            {{ resolveError }}
+          </p>
+
+          <!-- 裁决按钮位（DESIGN.md §Layout：演化中心「自己页面的一个小动作」）。
+               具名区域 + 固定顺序：不同提醒的动作数不同（4/5/6 个），
+               但它们都落在这一处，位置稳定，面板下半截不会因为换一条提醒而跳。
+               dismiss 走次按钮：它是「不做处理」，与其余「做处理」的动作不同权。 -->
+          <div
+            v-if="tab === 'pending'"
+            class="mt-5 flex flex-wrap gap-3 border-t border-hairline pt-4"
+            role="group"
+            aria-label="裁决动作"
+          >
+            <button
+              v-for="action in actionsOf(selectedAlert)"
+              :key="action"
+              type="button"
+              :data-action="action"
+              :disabled="Boolean(disabledReason(selectedAlert, action)) || resolving"
+              :title="disabledReason(selectedAlert, action) || undefined"
+              :class="
+                action === 'dismiss'
+                  ? 'atom-btn atom-tone-secondary atom-btn-wide'
+                  : 'atom-btn atom-tone-primary atom-btn-lg'
+              "
+              @click="submit(selectedAlert, action)"
+            >
+              {{ evolutionActionLabel(action) }}
+            </button>
+          </div>
+
+          <div v-else class="mt-5 flex flex-wrap gap-3">
+            <RouterLink
+              v-if="subjectAt(selectedAlert, 0)"
+              :to="`/home/knowledge/${subjectAt(selectedAlert, 0)!.id}`"
+              class="atom-btn atom-tone-secondary atom-btn-wide"
+            >
+              查看知识
+            </RouterLink>
+          </div>
+        </Motion>
+      </div>
+    </main>
+  </div>
 </template>

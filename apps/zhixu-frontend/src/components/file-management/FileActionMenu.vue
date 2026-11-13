@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { springSnappy } from '../../utils/motion'
 import type { FileDisplayItem } from '../../types/file'
@@ -58,7 +58,7 @@ onMounted(() => document.addEventListener('keydown', handleKeydown))
 onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 
 const itemClass =
-  'flex h-10 w-full items-center gap-2.5 rounded-sm px-3 text-left text-[15px] text-label transition-colors duration-150 hover:bg-surface-secondary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50'
+  'flex h-10 w-full items-center gap-2.5 px-3 text-left text-lead font-normal text-label transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-50'
 </script>
 
 <template>
@@ -76,7 +76,7 @@ const itemClass =
         :animate="{ opacity: 1, scale: 1 }"
         :exit="{ opacity: 0, scale: 0.95 }"
         :transition="springSnappy"
-        class="fixed z-50 w-52 origin-top-right rounded-md bg-surface p-1.5 shadow-popover outline-none"
+        class="fixed z-50 w-52 origin-top-right bg-surface p-1.5 shadow-popover outline-none"
         :style="menuStyle"
         role="menu"
         tabindex="-1"
@@ -91,7 +91,11 @@ const itemClass =
           :disabled="previewDisabled"
           @click="emit('preview')"
         >
-          <Icon class="text-[18px] text-label-secondary" icon="material-symbols:visibility" />
+          <AppIcon
+            class="atom-glyph text-label-secondary"
+            icon="material-symbols:visibility"
+            :style="{ '--atom-glyph-size': '18px' }"
+          />
           预览
         </button>
         <button
@@ -102,7 +106,11 @@ const itemClass =
           :disabled="downloading"
           @click="emit('download')"
         >
-          <Icon class="text-[18px] text-label-secondary" icon="material-symbols:download" />
+          <AppIcon
+            class="atom-glyph text-label-secondary"
+            icon="material-symbols:download"
+            :style="{ '--atom-glyph-size': '18px' }"
+          />
           下载
         </button>
         <button
@@ -112,7 +120,11 @@ const itemClass =
           aria-label="重命名文件"
           @click="emit('rename')"
         >
-          <Icon class="text-[18px] text-label-secondary" icon="material-symbols:edit" />
+          <AppIcon
+            class="atom-glyph text-label-secondary"
+            icon="material-symbols:edit"
+            :style="{ '--atom-glyph-size': '18px' }"
+          />
           重命名
         </button>
         <button
@@ -122,7 +134,11 @@ const itemClass =
           aria-label="移动文件"
           @click="emit('move')"
         >
-          <Icon class="text-[18px] text-label-secondary" icon="material-symbols:drive-file-move" />
+          <AppIcon
+            class="atom-glyph text-label-secondary"
+            icon="material-symbols:drive-file-move"
+            :style="{ '--atom-glyph-size': '18px' }"
+          />
           移动到
         </button>
         <div v-if="target?.type === 'file'" class="border-t border-hairline px-3 py-2">
@@ -140,7 +156,7 @@ const itemClass =
           :disabled="deleting"
           @click="emit('delete')"
         >
-          <Icon icon="material-symbols:delete" />
+          <AppIcon icon="material-symbols:delete" />
           删除
         </button>
       </Motion>

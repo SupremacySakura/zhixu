@@ -1,12 +1,21 @@
 <script setup lang="tsx">
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+/**
+ * 侧栏导航项。
+ *
+ * `group` 是 #39 新增的：DESIGN.md §Layout 要求导航分五组（总览 / 知识 / 来源 / 对话 / 系统），
+ * 每组一行 12px 等宽小组标。标成可选是为了两件事：
+ * 1. 未标注的项落进「其他」兜底组，不会因为漏写字段就从界面上消失；
+ * 2. 侧栏的既有测试传的是空数组/临时项，不该被分组字段绑架。
+ */
 export type NavItem = {
   label: string
   icon: string
   to: string
+  group?: string
 }
 
 const props = withDefaults(
@@ -14,8 +23,10 @@ const props = withDefaults(
     brandTitle?: string
     brandSubtitle?: string
     navItems?: NavItem[]
-    storagePercent?: number
-    storageDetail?: string
+    /** 已索引知识条数；未取到时为 null，底部计数行显示占位符而不是假数据。 */
+    indexCount?: number | null
+    /** 已分块总数；未取到时为 null。 */
+    chunkCount?: number | null
     compact?: boolean
     userName?: string
     userEmail?: string
@@ -23,9 +34,10 @@ const props = withDefaults(
   }>(),
   {
     brandTitle: '知序',
-    brandSubtitle: 'Personal Knowledge Base',
-    storagePercent: 0,
-    storageDetail: '',
+    brandSubtitle: '',
+    navItems: () => [],
+    indexCount: null,
+    chunkCount: null,
     compact: false,
     userName: '',
     userEmail: '',
@@ -37,19 +49,28 @@ const emit = defineEmits<{ logout: [] }>()
 
 const route = useRoute()
 
-const defaultNavItems: NavItem[] = [
-  { label: 'Dashboard', icon: 'material-symbols:dashboard', to: '/home/dashboard' },
-  { label: 'File Manager', icon: 'material-symbols:folder-open', to: '/home/files' },
-  { label: 'Pickup Codes', icon: 'material-symbols:key-outline', to: '/home/pickup-codes' },
-  { label: 'Analytics', icon: 'material-symbols:bar-chart', to: '/home/analytics' },
-  { label: 'Settings', icon: 'material-symbols:settings', to: '/home/settings' },
-]
+/**
+ * 五个分组与它们的固定顺序（DESIGN.md §Layout）。
+ * 顺序是外壳骨架的一部分，不随传入顺序漂移 —— 侧栏每次挂载都长得一样，
+ * 位置记忆才成立。组内顺序仍由传入顺序决定。
+ */
+const GROUP_ORDER = ['总览', '知识', '来源', '对话', '系统'] as const
+/** 未标注 group 的项落在这里，排在五组之后。 */
+const FALLBACK_GROUP = '其他'
 
-const items = computed(() => props.navItems ?? defaultNavItems)
-
-// 用量 ≥ 90% 视为空间不足（DESIGN.md：warning 语义）
-const isStorageWarning = computed(() => props.storagePercent >= 90)
-const storagePercentClamped = computed(() => Math.min(100, Math.max(0, props.storagePercent)))
+const groups = computed(() => {
+  const buckets = new Map<string, NavItem[]>()
+  for (const item of props.navItems ?? []) {
+    const key = item.group?.trim() || FALLBACK_GROUP
+    const bucket = buckets.get(key)
+    if (bucket) bucket.push(item)
+    else buckets.set(key, [item])
+  }
+  const ordered = [...GROUP_ORDER, FALLBACK_GROUP]
+  return ordered
+    .filter(name => buckets.has(name))
+    .map(name => ({ name, items: buckets.get(name)! }))
+})
 
 const normalizePath = (path: string) => {
   const normalized = path.replace(/\/+$/, '')
@@ -60,7 +81,7 @@ const normalizePath = (path: string) => {
 const activeTarget = computed(() => {
   const current = normalizePath(route.path)
   let matched = ''
-  for (const item of items.value) {
+  for (const item of props.navItems ?? []) {
     const target = normalizePath(item.to)
     const hit = current === target || (target !== '/' && current.startsWith(`${target}/`))
     if (hit && target.length > matched.length) matched = target
@@ -74,129 +95,131 @@ const isActive = (to: string) =>
 // 无头像时使用用户名首字符占位（中英文均取第一个字符）
 const avatarInitial = computed(() => (props.userName.trim()[0] || '?').toUpperCase())
 
+/**
+ * 导航项几何：29px 高、激活态 = 3px 蓝左边条 + #e6e2d4 底 + 蓝字。
+ *
+ * 为什么激活态不是 `bg-primary-tint` 整块填充：DESIGN.md:580 明确
+ * 「表示选中：3px 蓝左边条 + #e6e2d4 底，不是换整个底色」——
+ * 整块 tint 是旧世界的选中语言，已随换骨退役。
+ * 未激活项保留一条同宽的透明左边条，否则激活瞬间文字会横跳 3px。
+ */
 const linkClass = (to: string) => {
   const base =
-    'flex h-10 items-center gap-3 rounded-sm px-3 text-[15px] font-medium transition-colors duration-150 focus:outline-none active:bg-primary/20 active:text-primary-pressed'
+    'flex h-nav-item items-center gap-2.5 border-l-[3px] pl-[13px] pr-[14px] text-body font-medium transition-colors active:bg-nav-active active:text-primary-pressed'
   return isActive(to)
-    ? `${base} bg-primary-tint font-semibold text-primary`
-    : `${base} text-label-secondary hover:bg-surface-secondary hover:text-label`
+    ? `${base} border-l-primary bg-nav-active font-semibold text-primary`
+    : `${base} border-l-transparent text-label-secondary hover:bg-nav-active/60 hover:text-label`
 }
+
+/** 千位分隔：1286 → 1,286。走 en-US 分组符，中文语境里数字分组习惯与西文一致。 */
+const formatCount = (value: number | null | undefined) =>
+  typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('en-US') : '—'
+
+/** 底部计数行的完整文案；空值时整行仍渲染，只是数字变成破折号。 */
+const countsLine = computed(
+  () => `索引 ${formatCount(props.indexCount)} · 分块 ${formatCount(props.chunkCount)}`,
+)
 </script>
 
 <template>
   <aside
     :class="
       props.compact
-        ? 'flex h-full w-full flex-col p-4'
-        : 'material flex h-full w-64 shrink-0 flex-col border-r border-hairline p-6 backdrop-blur-[20px] backdrop-saturate-[180%]'
+        ? 'flex h-full w-full flex-col px-3 pb-3'
+        : 'flex h-full w-rail shrink-0 flex-col border-r border-hairline bg-surface-secondary px-3 pb-3'
     "
   >
-    <div class="flex items-center gap-2.5 px-2 py-0.5">
-      <svg
-        class="h-7 w-7 flex-none text-primary"
-        :class="props.compact && 'h-6 w-6'"
-        fill="none"
-        viewBox="0 0 48 48"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <path
-          d="M13.8261 17.4264C16.7203 18.1174 20.2244 18.5217 24 18.5217C27.7756 18.5217 31.2797 18.1174 34.1739 17.4264C36.9144 16.7722 39.9967 15.2331 41.3563 14.1648L24.8486 40.6391C24.4571 41.267 23.5429 41.267 23.1514 40.6391L6.64374 14.1648C8.00331 15.2331 11.0856 16.7722 13.8261 17.4264Z"
-          fill="currentColor"
-        />
-        <path
-          clip-rule="evenodd"
-          d="M39.998 12.236C39.9944 12.2537 39.9875 12.2845 39.9748 12.3294C39.9436 12.4399 39.8949 12.5741 39.8346 12.7175C39.8168 12.7597 39.7989 12.8007 39.7813 12.8398C38.5103 13.7113 35.9788 14.9393 33.7095 15.4811C30.9875 16.131 27.6413 16.5217 24 16.5217C20.3587 16.5217 17.0125 16.131 14.2905 15.4811C12.0012 14.9346 9.44505 13.6897 8.18538 12.8168C8.17384 12.7925 8.16216 12.767 8.15052 12.7408C8.09919 12.6249 8.05721 12.5114 8.02977 12.411C8.00356 12.3152 8.00039 12.2667 8.00004 12.2612C8.00004 12.261 8 12.2607 8.00004 12.2612C8.00004 12.2359 8.0104 11.9233 8.68485 11.3686C9.34546 10.8254 10.4222 10.2469 11.9291 9.72276C14.9242 8.68098 19.1919 8 24 8C28.8081 8 33.0758 8.68098 36.0709 9.72276C37.5778 10.2469 38.6545 10.8254 39.3151 11.3686C39.9006 11.8501 39.9857 12.1489 39.998 12.236ZM4.95178 15.2312L21.4543 41.6973C22.6288 43.5809 25.3712 43.5809 26.5457 41.6973L43.0534 15.223C43.0709 15.1948 43.0878 15.1662 43.104 15.1371L41.3563 14.1648C43.104 15.1371 43.1038 15.1374 43.104 15.1371L43.1051 15.135L43.1065 15.1325L43.1101 15.1261L43.1199 15.1082C43.1276 15.094 43.1377 15.0754 43.1497 15.0527C43.1738 15.0075 43.2062 14.9455 43.244 14.8701C43.319 14.7208 43.4196 14.511 43.5217 14.2683C43.6901 13.8679 44 13.0689 44 12.2609C44 10.5573 43.003 9.22254 41.8558 8.2791C40.6947 7.32427 39.1354 6.55361 37.385 5.94477C33.8654 4.72057 29.133 4 24 4C18.867 4 14.1346 4.72057 10.615 5.94478C8.86463 6.55361 7.30529 7.32428 6.14419 8.27911C4.99695 9.22255 3.99999 10.5573 3.99999 12.2609C3.99999 13.1275 4.29264 13.9078 4.49321 14.3607C4.60375 14.6102 4.71348 14.8196 4.79687 14.9689C4.83898 15.0444 4.87547 15.1065 4.9035 15.1529C4.91754 15.1762 4.92954 15.1957 4.93916 15.2111L4.94662 15.223L4.95178 15.2312ZM35.9868 18.996L24 38.22L12.0131 18.996C12.4661 19.1391 12.9179 19.2658 13.3617 19.3718C16.4281 20.1039 20.0901 20.5217 24 20.5217C27.9099 20.5217 31.5719 20.1039 34.6383 19.3718C35.082 19.2658 35.5339 19.1391 35.9868 18.996Z"
-          fill="currentColor"
-          fill-rule="evenodd"
-        />
-      </svg>
-      <h1 class="text-[17px] font-bold tracking-[-0.01em] text-label">
+    <!-- 品牌区 62px：字标「知序」+ 16px 方章。
+         字标走系统黑体（中文没有打字机字面，硬凑只会得到错字距的中西混排），
+         方章是蓝底反白「序」—— 品牌不是贴上去的标志，是索引卡左上角的分类号。 -->
+    <div data-test="brand" class="flex h-brand flex-none items-center gap-2 px-2">
+      <h1 data-test="brand-wordmark" class="text-brand tracking-[0.2em] text-label">
         {{ brandTitle }}
       </h1>
+      <span
+        data-test="brand-seal"
+        class="flex h-seal w-seal flex-none items-center justify-center bg-primary text-note font-bold text-surface-tertiary"
+        aria-hidden="true"
+        >序</span
+      >
     </div>
-    <p
-      v-if="brandSubtitle"
-      class="mt-0.5 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary"
-    >
+    <p v-if="brandSubtitle" class="mb-1 px-2 font-type text-micro uppercase text-label-tertiary">
       {{ brandSubtitle }}
     </p>
 
-    <nav class="mt-6 flex flex-col gap-1" role="navigation" aria-label="主导航">
-      <RouterLink
-        v-for="item in items"
-        :key="item.to"
-        :to="item.to"
-        :class="linkClass(item.to)"
-        role="link"
-        :aria-current="isActive(item.to) ? 'page' : undefined"
+    <nav
+      class="mt-2 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
+      role="navigation"
+      aria-label="主导航"
+    >
+      <div
+        v-for="group in groups"
+        :key="group.name"
+        data-test="nav-group"
+        :data-group="group.name"
+        class="flex flex-col gap-0.5"
       >
-        <Icon :icon="item.icon" class="flex-none text-[20px]" />
-        <span class="whitespace-nowrap">{{ item.label }}</span>
-      </RouterLink>
+        <p data-test="nav-group-title" class="px-2 pb-1 font-type text-micro text-label-tertiary">
+          {{ group.name }}
+        </p>
+        <RouterLink
+          v-for="item in group.items"
+          :key="item.to"
+          :to="item.to"
+          :class="linkClass(item.to)"
+          role="link"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
+        >
+          <AppIcon
+            :icon="item.icon"
+            class="flex-none atom-glyph"
+            :style="{ '--atom-glyph-size': '16px' }"
+          />
+          <span class="truncate">{{ item.label }}</span>
+        </RouterLink>
+      </div>
     </nav>
 
-    <!-- 存储指示：父级传入 storageDetail 时渲染（默认隐藏，避免展示假数据） -->
-    <div class="mt-auto">
-      <div v-if="storageDetail" class="px-2 pb-0.5 pt-4">
-        <div class="mb-2 flex items-baseline justify-between">
-          <span class="text-subhead text-label-secondary">存储空间</span>
-          <span
-            class="text-[15px] font-semibold"
-            :class="isStorageWarning ? 'text-danger' : 'text-label'"
-          >
-            {{ storagePercentClamped }}%
-          </span>
-        </div>
-        <div class="h-1.5 overflow-hidden rounded-full bg-surface-tertiary">
-          <div
-            class="h-full rounded-full transition-[width] duration-500 ease-out"
-            :class="isStorageWarning ? 'bg-warning' : 'bg-primary'"
-            :style="{ width: `${storagePercentClamped}%` }"
-          />
-        </div>
-        <div class="mt-2 flex items-center justify-between gap-2">
-          <p class="text-caption text-label-tertiary">{{ storageDetail }}</p>
-          <span
-            v-if="isStorageWarning"
-            class="inline-flex h-[22px] flex-none items-center rounded-full bg-warning-tint px-2.5 text-caption font-semibold text-warning-strong"
-          >
-            空间不足
-          </span>
-        </div>
-      </div>
+    <!-- 底部固定一行等宽计数：页面级计数与同步时间下沉到侧栏，页面里就不再有页脚。 -->
+    <div
+      data-test="shell-counts"
+      class="mt-auto flex-none border-t border-hairline px-2 pt-2 font-type text-micro text-label-tertiary tabular-nums"
+    >
+      {{ countsLine }}
+    </div>
 
-      <!-- 当前用户：加载完成后渲染，退出登录由父级确认后执行 -->
-      <div
-        v-if="userName"
-        class="mt-3 flex items-center gap-2.5 border-t border-hairline px-2 pb-0.5 pt-3"
+    <!-- 当前用户：加载完成后渲染，退出登录由父级确认后执行 -->
+    <div v-if="userName" class="mt-2 flex flex-none items-center gap-2 px-2 pb-0.5">
+      <img
+        v-if="userAvatar"
+        :src="userAvatar"
+        :alt="`${userName} 的头像`"
+        class="h-7 w-7 flex-none object-cover"
+      />
+      <span
+        v-else
+        class="flex h-7 w-7 flex-none items-center justify-center bg-primary-tint text-note font-semibold text-primary-pressed"
+        aria-hidden="true"
+        >{{ avatarInitial }}</span
       >
-        <img
-          v-if="userAvatar"
-          :src="userAvatar"
-          :alt="`${userName} 的头像`"
-          class="h-9 w-9 flex-none rounded-full object-cover"
-        />
-        <span
-          v-else
-          class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary-tint text-[15px] font-semibold text-primary-pressed"
-          aria-hidden="true"
-          >{{ avatarInitial }}</span
-        >
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-subhead font-semibold text-label">{{ userName }}</p>
-          <p v-if="userEmail" class="truncate text-caption text-label-tertiary">{{ userEmail }}</p>
-        </div>
-        <button
-          type="button"
-          aria-label="退出登录"
-          title="退出登录"
-          class="flex h-9 w-9 flex-none items-center justify-center rounded-sm text-label-secondary transition-[background-color,color,transform] duration-150 hover:bg-surface-secondary hover:text-label focus-visible:outline-2 focus-visible:outline-primary active:scale-[0.95]"
-          @click="emit('logout')"
-        >
-          <Icon icon="material-symbols:logout-rounded" class="text-[18px]" aria-hidden="true" />
-        </button>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-body font-semibold text-label">{{ userName }}</p>
+        <p v-if="userEmail" class="truncate text-note text-label-tertiary">{{ userEmail }}</p>
       </div>
+      <button
+        type="button"
+        aria-label="退出登录"
+        title="退出登录"
+        class="flex h-7 w-7 flex-none items-center justify-center text-label-secondary transition-colors tap-target hover:bg-nav-active hover:text-label"
+        @click="emit('logout')"
+      >
+        <AppIcon
+          icon="material-symbols:logout-rounded"
+          class="atom-glyph"
+          aria-hidden="true"
+          :style="{ '--atom-glyph-size': '16px' }"
+        />
+      </button>
     </div>
   </aside>
 </template>

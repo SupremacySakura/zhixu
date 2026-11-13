@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
+import AppButton from '../ui/AppButton.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../../utils/motion'
 import type { FileDisplayItem, PreviewKind } from '../../types/file'
@@ -70,7 +72,7 @@ watch(
         :animate="{ opacity: 1 }"
         :exit="{ opacity: 0 }"
         :transition="fadeTransition"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4 backdrop-blur-sm sm:p-6 md:p-10"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4 sm:p-6 md:p-10"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="titleId"
@@ -82,7 +84,7 @@ watch(
           :animate="{ opacity: 1, scale: 1 }"
           :exit="{ opacity: 0, scale: 0.98 }"
           :transition="springSnappy"
-          class="relative flex h-full max-h-[850px] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-surface shadow-popover"
+          class="relative flex h-full max-h-[850px] w-full max-w-wide flex-col overflow-hidden bg-surface shadow-popover"
         >
           <!-- 头部：类型图标 + 名称 + 元数据 + 圆形关闭 -->
           <div
@@ -90,29 +92,33 @@ watch(
           >
             <div class="flex min-w-0 items-center gap-3">
               <div
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm"
+                class="flex h-10 w-10 shrink-0 items-center justify-center"
                 :class="[fileIconBg, fileIconFg]"
               >
-                <Icon class="text-[22px]" :icon="fileIcon" />
+                <AppIcon
+                  class="atom-glyph"
+                  :icon="fileIcon"
+                  :style="{ '--atom-glyph-size': '22px' }"
+                />
               </div>
               <div class="min-w-0">
                 <h2
                   :id="titleId"
-                  class="max-w-[60vw] truncate text-[17px] font-semibold tracking-[-0.01em] text-label"
+                  class="max-w-[60vw] truncate text-title font-semibold tracking-[-0.01em] text-label"
                 >
                   {{ fileName }}
                 </h2>
-                <p class="text-caption text-label-tertiary">{{ fileTypeLabel }} • {{ fileSize }}</p>
+                <p class="text-note text-label-tertiary">{{ fileTypeLabel }} • {{ fileSize }}</p>
               </div>
             </div>
             <button
               ref="closeButtonRef"
-              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-label-secondary transition-colors duration-150 hover:bg-surface-secondary hover:text-label"
+              class="flex h-9 w-9 shrink-0 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-secondary hover:text-label"
               type="button"
               aria-label="关闭预览"
               @click="handleClose"
             >
-              <Icon icon="material-symbols:close" />
+              <AppIcon icon="material-symbols:close" />
             </button>
           </div>
 
@@ -124,19 +130,20 @@ watch(
                   v-if="loading"
                   class="flex min-h-full flex-col items-center justify-center gap-3 text-label-secondary"
                 >
-                  <Icon
-                    icon="material-symbols:progress-activity"
-                    class="animate-spin text-3xl text-primary"
-                  />
-                  <span class="text-subhead">正在加载预览...</span>
+                  <AppLoading :size="30" class="text-primary" />
+                  <span class="text-body">正在加载预览...</span>
                 </div>
 
                 <div
                   v-else-if="error"
                   class="flex min-h-full flex-col items-center justify-center px-6 text-center text-danger"
                 >
-                  <Icon icon="material-symbols:error" class="mb-2 text-4xl" />
-                  <p class="text-[15px] font-semibold">{{ error }}</p>
+                  <AppIcon
+                    icon="material-symbols:error"
+                    class="mb-2 atom-glyph"
+                    :style="{ '--atom-glyph-size': '36px' }"
+                  />
+                  <p class="text-lead font-semibold">{{ error }}</p>
                 </div>
 
                 <div
@@ -146,14 +153,14 @@ watch(
                   <img
                     :src="url"
                     :alt="fileName"
-                    class="h-auto max-w-full rounded-md border border-hairline bg-surface object-contain shadow-card"
+                    class="h-auto max-w-full border border-hairline bg-surface object-contain shadow-card"
                   />
                 </div>
 
                 <iframe
                   v-else-if="kind === 'pdf' && url"
                   :src="url"
-                  class="h-[calc(100vh-300px)] min-h-[520px] w-full rounded-md border border-hairline bg-surface"
+                  class="h-[calc(100vh-300px)] min-h-[520px] w-full border border-hairline bg-surface"
                   title="PDF 预览"
                 ></iframe>
 
@@ -161,7 +168,7 @@ watch(
                   v-else-if="kind === 'video' && url"
                   class="flex min-h-full w-full items-start justify-center"
                 >
-                  <video controls :src="url" class="max-w-full rounded-md bg-black"></video>
+                  <video controls :src="url" class="max-w-full bg-black"></video>
                 </div>
 
                 <div
@@ -173,7 +180,7 @@ watch(
 
                 <pre
                   v-else-if="kind === 'text'"
-                  class="h-full w-full overflow-auto whitespace-pre-wrap break-words rounded-md border border-hairline bg-surface p-4 text-subhead text-label"
+                  class="h-full w-full overflow-auto whitespace-pre-wrap break-words border border-hairline bg-surface p-4 text-body text-label"
                   >{{ textContent || '文件为空' }}</pre
                 >
 
@@ -182,27 +189,30 @@ watch(
                   class="flex min-h-full flex-col items-center justify-center px-6 text-center text-label-secondary"
                 >
                   <slot name="unsupported" :file="file">
-                    <Icon icon="material-symbols:description" class="mb-2 text-4xl" />
-                    <p class="text-[15px] font-semibold">当前文件类型暂不支持在线预览</p>
-                    <p class="mt-1 text-caption">你可以使用下方按钮下载后查看</p>
+                    <AppIcon
+                      icon="material-symbols:description"
+                      class="mb-2 atom-glyph"
+                      :style="{ '--atom-glyph-size': '36px' }"
+                    />
+                    <p class="text-lead font-semibold">当前文件类型暂不支持在线预览</p>
+                    <p class="mt-1 text-note">你可以使用下方按钮下载后查看</p>
                   </slot>
                 </div>
               </div>
 
-              <!-- 浮动下载条：material-thick 胶囊 -->
+              <!-- 浮动下载条：浮在预览画面上的一条窄工具条 -->
               <div
-                class="material-thick absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full p-1.5 shadow-floating backdrop-blur-[20px] backdrop-saturate-[180%]"
+                class="absolute bottom-6 left-1/2 z-toolbar flex -translate-x-1/2 items-center gap-1 border border-hairline bg-surface p-1.5 shadow-floating"
               >
-                <button
-                  class="flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed disabled:cursor-not-allowed disabled:opacity-60"
-                  type="button"
-                  aria-label="下载文件"
+                <AppButton
+                  tone="primary"
+                  icon="material-symbols:download"
                   :disabled="!canDownload"
+                  aria-label="下载文件"
                   @click="emit('download')"
                 >
-                  <Icon class="text-[18px]" icon="material-symbols:download" />
                   下载
-                </button>
+                </AppButton>
               </div>
             </div>
 
@@ -211,29 +221,29 @@ watch(
               class="flex max-h-72 w-full shrink-0 flex-col overflow-y-auto border-t border-hairline bg-surface p-6 md:max-h-none md:w-80 md:border-l md:border-t-0"
             >
               <h3
-                class="mb-6 text-caption font-semibold uppercase tracking-[0.08em] text-label-tertiary"
+                class="mb-6 text-note font-semibold uppercase tracking-[0.08em] text-label-tertiary"
               >
                 文件详情
               </h3>
               <div class="space-y-6">
                 <div>
-                  <span class="mb-1 block text-caption text-label-tertiary">文件名</span>
-                  <p class="break-all text-sm font-semibold text-label">{{ fileName }}</p>
+                  <span class="mb-1 block text-note text-label-tertiary">文件名</span>
+                  <p class="break-all text-body font-semibold text-label">{{ fileName }}</p>
                 </div>
                 <div>
-                  <span class="mb-1 block text-caption text-label-tertiary">文件大小</span>
-                  <p class="text-sm font-semibold text-label">{{ fileSize }}</p>
+                  <span class="mb-1 block text-note text-label-tertiary">文件大小</span>
+                  <p class="text-body font-semibold text-label">{{ fileSize }}</p>
                 </div>
                 <div>
-                  <span class="mb-1 block text-caption text-label-tertiary">文件类型</span>
-                  <p class="text-sm font-semibold text-label">{{ fileTypeLabel }}</p>
+                  <span class="mb-1 block text-note text-label-tertiary">文件类型</span>
+                  <p class="text-body font-semibold text-label">{{ fileTypeLabel }}</p>
                 </div>
                 <div>
-                  <span class="mb-1 block text-caption text-label-tertiary">最后修改</span>
-                  <p class="text-sm font-semibold text-label">{{ lastModifiedText }}</p>
+                  <span class="mb-1 block text-note text-label-tertiary">最后修改</span>
+                  <p class="text-body font-semibold text-label">{{ lastModifiedText }}</p>
                 </div>
                 <div class="border-t border-hairline pt-5">
-                  <span class="mb-2 block text-caption text-label-tertiary">
+                  <span class="mb-2 block text-note text-label-tertiary">
                     公网分享链接（免鉴权访问）
                   </span>
                   <div v-if="publicShareLink" class="space-y-2">
@@ -241,57 +251,43 @@ watch(
                       :value="publicShareLink"
                       readonly
                       aria-label="公网分享链接"
-                      class="w-full rounded-sm border border-hairline bg-surface-secondary px-3 py-2 text-sm text-label focus:outline-none"
+                      class="w-full border border-hairline bg-surface-secondary px-3 py-2 text-body text-label"
                     />
                     <div class="grid grid-cols-2 gap-2">
-                      <button
-                        class="flex h-9 items-center justify-center gap-1.5 rounded-full bg-primary text-[13px] font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97]"
-                        type="button"
+                      <AppButton
+                        tone="primary"
+                        icon="material-symbols:content-copy-outline"
+                        class="justify-center"
                         aria-label="复制分享链接"
                         @click="emit('copy-share')"
                       >
-                        <Icon class="text-[16px]" icon="material-symbols:content-copy-outline" />
                         复制
-                      </button>
-                      <button
-                        class="flex h-9 items-center justify-center gap-1.5 rounded-full bg-danger text-[13px] font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-danger/90 active:scale-[0.97] disabled:opacity-60"
-                        type="button"
+                      </AppButton>
+                      <AppButton
+                        tone="danger"
+                        :icon="deletingShareLink ? undefined : 'material-symbols:delete-outline'"
+                        :loading="deletingShareLink"
+                        class="justify-center"
                         aria-label="删除分享链接"
                         :disabled="deletingShareLink"
                         @click="emit('delete-share')"
                       >
-                        <Icon
-                          class="text-[16px]"
-                          :icon="
-                            deletingShareLink
-                              ? 'material-symbols:progress-activity'
-                              : 'material-symbols:delete-outline'
-                          "
-                          :class="deletingShareLink ? 'animate-spin' : ''"
-                        />
                         {{ deletingShareLink ? '删除中' : '删除' }}
-                      </button>
+                      </AppButton>
                     </div>
                   </div>
-                  <button
+                  <AppButton
                     v-else
-                    class="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed disabled:opacity-60"
-                    type="button"
+                    tone="primary"
+                    :icon="creatingShareLink ? undefined : 'material-symbols:share'"
+                    :loading="creatingShareLink"
+                    class="w-full justify-center"
                     aria-label="生成公网链接"
                     :disabled="creatingShareLink || !file"
                     @click="emit('create-share')"
                   >
-                    <Icon
-                      class="text-[18px]"
-                      :icon="
-                        creatingShareLink
-                          ? 'material-symbols:progress-activity'
-                          : 'material-symbols:share'
-                      "
-                      :class="creatingShareLink ? 'animate-spin' : ''"
-                    />
                     {{ creatingShareLink ? '生成中' : '生成公网链接' }}
-                  </button>
+                  </AppButton>
                 </div>
               </div>
             </aside>

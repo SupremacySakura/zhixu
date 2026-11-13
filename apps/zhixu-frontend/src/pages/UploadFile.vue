@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
+import AppBadge from '../components/ui/AppBadge.vue'
+import AppButton from '../components/ui/AppButton.vue'
+import AppDialog from '../components/ui/AppDialog.vue'
+import AppEmptyState from '../components/ui/AppEmptyState.vue'
+import AppIcon from '../components/ui/AppIcon.vue'
+import AppLoading from '../components/ui/AppLoading.vue'
 import { computed, reactive, ref } from 'vue'
-import { AnimatePresence, Motion } from 'motion-v'
-import { fadeTransition, springSnappy } from '../utils/motion'
 import { getListByFolderIDAndUserID, uploadFile } from '../services/apis/file'
 import { detectFileType, formatBytes, iconForFile } from '../utils/file'
 import { createId } from '../utils/hash'
@@ -196,21 +199,34 @@ const startUpload = async (item: QueueItem) => {
   }
 }
 
+/**
+ * 队列状态词（R18）。
+ *
+ * 这里原先返回 Success / Failed / Canceled / Merging / Hashing / Pending ——
+ * 「一个字未改」约束的是**既有中文串**，英文串与「中文界面」自相矛盾，
+ * 所以整组换成中文。上传中是唯一带数字的状态，保留百分比。
+ */
 const badgeText = (item: QueueItem) => {
-  if (item.status === 'success') return 'Success'
-  if (item.status === 'failed') return 'Failed'
-  if (item.status === 'canceled') return 'Canceled'
-  if (item.status === 'merging') return 'Merging'
-  if (item.status === 'hashing') return 'Hashing'
-  if (item.status === 'pending') return 'Pending'
+  if (item.status === 'success') return '成功'
+  if (item.status === 'failed') return '失败'
+  if (item.status === 'canceled') return '已取消'
+  if (item.status === 'merging') return '合并中'
+  if (item.status === 'hashing') return '校验中'
+  if (item.status === 'pending') return '等待中'
   return `${clampPercent(item.percent)}%`
 }
 
-const badgeClass = (item: QueueItem) => {
-  if (item.status === 'failed') return 'text-danger'
-  if (item.status === 'success') return 'text-primary'
-  if (item.status === 'canceled') return 'text-label-tertiary'
-  return 'text-primary'
+/**
+ * 状态语气：徽章的颜色由 AppBadge 的 tone 决定，不再手写 text-* 类。
+ * 终态用实义语气（成功=primary / 失败=danger / 取消=neutral），
+ * 进行中用 info，读起来「还在动」而不是「已经定了」。
+ */
+const badgeTone = (item: QueueItem): 'primary' | 'danger' | 'neutral' | 'info' => {
+  if (item.status === 'failed') return 'danger'
+  if (item.status === 'success') return 'primary'
+  if (item.status === 'canceled') return 'neutral'
+  if (item.status === 'pending') return 'neutral'
+  return 'info'
 }
 </script>
 
@@ -218,27 +234,33 @@ const badgeClass = (item: QueueItem) => {
   <div class="flex min-w-0 flex-1 flex-col bg-canvas text-label">
     <LoginRequiredPlaceholder v-if="!userStore.isLoggedIn" />
     <template v-else>
-      <main class="flex-1 overflow-y-auto">
-        <div
-          class="mx-auto flex w-full max-w-[960px] flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
-        >
+      <!-- 页头带 64px：上传是表单原型（DESIGN 原型 ④），容器 panel（896）。
+           标题原先是页面内 section，现在提到带里，与其他八页对齐。 -->
+      <header class="shell-band-panel">
+        <div class="min-w-0 flex-1">
+          <h1 class="text-title">上传文件</h1>
+          <p class="font-type text-micro text-label-tertiary">拖拽或选择文件，保留原件</p>
+        </div>
+      </header>
+
+      <main class="shell-page">
+        <!-- 分节 48px（DESIGN §Layout ④表单：字段 24 / 分节 48） -->
+        <div class="shell-panel flex flex-col gap-12">
           <!-- 上传目录信息条 -->
-          <section
-            class="flex items-center justify-between gap-4 rounded-md bg-surface px-[18px] py-3.5 shadow-card"
-          >
+          <section class="cabinet-card flex items-center justify-between gap-4 px-[18px] py-3.5">
             <div class="min-w-0">
-              <p class="text-caption text-label-secondary">上传目录</p>
-              <p class="text-headline truncate text-label">{{ selectedUploadFolderPath }}</p>
+              <p class="text-note text-label-secondary">上传目录</p>
+              <p class="text-lead truncate text-label">{{ selectedUploadFolderPath }}</p>
             </div>
-            <button
-              class="inline-flex h-10 flex-none items-center gap-1.5 rounded-full bg-primary-tint px-4 text-[15px] font-semibold text-primary transition-[background-color,scale] duration-150 hover:bg-primary/[0.18] active:scale-[0.97]"
-              type="button"
+            <AppButton
+              tone="secondary"
+              size="md"
+              icon="material-symbols:folder-open-outline"
               aria-label="选择上传目录"
               @click="openFolderPicker"
             >
-              <Icon icon="material-symbols:folder-open-outline" />
               选择目录
-            </button>
+            </AppButton>
           </section>
 
           <input
@@ -251,7 +273,7 @@ const badgeClass = (item: QueueItem) => {
 
           <!-- 大拖放区：虚线淡描边 + surface-secondary 底；悬停品牌绿描边，拖拽中 primary-tint 底 + 轻微放大 -->
           <section
-            class="group flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-label-tertiary bg-surface-secondary px-4 py-16 text-center transition-[transform,border-color,background-color,box-shadow] duration-200 ease-out hover:border-primary"
+            class="group flex cursor-pointer flex-col items-center justify-center border-2 border-dashed border-label-tertiary bg-surface-secondary px-4 py-16 text-center transition-[transform,border-color,background-color,box-shadow] hover:border-primary"
             :class="isDragging ? 'scale-[1.01] border-primary bg-primary-tint shadow-card' : ''"
             @click="openFileDialog"
             @dragover="onDragOver"
@@ -259,223 +281,175 @@ const badgeClass = (item: QueueItem) => {
             @drop="onDrop"
           >
             <div
-              class="mb-4 flex size-16 items-center justify-center rounded-full bg-surface text-primary shadow-card transition-transform duration-200 ease-out group-hover:scale-110"
+              class="mb-4 flex size-16 items-center justify-center bg-surface text-primary shadow-card transition-transform"
               :class="isDragging ? 'scale-110' : ''"
             >
-              <Icon class="text-[28px]" icon="material-symbols:upload-file" />
+              <AppIcon
+                class="atom-glyph"
+                icon="material-symbols:upload-file"
+                :style="{ '--atom-glyph-size': '28px' }"
+              />
             </div>
-            <h3 class="text-title-3 mb-1.5">拖拽文件到此处上传</h3>
-            <p class="text-subhead mb-5 max-w-sm text-label-secondary">
+            <h3 class="text-title mb-1.5">拖拽文件到此处上传</h3>
+            <p class="text-body mb-5 max-w-sm text-label-secondary">
               支持图片、视频、文档与压缩包等常见格式。
             </p>
-            <button
-              class="h-10 rounded-full bg-surface px-[18px] text-[15px] font-semibold text-label ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97]"
-              type="button"
-              aria-label="选择文件"
-            >
-              选择文件
-            </button>
+            <AppButton tone="secondary" size="lg" aria-label="选择文件">选择文件</AppButton>
           </section>
 
-          <!-- 选择上传目录弹窗：Teleport + 遮罩淡入淡出 + 面板弹簧 scale 0.96→1（motion-v） -->
-          <Teleport to="body">
-            <AnimatePresence>
-              <Motion
-                v-if="isFolderPickerOpen"
-                key="folder-picker-overlay"
-                :initial="{ opacity: 0 }"
-                :animate="{ opacity: 1 }"
-                :exit="{ opacity: 0 }"
-                :transition="fadeTransition"
-                class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
-                role="dialog"
-                aria-modal="true"
-                @click.self="closeFolderPicker"
+          <!-- 选择上传目录弹窗 -->
+          <AppDialog
+            v-model="isFolderPickerOpen"
+            title="选择上传目录"
+            description="默认上传到 root，可切换到任意已有文件夹。"
+            size="md"
+            @close="closeFolderPicker"
+          >
+            <div class="mb-3 flex items-center justify-between gap-3">
+              <nav class="flex items-center gap-1.5 overflow-x-auto text-note text-label-secondary">
+                <template v-for="(bc, idx) in folderPickerBreadcrumbs" :key="`${bc.id}-${idx}`">
+                  <button
+                    v-if="idx < folderPickerBreadcrumbs.length - 1"
+                    class="whitespace-nowrap transition-colors hover:text-primary"
+                    type="button"
+                    :aria-label="`导航到 ${bc.name}`"
+                    @click="goToFolderPickerBreadcrumb(idx)"
+                  >
+                    {{ bc.name }}
+                  </button>
+                  <span v-else class="whitespace-nowrap font-semibold text-label">
+                    {{ bc.name }}
+                  </span>
+                  <AppIcon
+                    v-if="idx < folderPickerBreadcrumbs.length - 1"
+                    icon="material-symbols:chevron-right"
+                    class="text-body text-label-tertiary"
+                  />
+                </template>
+              </nav>
+              <AppButton size="sm" aria-label="选择当前目录" @click="selectCurrentFolderForUpload">
+                选择当前目录
+              </AppButton>
+            </div>
+
+            <!-- 目录浏览器：48px 行，hover 底色，分隔线自图标后内缩 -->
+            <div class="overflow-hidden border border-hairline">
+              <div class="max-h-72 overflow-y-auto">
+                <!-- 加载态：三页统一用 AppLoading（不传 label，见 R13） -->
+                <div
+                  v-if="isFolderPickerLoading"
+                  class="flex items-center gap-2.5 px-3.5 py-3 text-body text-label-secondary"
+                >
+                  <AppLoading size="sm" />正在加载目录...
+                </div>
+                <div v-else-if="folderPickerErrorMessage" class="px-3.5 py-3 text-body text-danger">
+                  {{ folderPickerErrorMessage }}
+                </div>
+                <template v-else>
+                  <template v-for="(folder, index) in folderPickerFolders" :key="folder.id">
+                    <button
+                      class="flex min-h-12 w-full items-center gap-2.5 px-3.5 text-left transition-colors hover:bg-surface-secondary"
+                      type="button"
+                      :aria-label="`打开文件夹 ${folder.name}`"
+                      @click="goToFolderPickerFolder(folder)"
+                    >
+                      <AppIcon
+                        icon="material-symbols:folder"
+                        class="flex-none atom-glyph text-primary"
+                        :style="{ '--atom-glyph-size': '18px' }"
+                      />
+                      <span class="min-w-0 flex-1 truncate text-body text-label">
+                        {{ folder.name }}
+                      </span>
+                      <AppIcon
+                        icon="material-symbols:chevron-right"
+                        class="flex-none atom-glyph text-label-tertiary"
+                        :style="{ '--atom-glyph-size': '16px' }"
+                      />
+                    </button>
+                    <div
+                      v-if="index < folderPickerFolders.length - 1"
+                      class="ml-[52px] h-px bg-hairline"
+                    />
+                  </template>
+                  <div
+                    v-if="folderPickerFolders.length === 0"
+                    class="px-3.5 py-3 text-body text-label-secondary"
+                  >
+                    当前目录下没有子文件夹
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <template #footer>
+              <AppButton aria-label="取消选择" @click="closeFolderPicker">取消</AppButton>
+              <AppButton
+                tone="primary"
+                aria-label="确认选择当前目录"
+                @click="selectCurrentFolderForUpload"
               >
-                <Motion
-                  :initial="{ opacity: 0, scale: 0.96 }"
-                  :animate="{ opacity: 1, scale: 1 }"
-                  :exit="{ opacity: 0, scale: 0.98 }"
-                  :transition="springSnappy"
-                  class="flex max-h-[min(80vh,42rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-surface p-6 shadow-popover"
-                  @click.stop
-                >
-                  <h3 class="text-title-3 mb-2">选择上传目录</h3>
-                  <p class="text-subhead text-label-secondary mb-4">
-                    默认上传到 root，可切换到任意已有文件夹。
-                  </p>
+                确认
+              </AppButton>
+            </template>
+          </AppDialog>
 
-                  <div class="mb-3 flex items-center justify-between gap-3">
-                    <nav
-                      class="flex items-center gap-1.5 overflow-x-auto text-caption text-label-secondary"
-                    >
-                      <template
-                        v-for="(bc, idx) in folderPickerBreadcrumbs"
-                        :key="`${bc.id}-${idx}`"
-                      >
-                        <button
-                          v-if="idx < folderPickerBreadcrumbs.length - 1"
-                          class="whitespace-nowrap rounded-sm transition-colors duration-150 hover:text-primary"
-                          type="button"
-                          :aria-label="`导航到 ${bc.name}`"
-                          @click="goToFolderPickerBreadcrumb(idx)"
-                        >
-                          {{ bc.name }}
-                        </button>
-                        <span v-else class="whitespace-nowrap font-semibold text-label">
-                          {{ bc.name }}
-                        </span>
-                        <Icon
-                          v-if="idx < folderPickerBreadcrumbs.length - 1"
-                          icon="material-symbols:chevron-right"
-                          class="text-[14px] text-label-tertiary"
-                        />
-                      </template>
-                    </nav>
-                    <button
-                      class="h-8 flex-none rounded-full bg-surface px-3.5 text-[13px] font-semibold text-label ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97]"
-                      type="button"
-                      aria-label="选择当前目录"
-                      @click="selectCurrentFolderForUpload"
-                    >
-                      选择当前目录
-                    </button>
-                  </div>
-
-                  <!-- 目录浏览器：48px 行，hover 底色，分隔线自图标后内缩 -->
-                  <div class="overflow-hidden rounded-md border border-hairline">
-                    <div class="max-h-72 overflow-y-auto">
-                      <div
-                        v-if="isFolderPickerLoading"
-                        class="px-3.5 py-3 text-subhead text-label-secondary"
-                      >
-                        正在加载目录...
-                      </div>
-                      <div
-                        v-else-if="folderPickerErrorMessage"
-                        class="px-3.5 py-3 text-subhead text-danger"
-                      >
-                        {{ folderPickerErrorMessage }}
-                      </div>
-                      <template v-else>
-                        <template v-for="(folder, index) in folderPickerFolders" :key="folder.id">
-                          <button
-                            class="flex min-h-12 w-full items-center gap-2.5 px-3.5 text-left transition-colors duration-150 hover:bg-surface-secondary focus:outline-none"
-                            type="button"
-                            :aria-label="`打开文件夹 ${folder.name}`"
-                            @click="goToFolderPickerFolder(folder)"
-                          >
-                            <Icon
-                              icon="material-symbols:folder"
-                              class="flex-none text-[18px] text-primary"
-                            />
-                            <span class="min-w-0 flex-1 truncate text-subhead text-label">
-                              {{ folder.name }}
-                            </span>
-                            <Icon
-                              icon="material-symbols:chevron-right"
-                              class="flex-none text-[16px] text-label-tertiary"
-                            />
-                          </button>
-                          <div
-                            v-if="index < folderPickerFolders.length - 1"
-                            class="ml-[52px] h-px bg-hairline"
-                          />
-                        </template>
-                        <div
-                          v-if="folderPickerFolders.length === 0"
-                          class="px-3.5 py-3 text-subhead text-label-secondary"
-                        >
-                          当前目录下没有子文件夹
-                        </div>
-                      </template>
-                    </div>
-                  </div>
-
-                  <div class="mt-5 flex justify-end gap-3">
-                    <button
-                      class="h-10 rounded-full bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97]"
-                      type="button"
-                      aria-label="取消选择"
-                      @click="closeFolderPicker"
-                    >
-                      取消
-                    </button>
-                    <button
-                      class="h-10 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed"
-                      type="button"
-                      aria-label="确认选择当前目录"
-                      @click="selectCurrentFolderForUpload"
-                    >
-                      确认
-                    </button>
-                  </div>
-                </Motion>
-              </Motion>
-            </AnimatePresence>
-          </Teleport>
-
-          <!-- 上传队列 -->
-          <section>
+          <!-- 上传队列（分节交界：一条 hairline；gap-12 已给上方 48px） -->
+          <section class="border-t border-hairline pt-6">
             <div class="mb-3.5 flex items-center justify-between gap-3">
-              <h3 class="text-title-3">上传队列</h3>
+              <h3 class="text-title">上传队列</h3>
               <div class="flex items-center gap-4">
-                <span class="text-subhead text-label-secondary"
-                  >{{ processingCount }} 项处理中</span
-                >
-                <button
-                  class="flex h-8 items-center rounded-full px-3 text-[13px] font-semibold text-primary transition-[background-color,scale] duration-150 hover:bg-primary-tint active:scale-[0.97]"
-                  type="button"
+                <span class="text-body text-label-secondary">{{ processingCount }} 项处理中</span>
+                <AppButton
+                  tone="quiet"
+                  size="sm"
                   aria-label="清理已完成的上传任务"
                   @click="clearCompleted"
                 >
                   清理已完成
-                </button>
+                </AppButton>
               </div>
             </div>
 
-            <div
+            <AppEmptyState
               v-if="items.length === 0"
-              class="rounded-md bg-surface p-10 text-center shadow-card"
-            >
-              <p class="text-body text-label-secondary">暂无上传任务</p>
-            </div>
+              title="暂无上传任务"
+              description="拖拽文件到上方虚线区，或点击「选择文件」。"
+              icon="material-symbols:upload-file"
+            />
 
             <div v-else class="flex flex-col gap-3">
               <div
                 v-for="item in items"
                 :key="item.id"
-                class="flex min-h-16 items-center gap-3 rounded-md bg-surface-secondary/70 p-3.5 transition-colors duration-150 hover:bg-surface-tertiary/60"
+                class="flex min-h-16 items-center gap-3 bg-surface-secondary/70 p-3.5 transition-colors hover:bg-surface-tertiary/60"
               >
                 <span
-                  class="flex h-10 w-10 flex-none items-center justify-center rounded-sm"
+                  class="flex h-10 w-10 flex-none items-center justify-center"
                   :class="`${iconForFile(item.file).bg} ${iconForFile(item.file).fg}`"
                 >
-                  <Icon class="text-[20px]" :icon="iconForFile(item.file).icon" />
+                  <AppIcon
+                    class="atom-glyph"
+                    :icon="iconForFile(item.file).icon"
+                    :style="{ '--atom-glyph-size': '20px' }"
+                  />
                 </span>
 
                 <div class="flex min-w-0 flex-1 flex-col gap-1.5">
                   <div class="flex items-center justify-between gap-3">
                     <p
-                      class="truncate text-[15px] font-semibold"
+                      class="truncate text-lead font-semibold"
                       :class="item.status === 'canceled' ? 'text-label-secondary' : 'text-label'"
                     >
                       {{ item.file.name }}
                     </p>
-                    <span
-                      class="flex-none text-caption font-bold uppercase tracking-[0.06em]"
-                      :class="badgeClass(item)"
-                    >
-                      {{ badgeText(item) }}
-                    </span>
+                    <AppBadge size="sm" :tone="badgeTone(item)">{{ badgeText(item) }}</AppBadge>
                   </div>
 
                   <div class="flex min-w-0 items-center gap-3">
-                    <div
-                      class="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-tertiary"
-                    >
+                    <div class="h-1.5 min-w-0 flex-1 overflow-hidden bg-surface-tertiary">
                       <div
-                        class="h-full rounded-full transition-[width] duration-[120ms] ease-linear"
+                        class="h-full transition-[width] duration-standard"
                         :class="
                           item.status === 'failed'
                             ? 'bg-danger'
@@ -486,55 +460,58 @@ const badgeClass = (item: QueueItem) => {
                         :style="{ width: `${clampPercent(item.percent)}%` }"
                       ></div>
                     </div>
-                    <span class="flex-none truncate text-caption text-label-secondary">
+                    <span class="flex-none truncate text-note text-label-secondary">
                       {{ formatBytes(item.file.size) }} • {{ item.message || '等待中' }}
                     </span>
                   </div>
                 </div>
 
-                <div class="flex flex-none items-center gap-1.5">
-                  <button
+                <div class="flex flex-none items-center gap-1.5 pointer-coarse:gap-3">
+                  <AppButton
                     v-if="item.status === 'failed'"
-                    class="flex h-8 items-center gap-1.5 rounded-full bg-primary-tint px-3 text-[13px] font-semibold text-primary transition-[background-color,scale] duration-150 hover:bg-primary/[0.18] active:scale-[0.97]"
-                    type="button"
+                    size="sm"
+                    icon="material-symbols:replay"
                     aria-label="重试上传"
                     @click="retryItem(item)"
                   >
-                    <Icon class="text-[16px]" icon="material-symbols:replay" />
                     重试
-                  </button>
+                  </AppButton>
 
                   <div
                     v-if="item.status === 'success'"
                     class="p-1.5 text-primary"
                     aria-label="上传成功"
                   >
-                    <Icon class="text-[22px]" icon="material-symbols:check-circle" />
+                    <AppIcon
+                      class="atom-glyph"
+                      icon="material-symbols:check-circle"
+                      :style="{ '--atom-glyph-size': '22px' }"
+                    />
                   </div>
 
-                  <button
+                  <AppButton
                     v-if="
                       item.status === 'uploading' ||
                       item.status === 'hashing' ||
                       item.status === 'merging'
                     "
-                    class="flex h-9 w-9 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-danger"
-                    type="button"
+                    tone="quiet"
+                    size="sm"
+                    icon-only
+                    icon="material-symbols:close"
                     aria-label="取消上传"
                     @click="cancelItem(item)"
-                  >
-                    <Icon class="text-[20px]" icon="material-symbols:close" />
-                  </button>
+                  />
 
-                  <button
+                  <AppButton
                     v-else
-                    class="flex h-9 w-9 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-danger"
-                    type="button"
+                    tone="quiet"
+                    size="sm"
+                    icon-only
+                    icon="material-symbols:close"
                     aria-label="移除任务"
                     @click="removeItem(item.id)"
-                  >
-                    <Icon class="text-[20px]" icon="material-symbols:close" />
-                  </button>
+                  />
                 </div>
               </div>
             </div>

@@ -8,7 +8,7 @@ vi.mock('../../../services/apis/knowledge', async importOriginal => {
   const mod = await importOriginal<typeof import('../../../services/apis/knowledge')>()
   return { ...mod, retryKnowledgeVectorize: vi.fn() }
 })
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 
 const mockRetry = vi.mocked(retryKnowledgeVectorize)
 const mounted: ReturnType<typeof mount>[] = []

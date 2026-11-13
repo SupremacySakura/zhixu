@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import type { FileDisplayItem, FileItemKey } from '../../types/file'
 import { formatBytes } from '../../utils/file'
 import { ownerInitials } from '../../utils/file-management'
 import FileEmptyState from './FileEmptyState.vue'
+import FileSelectBox from './FileSelectBox.vue'
 import FileKnowledgeAction from '../knowledge/FileKnowledgeAction.vue'
 import type { KnowledgeItem } from '../../services/apis/knowledge'
 
@@ -36,10 +38,6 @@ const emit = defineEmits<{
 const ownerBadge = computed(() => ownerInitials(props.ownerName))
 
 const handleItemClick = (file: FileDisplayItem) => emit('open-item', file)
-const handleToggleSelect = (file: FileDisplayItem, event: Event) => {
-  const input = event.currentTarget
-  if (input instanceof HTMLInputElement) emit('toggle-select', file, input.checked)
-}
 const handleOpenMenu = (file: FileDisplayItem, event: MouseEvent) => {
   const anchor = event.currentTarget
   if (anchor instanceof HTMLElement) emit('open-menu', file, anchor)
@@ -49,18 +47,20 @@ const isSelected = (key: FileItemKey) => props.selectedIds.has(key)
 
 const cardClass = (key: FileItemKey) =>
   [
-    'relative cursor-pointer select-none rounded-md bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-popover',
+    'relative cursor-pointer select-none bg-surface p-4 shadow-card transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-popover',
     isSelected(key) ? 'ring-2 ring-primary' : '',
   ].join(' ')
 </script>
 
 <template>
   <div>
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- 基础档就是两列：375px 下双列卡片是 DESIGN.md:514 的明确要求，
+         原来只在 sm（≥640px）以上才双列，375 下退成单列，等于窄屏信息密度腰斩。 -->
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
       <!-- 「..」返回上一级目录卡 -->
       <div
         v-if="hasParentFolder"
-        class="relative cursor-pointer select-none rounded-md bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-popover"
+        class="relative cursor-pointer select-none bg-surface p-4 shadow-card transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-popover"
         role="button"
         tabindex="0"
         @click="emit('go-parent')"
@@ -68,13 +68,17 @@ const cardClass = (key: FileItemKey) =>
       >
         <div class="flex items-start gap-3">
           <span
-            class="flex h-11 w-11 flex-none items-center justify-center rounded-sm bg-warning-tint text-warning"
+            class="flex h-11 w-11 flex-none items-center justify-center bg-warning-tint text-warning"
           >
-            <Icon class="text-[22px]" icon="material-symbols:folder" />
+            <AppIcon
+              class="atom-glyph"
+              icon="material-symbols:folder"
+              :style="{ '--atom-glyph-size': '22px' }"
+            />
           </span>
           <div class="min-w-0">
-            <p class="truncate text-[15px] font-semibold leading-5 text-label">..</p>
-            <p class="mt-0.5 text-[13px] text-label-secondary">返回上一级目录</p>
+            <p class="truncate text-lead leading-5 text-label">..</p>
+            <p class="mt-0.5 text-note text-label-secondary">返回上一级目录</p>
           </div>
         </div>
       </div>
@@ -90,50 +94,31 @@ const cardClass = (key: FileItemKey) =>
       >
         <div class="flex items-start gap-3">
           <span
-            class="flex h-11 w-11 flex-none items-center justify-center rounded-sm"
+            class="flex h-11 w-11 flex-none items-center justify-center"
             :class="`${file.iconBg} ${file.iconFg}`"
           >
-            <Icon class="text-[22px]" :icon="file.icon" />
+            <AppIcon
+              class="atom-glyph"
+              :icon="file.icon"
+              :style="{ '--atom-glyph-size': '22px' }"
+            />
           </span>
           <div class="min-w-0 flex-1">
-            <p class="line-clamp-2 text-[15px] font-semibold leading-5 text-label">
+            <p class="line-clamp-2 text-lead leading-5 text-label">
               {{ file.name }}
             </p>
-            <p class="mt-0.5 truncate text-[13px] text-label-secondary">{{ file.typeLabel }}</p>
+            <p class="mt-0.5 truncate text-note text-label-secondary">{{ file.typeLabel }}</p>
           </div>
-          <label class="inline-flex flex-none cursor-pointer pt-0.5" @click.stop>
-            <input
-              type="checkbox"
-              class="peer sr-only"
-              :aria-label="`选择 ${file.name}`"
+          <span class="flex-none pt-0.5">
+            <FileSelectBox
+              :label="`选择 ${file.name}`"
               :checked="isSelected(file.key)"
-              @change="handleToggleSelect(file, $event)"
+              @change="checked => emit('toggle-select', file, checked)"
             />
-            <span
-              class="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-label-tertiary bg-surface transition-all duration-100 hover:border-primary peer-checked:border-primary peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 active:scale-[0.88]"
-            >
-              <svg
-                v-if="isSelected(file.key)"
-                class="h-[11px] w-[11px]"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="m5 12.5 5 5L19 8"
-                  stroke="#fff"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </span>
-          </label>
+          </span>
         </div>
 
-        <div
-          class="mt-3.5 flex items-center justify-between gap-2 text-caption text-label-secondary"
-        >
+        <div class="mt-3.5 flex items-center justify-between gap-2 text-note text-label-secondary">
           <span>{{ file.type === 'folder' ? '-' : formatBytes(file.size) }}</span>
           <span class="whitespace-nowrap">{{ file.lastModifiedText }}</span>
         </div>
@@ -147,30 +132,31 @@ const cardClass = (key: FileItemKey) =>
         <div class="mt-3 flex items-center justify-between gap-2">
           <div class="flex min-w-0 items-center gap-2">
             <span
-              class="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-surface-tertiary text-[10px] font-bold tracking-[0.02em] text-label-secondary"
+              class="flex h-6 w-6 flex-none items-center justify-center bg-surface-tertiary text-note font-bold tracking-[0.02em] text-label-secondary"
             >
               {{ ownerBadge }}
             </span>
-            <span class="truncate text-caption text-label-secondary">{{ ownerName }}</span>
+            <span class="truncate text-note text-label-secondary">{{ ownerName }}</span>
           </div>
           <button
-            class="flex h-8 w-8 flex-none items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-tertiary hover:text-label"
+            class="flex h-8 w-8 flex-none items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-tertiary hover:text-label"
             type="button"
             :aria-label="`${file.name} 操作菜单`"
             @click.stop="handleOpenMenu(file, $event)"
           >
-            <Icon class="text-[18px]" icon="material-symbols:more-vert" />
+            <AppIcon
+              class="atom-glyph"
+              icon="material-symbols:more-vert"
+              :style="{ '--atom-glyph-size': '18px' }"
+            />
           </button>
         </div>
       </div>
 
       <div v-if="loading" class="col-span-full py-20">
         <div class="flex flex-col items-center justify-center text-center">
-          <Icon
-            icon="material-symbols:progress-activity"
-            class="mb-3 animate-spin text-[28px] text-primary"
-          />
-          <p class="text-subhead text-label-tertiary">加载中...</p>
+          <AppLoading :size="28" class="mb-3 text-primary" />
+          <p class="text-note text-label-tertiary">加载中...</p>
         </div>
       </div>
       <div v-else-if="files.length === 0" class="col-span-full py-20">

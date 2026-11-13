@@ -64,20 +64,20 @@ const danger = computed(() => state.value === 'partial')
 const showChunksLink = computed(() => props.item.chunks_total > 0)
 </script>
 <template>
-  <section v-if="visible" class="rounded-lg border border-hairline bg-surface p-5">
+  <section v-if="visible" class="border border-hairline bg-surface p-5">
     <div class="mb-5 flex items-center justify-between gap-3">
       <h2 class="text-body font-semibold">向量化</h2>
       <KnowledgeVectorBadge v-if="state" :state="state" />
     </div>
     <dl class="space-y-5">
       <div v-for="row in rows" :key="row.label">
-        <dt class="text-caption text-label-secondary">{{ row.label }}</dt>
-        <dd class="mt-1.5 break-all text-subhead">{{ row.value }}</dd>
+        <dt class="text-note text-label-secondary">{{ row.label }}</dt>
+        <dd class="mt-1.5 break-all text-body">{{ row.value }}</dd>
       </div>
     </dl>
     <p
       v-if="message"
-      class="mt-5 rounded-sm px-3 py-2.5 text-caption leading-5"
+      class="mt-5 px-3 py-2.5 text-note leading-5"
       :class="danger ? 'bg-danger-tint text-danger' : 'bg-surface-secondary text-label-secondary'"
       role="status"
     >
@@ -86,23 +86,23 @@ const showChunksLink = computed(() => props.item.chunks_total > 0)
     <div v-if="canRetry" class="mt-4">
       <button
         type="button"
-        class="knowledge-button-tint w-full"
+        class="atom-btn atom-tone-tint atom-btn-wide w-full"
         :disabled="retrying"
         @click="retry"
       >
         {{ retrying ? '正在重新排队…' : '重试向量化' }}
       </button>
-      <p class="mt-2 text-caption leading-5 text-label-secondary">
+      <p class="mt-2 text-note leading-5 text-label-secondary">
         仅重试失败分块，已成功分块不重复计费。
       </p>
-      <p v-if="retryError" class="mt-2 text-caption leading-5 text-danger" role="alert">
+      <p v-if="retryError" class="mt-2 text-note leading-5 text-danger" role="alert">
         {{ retryError }}
       </p>
     </div>
     <RouterLink
       v-if="showChunksLink"
       :to="`/home/knowledge/${item.id}/chunks`"
-      class="knowledge-button-tint mt-4 w-full"
+      class="atom-btn atom-tone-tint atom-btn-wide mt-4 w-full"
       >查看分块结构</RouterLink
     >
   </section>

@@ -2,7 +2,9 @@
 import { computed, ref } from 'vue'
 import { downloadByPickupCode } from '../services/apis/file'
 import { formatBytes, iconForListItem } from '../utils/file'
-import { Icon } from '@iconify/vue'
+import AppButton from '../components/ui/AppButton.vue'
+import AppIcon from '../components/ui/AppIcon.vue'
+import BrandMark from '../components/ui/BrandMark.vue'
 
 const codeDigits = ref<string[]>(Array.from({ length: 6 }, () => ''))
 const inputRefs = ref<(HTMLInputElement | null)[]>(Array.from({ length: 6 }, () => null))
@@ -144,116 +146,147 @@ const handleRetrieve = async () => {
 </script>
 
 <template>
+  <!-- 取件页：一个入口动作 + 一张结果卡。
+       六位取件码是「填空」不是「六个盒子」——每格只画下沿一条墨线，
+       六格落在同一条水平线上，所以整屏只多一条线（DESIGN.md 硬上限 ≤5）。 -->
   <div class="flex min-h-screen flex-col">
-    <main class="flex flex-1 items-center justify-center p-4 sm:p-8 lg:p-12">
-      <!-- Main Container -->
-      <div class="w-full max-w-[480px] space-y-8">
-        <!-- Entry Card -->
-        <div class="rounded-xl bg-surface p-6 shadow-card sm:p-8">
-          <div class="mb-7 text-center">
-            <h1 class="text-display mb-2 text-label">文件取件</h1>
+    <main
+      id="main-content"
+      tabindex="-1"
+      class="flex flex-1 flex-col items-center justify-center px-4 py-12"
+    >
+      <div class="w-full max-w-[480px]">
+        <div class="mb-6 flex items-center">
+          <BrandMark />
+        </div>
+
+        <!-- 入口卡 -->
+        <div class="cabinet-card p-6 sm:p-8">
+          <div class="mb-8 text-center">
+            <h1 class="text-display mb-2">文件取件</h1>
             <p class="text-body text-label-secondary">请输入您的 6 位提取码获取文件</p>
           </div>
+
           <div class="space-y-6">
-            <!-- 6 位取件码：输入自动跳格 / Backspace 回退 / 方向键移动 / 粘贴分发 -->
-            <div class="grid grid-cols-6 gap-2 sm:gap-2.5" :class="errorMessage && 'code-shake'">
-              <input
-                v-for="(_, index) in codeDigits"
-                :key="index"
-                :ref="el => setInputRef(el as HTMLInputElement | null, index)"
-                :aria-label="`取件码第${index + 1}位`"
-                class="aspect-square min-w-0 w-full cursor-default rounded-sm border-[1.5px] text-center font-mono text-title-3 uppercase text-label caret-primary transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-label-tertiary focus:outline-none"
-                :class="
-                  errorMessage
-                    ? 'border-danger bg-surface ring-[3px] ring-danger-tint'
-                    : 'border-hairline bg-surface-secondary focus:border-primary focus:bg-surface focus:ring-[3px] focus:ring-primary-tint'
-                "
-                maxlength="1"
-                inputmode="text"
-                placeholder="·"
-                type="text"
-                :autofocus="index === 0"
-                :value="codeDigits[index]"
-                @input="handleInput(index, $event)"
-                @keydown="handleKeydown(index, $event)"
-                @paste="handlePaste"
-              />
+            <!-- 6 位取件码：输入自动跳格 / Backspace 回退 / 方向键移动 / 粘贴分发。
+                 六个格子共用**一条**下沿墨线（填空，不是六个盒子）——
+                 整屏因此只多一条线，且失败时抖的是这条线连同码字，不是六个框各自抖。 -->
+            <div
+              class="pickup-line"
+              :class="{ 'is-error': errorMessage, 'code-shake': errorMessage }"
+            >
+              <div class="grid grid-cols-6 gap-1 sm:gap-2">
+                <input
+                  v-for="(_, index) in codeDigits"
+                  :key="index"
+                  :ref="el => setInputRef(el as HTMLInputElement | null, index)"
+                  :aria-label="`取件码第${index + 1}位`"
+                  class="pickup-cell h-14 w-full min-w-0 cursor-default border-0 bg-transparent text-center font-type text-title uppercase text-label caret-primary placeholder:text-label-tertiary"
+                  maxlength="1"
+                  inputmode="text"
+                  placeholder="·"
+                  type="text"
+                  :autofocus="index === 0"
+                  :value="codeDigits[index]"
+                  @input="handleInput(index, $event)"
+                  @keydown="handleKeydown(index, $event)"
+                  @paste="handlePaste"
+                />
+              </div>
             </div>
-            <p v-if="errorMessage" class="text-center text-[13px] font-medium text-danger">
+
+            <p v-if="errorMessage" class="text-center text-body font-medium text-danger">
               {{ errorMessage }}
             </p>
-            <button
+
+            <AppButton
               aria-label="提取文件"
-              class="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-primary text-headline text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed disabled:cursor-not-allowed disabled:opacity-60"
+              tone="primary"
+              size="lg"
+              icon="material-symbols:key"
+              class="w-full"
+              style="--atom-control-height: 48px"
               :disabled="!canSubmit"
+              :loading="isLoading"
               @click="handleRetrieve"
             >
-              <span class="material-symbols-outlined">key</span>
               {{ isLoading ? '提取中...' : '提取文件' }}
-            </button>
+            </AppButton>
           </div>
-          <div
-            class="mt-6 flex items-center justify-center gap-1.5 border-t border-hairline pt-4 text-caption text-label-tertiary"
-          >
-            <span class="material-symbols-outlined text-[14px]">lock_clock</span>
+
+          <!-- 卡内页脚：与动作是同级块，按 Hairline 纪律用留白分组，不画线 -->
+          <div class="mt-7 flex items-center justify-center gap-1.5 text-note text-label-tertiary">
+            <AppIcon
+              icon="material-symbols:lock-clock"
+              class="atom-glyph"
+              :style="{ '--atom-glyph-size': '14px' }"
+            />
             仅限有效期内提取
           </div>
         </div>
 
-        <!-- Success State Section -->
-        <div v-if="successState" class="space-y-4">
-          <div class="flex items-center gap-2 px-2 text-primary">
-            <span class="material-symbols-outlined text-[18px]">check_circle</span>
-            <h3 class="text-headline">已提取文件</h3>
+        <!-- 结果卡：成功才出现，与入口卡同宽同材质 -->
+        <div v-if="successState" class="mt-6 cabinet-card p-6 sm:p-8">
+          <div class="mb-5 flex items-center gap-2 text-primary">
+            <AppIcon
+              icon="material-symbols:check-circle"
+              class="atom-glyph"
+              :style="{ '--atom-glyph-size': '18px' }"
+            />
+            <h3 class="text-title">已提取文件</h3>
           </div>
-          <div
-            class="flex flex-col items-center gap-5 rounded-lg bg-surface p-6 shadow-card sm:flex-row sm:gap-6"
-          >
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
             <div
-              class="relative flex h-20 w-16 flex-none items-center justify-center overflow-hidden rounded-md border border-current/20"
+              class="relative flex h-20 w-16 flex-none items-center justify-center"
               :class="[downloadedFile.iconBg, downloadedFile.iconFg]"
             >
-              <div class="absolute inset-0 bg-current opacity-5"></div>
-              <Icon :icon="downloadedFile.typeIcon" class="text-4xl" />
-              <div
-                class="absolute bottom-1 right-1 rounded bg-current px-1 text-[8px] font-bold text-white"
-                :class="downloadedFile.iconFg.replace('text-', 'bg-')"
+              <AppIcon
+                :icon="downloadedFile.typeIcon"
+                class="atom-glyph"
+                :style="{ '--atom-glyph-size': '32px' }"
+              />
+              <span
+                class="absolute bottom-0 right-0 bg-label px-1 text-micro text-surface-tertiary"
               >
                 {{ downloadedFile.extLabel }}
-              </div>
+              </span>
             </div>
-            <div class="min-w-0 flex-1 overflow-hidden text-center sm:text-left">
-              <h4 class="truncate text-title-3 text-label" :title="downloadedFile.name">
+            <div class="min-w-0 flex-1 text-center sm:text-left">
+              <h4 class="truncate text-title" :title="downloadedFile.name">
                 {{ downloadedFile.name }}
               </h4>
-              <p class="mt-1 text-subhead text-label-secondary">
+              <p class="mt-1 text-note text-label-secondary">
                 {{ downloadedFile.size }} • 下载成功
               </p>
             </div>
-            <button
+            <AppButton
               aria-label="重新下载文件"
-              class="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-label px-6 text-headline text-white transition-[background-color,scale] duration-150 hover:bg-label/85 active:scale-[0.97] sm:w-auto"
+              tone="secondary"
+              size="lg"
+              icon="material-symbols:download"
+              class="w-full sm:w-auto"
+              style="--atom-control-height: 44px"
               @click="handleRetrieve"
             >
-              <span class="material-symbols-outlined text-xl">download</span>
               重新下载
-            </button>
+            </AppButton>
           </div>
         </div>
 
-        <!-- Security Footer -->
-        <div class="border-t border-hairline py-4 text-center">
-          <p class="text-caption leading-relaxed text-label-tertiary">
-            传输过程全程加密，提取码过期后将无法下载文件。
-          </p>
-        </div>
+        <!-- 页脚不是一条带：没有底色、没有分隔线，只是一句安静的说明 -->
+        <p class="mt-6 text-center text-note text-label-tertiary">
+          传输过程全程加密，提取码过期后将无法下载文件。
+        </p>
       </div>
     </main>
   </div>
 </template>
 
 <style scoped>
-/* 失败 shake：0 → -8 → 8 → -5 → 5 → 0，共 400ms（DESIGN.md §5.2 FilePickup） */
+/* 失败 shake：0 → -8 → 8 → -5 → 5 → 0。
+   时长走世界的 sheet 档（220ms）+ settle 曲线；位移只有 translateX，
+   没有回弹，落地即停。reduced-motion 由 src/style.css 全局兜底，
+   这里不再重复一份（重复的那份是死代码）。 */
 @keyframes pickup-code-shake {
   0%,
   100% {
@@ -274,12 +307,44 @@ const handleRetrieve = async () => {
 }
 
 .code-shake {
-  animation: pickup-code-shake 400ms cubic-bezier(0.65, 0, 0.35, 1);
+  animation: pickup-code-shake 220ms var(--ease-settle);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .code-shake {
-    animation: none;
+/* 填空式码行：六格共用一条下沿墨线。
+   线画在容器上而不是每格上 —— 六段各自成线就是六条水平线，
+   而一条连续的线只算一条（DESIGN.md 硬上限 ≤5）。
+   失败时整行换危险色并抖动，抖的是这条线连同码字。 */
+.pickup-line {
+  border-bottom: 1.5px solid var(--color-rule);
+  transition-property: border-color;
+  transition-duration: var(--transition-duration-standard);
+  transition-timing-function: var(--ease-settle);
+
+  &.is-error {
+    border-bottom-color: var(--color-danger);
+  }
+
+  /* 焦点在任意一格时，整条线换成结构蓝：这是「当前正在填这一行」的提示，
+     比给单格加一个框更符合填空的语义。 */
+  &:focus-within:not(.is-error) {
+    border-bottom-color: var(--color-primary);
+  }
+}
+
+/* 填空式码格：iOS 上 input 默认有内阴影与最小行高，先清干净，
+   否则下沿那条墨线会被撑出第二条边。 */
+.pickup-cell {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-inline: 0;
+  background-color: transparent;
+}
+
+/* 触屏设备上 56px 已经够，但竖屏手机横向 6 格会挤到 44px 以下，
+   给一个下限保住热区。 */
+@media (pointer: coarse) {
+  .pickup-cell {
+    min-height: 44px;
   }
 }
 </style>

@@ -20,7 +20,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <dialog
       ref="dialog"
-      class="knowledge-dialog settings-dialog w-full max-w-3xl"
+      class="atom-dialog-shell settings-dialog w-full max-w-3xl"
       :aria-labelledby="id"
       @cancel.prevent="!busy && emit('close')"
       @click.self="!busy && emit('close')"
@@ -29,14 +29,14 @@ onBeforeUnmount(() => {
         :initial="{ opacity: 0, scale: 0.96 }"
         :animate="{ opacity: 1, scale: 1 }"
         :transition="springSnappy"
-        class="rounded-xl bg-surface p-6 shadow-popover sm:p-7"
+        class="bg-surface p-6 shadow-popover sm:p-7"
       >
         <header class="mb-5 flex items-center justify-between gap-4">
-          <h2 :id="id" class="text-title-3">{{ title }}</h2>
+          <h2 :id="id" class="text-title">{{ title }}</h2>
           <button
             type="button"
             aria-label="关闭弹窗"
-            class="knowledge-icon-button"
+            class="atom-icon-btn"
             :disabled="busy"
             @click="emit('close')"
           >

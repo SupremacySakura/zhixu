@@ -201,22 +201,20 @@ onScopeDispose(() => {
 </script>
 
 <template>
-  <section v-if="visible" class="rounded-lg border border-hairline bg-surface p-5">
+  <section v-if="visible" class="border border-hairline bg-surface p-5">
     <div class="mb-3 flex items-center justify-between gap-2">
       <h2 class="text-body font-semibold">AI 整理</h2>
-      <span
-        class="rounded-full bg-surface-secondary px-2.5 py-0.5 text-caption text-label-secondary"
-      >
+      <span class="bg-surface-secondary px-2.5 py-0.5 text-note text-label-secondary">
         {{ statusLabel }}
       </span>
     </div>
 
-    <p v-if="loading" class="text-caption text-label-secondary" role="status">正在读取整理结果…</p>
+    <p v-if="loading" class="text-note text-label-secondary" role="status">正在读取整理结果…</p>
 
     <template v-else>
       <p
         v-if="running"
-        class="rounded-sm bg-surface-secondary px-3 py-2.5 text-caption leading-5 text-label-secondary"
+        class="bg-surface-secondary px-3 py-2.5 text-note leading-5 text-label-secondary"
         role="status"
       >
         {{
@@ -225,12 +223,12 @@ onScopeDispose(() => {
             : '模型正在生成摘要与标签，请稍候。'
         }}
       </p>
-      <p v-else-if="!task" class="text-caption leading-6 text-label-secondary">
+      <p v-else-if="!task" class="text-note leading-6 text-label-secondary">
         还没有整理结果。生成后先在这里预览与修改，确认后再采纳；未采纳前不会改动正文与正式字段。
       </p>
       <p
         v-else-if="task.status === 'failed'"
-        class="rounded-sm bg-danger-tint px-3 py-2.5 text-caption leading-5 text-danger"
+        class="bg-danger-tint px-3 py-2.5 text-note leading-5 text-danger"
         role="alert"
       >
         {{ task.error_message || 'AI 整理失败，请重试。' }}
@@ -239,7 +237,7 @@ onScopeDispose(() => {
       <template v-if="draft && !running">
         <p
           v-if="draft.stale"
-          class="mt-3 rounded-sm bg-warning-tint px-3 py-2.5 text-caption leading-5 text-warning-strong"
+          class="mt-3 bg-warning-tint px-3 py-2.5 text-note leading-5 text-warning-strong"
           role="status"
         >
           正文在草稿生成后已更新，建议重新生成后再采纳。
@@ -247,28 +245,26 @@ onScopeDispose(() => {
 
         <div class="mt-4">
           <div class="flex items-baseline justify-between gap-2">
-            <label for="organize-summary" class="text-caption text-label-secondary">摘要</label>
-            <span class="text-caption text-label-secondary"
-              >{{ summaryCount }}/{{ SUMMARY_MAX }}</span
-            >
+            <label for="organize-summary" class="text-note text-label-secondary">摘要</label>
+            <span class="text-note text-label-secondary">{{ summaryCount }}/{{ SUMMARY_MAX }}</span>
           </div>
           <textarea
             id="organize-summary"
             v-model="summary"
             rows="3"
             :maxlength="SUMMARY_MAX"
-            class="knowledge-input mt-1.5 w-full resize-none py-2.5"
+            class="atom-field min-h-9 mt-1.5 w-full resize-none py-2.5"
             placeholder="采纳后会显示在知识列表"
           />
         </div>
 
         <div class="mt-4">
-          <p class="text-caption text-label-secondary">关键词（最多 {{ KEYWORD_MAX }} 个）</p>
+          <p class="text-note text-label-secondary">关键词（最多 {{ KEYWORD_MAX }} 个）</p>
           <div class="mt-2 flex flex-wrap gap-2">
             <span
               v-for="word in keywords"
               :key="word"
-              class="inline-flex items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1 text-caption"
+              class="inline-flex items-center gap-1.5 bg-surface-secondary px-3 py-1 text-note"
             >
               {{ word }}
               <button
@@ -280,13 +276,11 @@ onScopeDispose(() => {
                 ×
               </button>
             </span>
-            <span v-if="!keywords.length" class="text-caption text-label-secondary"
-              >还没有关键词</span
-            >
+            <span v-if="!keywords.length" class="text-note text-label-secondary">还没有关键词</span>
           </div>
           <input
             v-model="keywordInput"
-            class="knowledge-input mt-2 w-full"
+            class="atom-field min-h-9 mt-2 w-full"
             :maxlength="KEYWORD_MAX_RUNES"
             :disabled="keywordsFull"
             placeholder="输入关键词后回车添加"
@@ -295,7 +289,7 @@ onScopeDispose(() => {
         </div>
 
         <div v-if="draft.suggested_tags.length" class="mt-4">
-          <p class="text-caption text-label-secondary">
+          <p class="text-note text-label-secondary">
             推荐标签（点击切换；采纳时追加到已有标签，不会删除已有关联）
           </p>
           <div class="mt-2 flex flex-wrap gap-2">
@@ -303,7 +297,7 @@ onScopeDispose(() => {
               v-for="tag in draft.suggested_tags"
               :key="tag.name"
               type="button"
-              class="rounded-full border px-3 py-1 text-caption transition-colors"
+              class="border px-3 py-1 text-note transition-colors"
               :class="
                 selectedTags.includes(tag.name)
                   ? 'border-primary bg-primary-tint text-primary-pressed'
@@ -318,20 +312,20 @@ onScopeDispose(() => {
           </div>
         </div>
 
-        <p v-if="draft.accepted" class="mt-3 text-caption leading-5 text-label-secondary">
+        <p v-if="draft.accepted" class="mt-3 text-note leading-5 text-label-secondary">
           已采纳{{
             draft.accepted_at ? '于 ' + knowledgeDate(draft.accepted_at) : ''
           }}，可继续修改后再次采纳。
         </p>
       </template>
 
-      <p v-if="error" class="mt-3 text-caption leading-5 text-danger" role="alert">{{ error }}</p>
+      <p v-if="error" class="mt-3 text-note leading-5 text-danger" role="alert">{{ error }}</p>
 
       <div class="mt-4 space-y-2">
         <button
           v-if="draft && !running"
           type="button"
-          class="knowledge-button-primary w-full"
+          class="atom-btn atom-tone-primary atom-btn-lg w-full"
           :disabled="!canAccept || busy === 'accept'"
           @click="accept"
         >
@@ -339,7 +333,7 @@ onScopeDispose(() => {
         </button>
         <button
           type="button"
-          class="knowledge-button-tint w-full"
+          class="atom-btn atom-tone-tint atom-btn-wide w-full"
           :disabled="running || Boolean(busy)"
           @click="regenerate"
         >

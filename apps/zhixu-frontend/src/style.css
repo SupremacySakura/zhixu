@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './styles/atoms.css';
 
 /* ============================================================
    设计令牌 — 世界：索引卡盒 Card Cabinet
@@ -43,6 +44,10 @@
   --color-surface: #f2eee4;
   --color-surface-secondary: #e2ddd0;
   --color-surface-tertiary: #fbf8ef;
+  /* 侧栏导航激活底（DESIGN.md §Layout / nav-item-active 冻结值 #e6e2d4）。
+     它不是第五档表面、不参与层级表达：真正的选中信号是左侧 3px 蓝条 + 蓝字，
+     这块底色只负责把行从侧栏的 surface-secondary 上「抬起半格」。 */
+  --color-nav-active: #e6e2d4;
 
   /* —— 规则线与遮罩 —— */
   --color-hairline: rgb(24 24 24 / 0.26); /* 装饰纹理 1.72:1，不可作控件边界 */
@@ -70,6 +75,12 @@
   --color-danger-tint: rgb(168 50 42 / 0.12);
   --color-warning: #6f4700; /* 6.01 */
   --color-warning-tint: rgb(111 71 0 / 0.12);
+  /* error/alert 态专用的一档更深的琥珀。它不是第五个色相，是 warning 的
+     加深变体：警告块用 #6f4700 当正文时，压在 warning-tint 底上只有 5.42
+     （canvas 底），字重一轻就显得糊；#4a2f00 在同一底上是 8.23，且是纯加深、
+     不引入新色相。实测：canvas 9.83 / surface 10.68 / surface-tertiary 11.65，
+     叠 warning-tint 后 8.23 / 8.90 / 9.67 —— 全部 ≥4.5。 */
+  --color-warning-strong: #4a2f00;
   --color-info: #1f4e79; /* 6.39，与结构色同族 */
   --color-info-tint: rgb(31 78 121 / 0.1);
   --color-success: #0a5f3c; /* 5.70 */
@@ -106,6 +117,14 @@
   --text-micro--font-weight: 700;
   --text-micro--letter-spacing: 0.06em;
 
+  /* 品牌字标专用档（#39）。它是 DESIGN.md §Layout 冻结的 21px/600/.2em，
+     既不在八档字级表里、也不该进去：字级表管正文排版，字标是外壳几何的一部分，
+     和 200px 侧栏、64px 页头带同级。放在这里是为了让模板里不出现任意值字号
+     （text-[21px] 会被世界守卫拦掉）。 */
+  --text-brand: 21px;
+  --text-brand--line-height: 26px;
+  --text-brand--font-weight: 600;
+
   /* —— 圆角：全部归零。v4 默认无 --radius-full 键，不显式写就杀不掉 rounded-full —— */
   --radius-xs: 0px;
   --radius-sm: 0px;
@@ -136,6 +155,12 @@
   --ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
+  /* —— 默认过渡：不写时长/曲线的 transition-* 直接落到世界的刻度，
+     而不是框架默认的 150ms + cubic-bezier(0.4, 0, 0.2, 1)。
+     两个默认令牌都能引用上面的语义令牌，因此只有一处真值。 —— */
+  --default-transition-duration: var(--transition-duration-micro);
+  --default-transition-timing-function: var(--ease-settle);
+
   /* —— z 序六档（命名空间是 --z-index-*）—— */
   --z-index-rail: 10;
   --z-index-toolbar: 20;
@@ -144,56 +169,57 @@
   --z-index-dialog: 50;
   --z-index-toast: 60;
 
-  /* —— 行长：正文 40em ≈ 640px，落在中文 36–40 字区间；硬上限 768px —— */
+  /* —— 三档页面容器宽度 ——
+     measure 40em ≈ 640px，长文行长落在中文 36–40 字区间；
+     panel 56rem = 896px，面板/表单页；
+     wide 72rem = 1152px，索引列表、画布、演化中心这类宽版页。
+     三者由 --container-* 命名空间自动生成 max-w-measure/panel/wide。 */
   --container-measure: 40em;
+  --container-panel: 56rem;
+  --container-wide: 72rem;
+
+  /* —— 外壳几何（#39）——
+     外壳是**唯一**允许写死像素的地方：它不随内容排版变，只随视口断点变。
+     这些值全部来自 DESIGN.md §Layout，写成令牌是为了让「200 / 64 / 60 / 29」
+     在组件里只有一处真值，改一次就全仓生效。 */
+  --spacing-rail: 200px; /* 桌面侧栏宽（原 256px） */
+  --spacing-band: 64px; /* 页头带高 */
+  --spacing-topbar: 60px; /* 移动全局条高 */
+  --spacing-nav-item: 29px; /* 侧栏导航项高 */
+  --spacing-brand: 62px; /* 侧栏品牌区高 */
+  --spacing-seal: 16px; /* 品牌方章边长 */
+  --width-drawer: min(15rem, 84vw); /* 窄屏抽屉宽：375 下 240px，更宽视口封顶 240px */
+
+  /* —— 知识库硬卡（#40）——
+     DESIGN.md §Layout 原型①冻结值「知识库为 118px 硬卡」，与 §Shapes 的
+     「纸条 17px 高、逐张 +5px 阶梯缩进」一样属于**几何冻结值**，不是排版
+     尺度：它们描述的是器物本身，所以和外壳一样进令牌，模板里不出现任意值。
+     118px 容得下四行（分类号 16 / 标题 21 / 摘要 17 / meta 17）+ 12px 内边距。 */
+  --spacing-hard-card: 118px;
+  --spacing-slip: 17px;
+  --spacing-slip-step: 5px;
 }
 
 /* ============================================================
-   迁移期兼容层（deprecated）
-   现有 17 个页面仍在用旧令牌名与旧组件类。这一层把它们映射到上面的
-   冻结取值，使「令牌先落地、页面分批改」期间界面不会整体塌掉。
-   ⚠️ 不构成新规范的一部分：新代码只用上方令牌与 .cabinet-*。
-   随 #28「分批实施与验收口径」的批次推进逐条删除，全部删完即迁移完成。
+   深色岛：知识图谱画布（任务单 #42）
+   —— 这是**新造**的一条画布带，不是保留。本仓历史里画布一直是纸色。
+   岛底 `#16191c` 与岛上文字 `#8b939c` 取自原型 prototype/graph-encoding
+   的 ISLAND_BG / ISLAND_TEXT；其余岛内色为满足对比度地板重算所得，
+   每个值后面的数字是在 `#16191c` 上的实测对比度（非文本下限 3:1）。
+
+   岛上的墨色必须与纸世界分开：`--color-label` 是 `#181818`，
+   在 `#16191c` 上只有 1.01:1，等于隐形。所以这里另立 `--color-graph-island-label*`。
    ============================================================ */
 @theme {
-  /* 旧字号名 → 最近的新档位（旧 title-1/2/3、headline、subhead、caption 共 493 处引用）
-     title-1 用于页面 h1（KnowledgeLibrary/KnowledgeDetail/EvolutionCenter/KnowledgeChunks），
-     故映射到 display 而非 title —— 否则页面标题会从 28px 掉到 19px，层级倒退。 */
-  --text-title-1: 26px;
-  --text-title-1--line-height: 34px;
-  --text-title-1--font-weight: 700;
-  --text-title-2: 19px;
-  --text-title-2--line-height: 26px;
-  --text-title-2--font-weight: 700;
-  /* title-3 用于弹窗/面板 h2/h3（SettingsModal/ServiceStatusPanel/ConfirmDialog） */
-  --text-title-3: 19px;
-  --text-title-3--line-height: 26px;
-  --text-title-3--font-weight: 700;
-  --text-headline: 15px;
-  --text-headline--line-height: 21px;
-  --text-headline--font-weight: 700;
-  --text-subhead: 13px;
-  --text-subhead--line-height: 19px;
-  --text-subhead--font-weight: 400;
-  --text-caption: 12px;
-  --text-caption--line-height: 17px;
-  --text-caption--font-weight: 400;
-
-  /* 毛玻璃退役：material 别名直指卡面实色 */
-  --color-material: #f2eee4;
-  --color-material-thick: #f2eee4;
-
-  /* 文件类型分色并入语义四色，不再新增第五个色相 */
-  --color-purple: #1f4e79;
-  --color-purple-tint: rgb(31 78 121 / 0.12);
-  --color-pink: #a8322a;
-  --color-pink-tint: rgb(168 50 42 / 0.12);
-  --color-teal: #0a5f3c;
-  --color-teal-tint: rgb(10 95 60 / 0.12);
-  --color-teal-strong: #0a5f3c;
-
-  /* warning-strong 仍有 30 处引用，映射到比 warning 更深一档 */
-  --color-warning-strong: #4a2f00;
+  --color-graph-island: #16191c;
+  --color-graph-island-rule: #3a424b; /* 1.73 —— 装饰线，与纸世界 hairline 1.72 同口径 */
+  --color-graph-island-label: #a8b0b8; /* 8.04 */
+  --color-graph-island-label-secondary: #8b939c; /* 5.67 */
+  --color-graph-node-border: #605949; /* 纸白节点上 6.00 */
+  --color-graph-select-ring: #4a8ac0; /* 岛上 4.78 / 纸白节点上 3.19 */
+  --color-graph-edge-ai: #b2cae1;
+  --color-graph-edge-manual: #c3c8cb;
+  --color-graph-edge-contradicts: #d16559;
 }
 
 @layer base {
@@ -221,105 +247,213 @@
   }
 }
 
+/* ============================================================
+   世界骨架（#24 冻结的五个）
+   以 @utility 定义而不是 @layer components：Tailwind v4 里
+   @layer components 的自定义类**不能**被 @apply 引用（报
+   Cannot apply unknown utility class 'cabinet-btn'），只有 @utility
+   定义的才能作为原子被别的样式/组件组合。外观与 #24 裁定一致，
+   迁移前后声明逐条相同。
+   ============================================================ */
+@utility cabinet-card {
+  @apply bg-surface text-body;
+  border: 1px solid var(--color-hairline);
+  box-shadow: var(--shadow-card);
+}
+
+@utility cabinet-btn {
+  @apply inline-flex items-center gap-2 bg-surface px-4 text-lead;
+  min-height: 2.25rem;
+  border: 1px solid var(--color-rule);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-label);
+  transition-property: box-shadow, background-color;
+  transition-duration: var(--transition-duration-micro);
+  transition-timing-function: var(--ease-settle);
+}
+
+@utility cabinet-btn-primary {
+  border-color: var(--color-primary-pressed);
+  background-color: var(--color-primary);
+  box-shadow: var(--shadow-floating);
+  color: var(--color-surface-tertiary);
+}
+
+/* AI 生成内容标记：绿只做底与条，绝不做字 */
+@utility cabinet-ai {
+  @apply bg-ai-tint text-label;
+  border-top: 2px solid var(--color-ai);
+}
+
+/* 打字机编号/计数 */
+@utility cabinet-num {
+  @apply font-type text-micro tabular-nums;
+}
+
+/* ============================================================
+   知识库硬卡与交叉引用纸条（#40）
+   招牌动作只属于知识库列表页（DESIGN.md §Layout「招牌动作独占条款」），
+   所以这两条不进原子层：原子是全世界共用的，硬卡 + 纸条是**一页**的器物。
+   写在 style.css 里而不是组件里，理由同外壳：像素值只留一处真值。
+   ============================================================ */
+
+/* 118px 硬卡：定高、单层 hairline 描边、双层硬偏移。
+   定高不是审美 —— 索引卡的物理属性就是同尺寸才能叠成一盒；
+   变高会让 20 张卡在滚动中失去对齐参照，扫读时每张都要重新找行。
+   不写 flex-direction：窄屏要竖排（纸条移到卡内下方，DESIGN §Layout
+   「窄屏的结构性降级」），桌面要横排，方向由调用点决定。 */
+@utility hard-card {
+  @apply flex min-w-0 bg-surface;
+  min-height: var(--spacing-hard-card);
+  border: 1px solid var(--color-hairline);
+  box-shadow: var(--shadow-card);
+}
+
+/* 卡面上的蓝色格线：摘要压在其上（DESIGN.md §Colors「卡片上的蓝色格线」）。
+   只画**一条**，不铺满整张卡：铺满会与「单屏水平线 ≤5 条」的纪律打架，
+   而且 20 张卡各铺 3 条会读成横格纸而不是索引卡。
+   蓝色格线是世界的母题，不是分隔线，所以走 --color-grid 而不是 hairline。 */
+@utility card-ruled {
+  border-bottom: 1px solid var(--color-grid);
+}
+
+/* 交叉引用纸条：17px 高、surface-tertiary 底、1px hairline 描边、1px 1px 0 硬偏移。
+   偏移量 1px 而不是 shadow-popover 的 2px —— 纸条比卡片薄，影子也该薄。 */
+@utility relation-slip {
+  @apply flex h-slip max-w-full items-center gap-1.5 overflow-hidden whitespace-nowrap bg-surface-tertiary px-1.5 text-micro text-label-secondary;
+  border: 1px solid var(--color-hairline);
+  box-shadow: 1px 1px 0 var(--color-hairline);
+}
+
+/* 纸条上的类别标签：唯一被印上去的颜色，与侧栏激活、主操作同一枚蓝。 */
+@utility relation-slip-type {
+  @apply flex-none font-semibold text-primary;
+}
+
+/* 纸条的逐张阶梯缩进：第 n 张往左多缩 5px，读起来是一叠手写小卡而不是一张表。 */
+@utility relation-slip-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+/* ============================================================
+   外壳几何载体（#39）
+   为什么是 @utility 而不是组件：DESIGN.md §Components「明确不建」里点名
+   AppPageHeader / AppToolbar「属外壳，页面直接按 class 写」。但「按 class 写」
+   不等于九个页面各抄一遍 12 个类 —— 抄九遍就是九个版本，改一次要改九处。
+   这里把**四段结构的几何**收成 4 个载体类，页面只写类名，
+   像素值仍然只有 style.css 一处真值。
+   ============================================================ */
+
+/* 页头带 64px：左标题 + 可选等宽计数行 / 右 1 主 + ≤2 次操作。
+   下沿一条 hairline，**不吸顶** —— 滚走时腾出高度，这是 DESIGN 的明确要求。 */
+@utility shell-band {
+  display: flex;
+  height: var(--spacing-band);
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--spacing) * 4);
+  border-bottom: 1px solid var(--color-hairline);
+  background-color: var(--color-surface);
+  /* 左内边距不是常量：wide 是居中的 max-width 盒子，页头带是全宽条，
+     两者左缘只有在「页头带也按同一条居中线留白」时才重合。
+     max(基础留白, (宽度 − 容器)/2) 恰好等于「居中容器在留白区里的左缘」：
+     宽度富余时它等于居中偏移，宽度不足时退回基础留白（16/20/24）。 */
+  padding-inline: max(calc(var(--spacing) * 4), calc((100% - var(--container-wide)) / 2));
+  @media (width >= 40rem) {
+    padding-inline: max(calc(var(--spacing) * 5), calc((100% - var(--container-wide)) / 2));
+  }
+  @media (width >= 64rem) {
+    padding-inline: max(calc(var(--spacing) * 6), calc((100% - var(--container-wide)) / 2));
+  }
+}
+
+/* 表单原型（panel 896）的页头带：同一条居中线，但按 panel 算。
+   1440 下若沿用 wide 的口径，标题会落在 244 而表单在 372 —— 差 128px。 */
+@utility shell-band-panel {
+  display: flex;
+  height: var(--spacing-band);
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--spacing) * 4);
+  border-bottom: 1px solid var(--color-hairline);
+  background-color: var(--color-surface);
+  padding-inline: max(calc(var(--spacing) * 4), calc((100% - var(--container-panel)) / 2));
+  @media (width >= 40rem) {
+    padding-inline: max(calc(var(--spacing) * 5), calc((100% - var(--container-panel)) / 2));
+  }
+  @media (width >= 64rem) {
+    padding-inline: max(calc(var(--spacing) * 6), calc((100% - var(--container-panel)) / 2));
+  }
+}
+
+/* 画布页的悬浮页头带：浮在满铺画布之上，仍是 64px，仍然不吸顶。
+   用 absolute 而不是 sticky —— sticky 会随滚动一直占着，那是栏杆不是纸条。 */
+@utility shell-band-float {
+  @apply absolute inset-x-0 top-0 z-toolbar flex h-band items-center justify-between gap-4 border-b border-hairline bg-surface px-4 sm:px-5 lg:px-6;
+}
+
+/* 画布页的页头带用 shell-band-float（容器是 full，没有居中线要对）。 */
+
+/* 页面滚动容器：水平内边距与页头带同一条左边线（16 / 20 / 24）。 */
+@utility shell-page {
+  @apply flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-6 lg:px-6 lg:py-8;
+}
+
+/* 工具栏 48px：搜索 + 筛选 + 右端命中计数。吸顶，z-toolbar，下沿一条 hairline。 */
+@utility shell-toolbar {
+  @apply sticky top-0 z-toolbar flex min-h-12 flex-wrap items-center gap-2 border-b border-hairline bg-surface py-2;
+}
+
+/* 页头带里的动作按钮：主操作实心蓝 32px、次操作描边 32px。
+   为什么不让页面各自写 atom-btn：那套是 36px 高、px-4，
+   放进 64px 的带子里会顶满上下留白，且三个并排必然溢出 375px。 */
+@utility shell-band-action {
+  @apply inline-flex h-8 flex-none items-center justify-center gap-1.5 bg-surface px-2.5 text-note font-semibold text-label-secondary transition-colors hover:bg-surface-secondary hover:text-label;
+  border: 1px solid var(--color-hairline);
+  @media (width >= 40rem) {
+    padding-inline: calc(var(--spacing) * 3);
+  }
+}
+
+@utility shell-band-action-primary {
+  @apply inline-flex h-8 flex-none items-center justify-center gap-1.5 bg-primary px-2.5 text-note font-semibold text-surface-tertiary transition-colors hover:bg-primary-hover;
+  @media (width >= 40rem) {
+    padding-inline: calc(var(--spacing) * 3);
+  }
+}
+
+/* 满宽场景（外层没有 shell-page 提供 gutter，例如对话页的工具栏）。 */
+@utility shell-toolbar-gutter {
+  @apply sticky top-0 z-toolbar flex min-h-12 flex-wrap items-center gap-2 border-b border-hairline bg-surface py-2;
+  padding-inline: max(calc(var(--spacing) * 4), calc((100% - var(--container-wide)) / 2));
+  @media (width >= 40rem) {
+    padding-inline: max(calc(var(--spacing) * 5), calc((100% - var(--container-wide)) / 2));
+  }
+  @media (width >= 64rem) {
+    padding-inline: max(calc(var(--spacing) * 6), calc((100% - var(--container-wide)) / 2));
+  }
+}
+
+/* 四级容器：只有这四档，别的一律不许出现在页面级容器上。 */
+@utility shell-measure {
+  @apply mx-auto w-full max-w-measure;
+}
+@utility shell-panel {
+  @apply mx-auto w-full max-w-panel;
+}
+@utility shell-wide {
+  @apply mx-auto w-full max-w-wide;
+}
+@utility shell-full {
+  @apply w-full;
+}
+
 @layer components {
-  /* —— 新世界组件：只有 #24 冻结的五个骨架。
-     完整 API 与变体留给 #19「组件原子层范围与 API」，此处不越界定案。 —— */
-
-  .cabinet-card {
-    @apply bg-surface text-body;
-    border: 1px solid var(--color-hairline);
-    box-shadow: var(--shadow-card);
-  }
-
-  .cabinet-btn {
-    @apply inline-flex items-center gap-2 bg-surface px-4 text-lead;
-    min-height: 2.25rem;
-    border: 1px solid var(--color-rule);
-    box-shadow: var(--shadow-popover);
-    color: var(--color-label);
-    transition-property: box-shadow, background-color;
-    transition-duration: var(--transition-duration-micro);
-    transition-timing-function: var(--ease-settle);
-  }
-
-  .cabinet-btn-primary {
-    border-color: var(--color-primary-pressed);
-    background-color: var(--color-primary);
-    box-shadow: var(--shadow-floating);
-    color: var(--color-surface-tertiary);
-  }
-
-  /* AI 生成内容标记：绿只做底与条，绝不做字 */
-  .cabinet-ai {
-    @apply bg-ai-tint text-label;
-    border-top: 2px solid var(--color-ai);
-  }
-
-  /* 打字机编号/计数 */
-  .cabinet-num {
-    @apply font-type text-micro tabular-nums;
-  }
-
-  /* —— 过渡版旧组件类：外观已换到新世界，API 保持不变，
-     待 #28 的批次把调用点改为 .cabinet-* 后删除本段。 —— */
-
-  .knowledge-button-primary,
-  .knowledge-button-secondary,
-  .knowledge-button-tint {
-    @apply inline-flex items-center justify-center gap-2 px-4 text-lead disabled:cursor-not-allowed disabled:opacity-50;
-    min-height: 2.25rem;
-    border: 1px solid var(--color-rule);
-    transition-property: box-shadow, background-color;
-    transition-duration: var(--transition-duration-micro);
-    transition-timing-function: var(--ease-settle);
-  }
-
-  .knowledge-button-primary {
-    border-color: var(--color-primary-pressed);
-    background-color: var(--color-primary);
-    box-shadow: var(--shadow-floating);
-    color: var(--color-surface-tertiary);
-  }
-
-  .knowledge-button-secondary {
-    background-color: var(--color-surface);
-    box-shadow: var(--shadow-popover);
-    color: var(--color-label);
-  }
-
-  .knowledge-button-tint {
-    background-color: var(--color-primary-tint);
-    color: var(--color-primary-pressed);
-  }
-
-  .knowledge-text-action {
-    @apply inline-flex min-h-9 items-center gap-2 text-lead text-primary-pressed underline disabled:cursor-not-allowed disabled:text-label-secondary disabled:no-underline;
-  }
-
-  .knowledge-icon-button {
-    @apply inline-flex h-9 w-9 items-center justify-center text-label-secondary disabled:opacity-50;
-    border: 1px solid var(--color-rule);
-  }
-
-  .knowledge-input {
-    @apply min-h-9 bg-surface px-3 text-body text-label outline-none focus:ring-2 focus:ring-primary-tint disabled:opacity-50;
-    border: 1px solid var(--color-rule);
-  }
-
-  .knowledge-textarea {
-    @apply w-full resize-y bg-surface px-3 py-3 text-body text-label outline-none focus:ring-2 focus:ring-primary-tint;
-    border: 1px solid var(--color-rule);
-  }
-
-  /* 无圆角、实色遮罩、去掉毛玻璃 */
-  .knowledge-dialog {
-    @apply fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto border-0 bg-transparent p-0 text-label;
-  }
-
-  .knowledge-dialog::backdrop {
-    background-color: var(--color-scrim);
-  }
-
   .knowledge-markdown {
     @apply break-words text-read;
     max-width: var(--container-measure);
@@ -393,17 +527,12 @@
   }
 
   .markdown-image-note {
-    @apply text-caption text-label-secondary;
+    @apply text-note text-label-secondary;
   }
 }
 
-/* 窄屏：弹窗转为贴底抽屉，直角、无偏移、上边框用控件边界色 */
-@media (max-width: 640px) {
-  .knowledge-dialog {
-    @apply bottom-0 top-auto mb-0 w-full max-w-none;
-    border-top: 1px solid var(--color-rule);
-  }
-}
+/* 窄屏弹窗转贴底抽屉的规则跟着原子走了：
+   见 src/styles/atoms.css 里 @media (max-width: 767px) 的 .atom-dialog 段。 */
 
 /* ============================================================
    四个 prefers-* 降级
@@ -425,7 +554,7 @@
 /* 降低透明度：本世界已无毛玻璃，保留此块给未来悬浮层；当前等价于无操作。 */
 @media (prefers-reduced-transparency: reduce) {
   .cabinet-card,
-  .knowledge-dialog {
+  .atom-dialog-panel {
     background-color: var(--color-surface);
   }
 }
@@ -443,9 +572,7 @@
 @media (forced-colors: active) {
   .cabinet-card,
   .cabinet-btn,
-  .knowledge-button-primary,
-  .knowledge-button-secondary,
-  .knowledge-button-tint {
+  .atom-btn {
     border: 1px solid CanvasText;
   }
 }

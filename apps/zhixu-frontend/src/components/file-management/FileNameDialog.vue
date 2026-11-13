@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppButton from '../ui/AppButton.vue'
 import { AnimatePresence, Motion } from 'motion-v'
 import { fadeTransition, springSnappy } from '../../utils/motion'
 
@@ -76,7 +76,7 @@ watch(
         :animate="{ opacity: 1 }"
         :exit="{ opacity: 0 }"
         :transition="fadeTransition"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="titleId"
@@ -89,22 +89,22 @@ watch(
           :animate="{ opacity: 1, scale: 1 }"
           :exit="{ opacity: 0, scale: 0.98 }"
           :transition="springSnappy"
-          class="w-full max-w-md rounded-lg bg-surface p-6 shadow-popover"
+          class="w-full max-w-md bg-surface p-6 shadow-popover"
         >
-          <h3 :id="titleId" class="text-title-3 mb-2">{{ title }}</h3>
+          <h3 :id="titleId" class="mb-2 text-title">{{ title }}</h3>
           <slot name="description">
-            <p v-if="description" class="text-body mb-4 text-label-secondary">{{ description }}</p>
+            <p v-if="description" class="mb-4 text-note text-label-secondary">{{ description }}</p>
           </slot>
 
           <div class="mb-6" :class="description ? '' : 'mt-4'">
-            <label class="mb-1.5 block text-[13px] font-semibold text-label-secondary">
+            <label class="mb-1.5 block text-note font-semibold text-label-secondary">
               {{ label }}
             </label>
             <input
               ref="inputRef"
               :value="value"
               type="text"
-              class="h-11 w-full rounded-sm border border-hairline bg-surface-secondary px-3.5 text-[15px] text-label transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-label-tertiary focus:border-primary focus:bg-surface focus:outline-none focus:ring-[3px] focus:ring-primary-tint disabled:opacity-60"
+              class="h-9 w-full border border-hairline bg-surface-secondary px-3 text-body text-label transition-[border-color,background-color,box-shadow] placeholder:text-label-tertiary focus:border-primary focus:bg-surface disabled:opacity-60"
               :placeholder="placeholder"
               :disabled="loading"
               @input="handleInput"
@@ -113,23 +113,15 @@ watch(
           </div>
 
           <div class="flex justify-end gap-3">
-            <button
-              class="h-10 rounded-full bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary active:scale-[0.97] disabled:opacity-60"
-              type="button"
-              :disabled="loading"
-              @click="handleCancel"
-            >
-              {{ cancelText }}
-            </button>
-            <button
-              class="flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed disabled:opacity-60"
-              type="button"
+            <AppButton :disabled="loading" @click="handleCancel">{{ cancelText }}</AppButton>
+            <AppButton
+              tone="primary"
               :disabled="isConfirmDisabled"
+              :loading="loading"
               @click="handleConfirm"
             >
-              <Icon v-if="loading" icon="material-symbols:progress-activity" class="animate-spin" />
               {{ loading ? loadingText : confirmText }}
-            </button>
+            </AppButton>
           </div>
         </Motion>
       </Motion>

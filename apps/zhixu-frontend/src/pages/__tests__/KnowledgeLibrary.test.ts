@@ -5,12 +5,16 @@ import KnowledgeLibrary from '../KnowledgeLibrary.vue'
 import {
   favoriteKnowledge,
   listKnowledge,
+  listKnowledgeRelations,
   deleteKnowledge,
   retryKnowledgeVectorize,
   unarchiveKnowledge,
   type KnowledgeItem,
+  type KnowledgeRelation,
 } from '../../services/apis/knowledge'
 import KnowledgeActionMenu from '../../components/knowledge/KnowledgeActionMenu.vue'
+import AppToast from '../../components/ui/AppToast.vue'
+import { defineComponent } from 'vue'
 vi.mock('../../services/apis/knowledge', () => ({
   listKnowledge: vi.fn(),
   addKnowledge: vi.fn(),
@@ -21,14 +25,24 @@ vi.mock('../../services/apis/knowledge', () => ({
   favoriteKnowledge: vi.fn(),
   archiveKnowledge: vi.fn(),
   unarchiveKnowledge: vi.fn(),
+  // 列表页每张卡右侧的交叉引用纸条要逐卡取关系（#40 R1）。默认返回空关系，
+  // 既有 9 条断言一条都不涉及纸条，因此它们照常绿。
+  listKnowledgeRelations: vi.fn().mockResolvedValue({ confirmed: [], suggested: [], task: null }),
 }))
 vi.mock('../../services/apis/tag', () => ({
   listTags: vi.fn().mockResolvedValue({ items: [] }),
 }))
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 afterEach(() => {
   vi.clearAllMocks()
 })
+// 页面在生产里永远活在带 toast 宿主的外壳里；测试如实照搬这个结构，
+// 而不是让页面自己渲染提示——那样测的是旧架构，不是用户看到的东西。
+const Harness = defineComponent({
+  components: { Page: KnowledgeLibrary, AppToast },
+  template: '<div><Page /><AppToast /></div>',
+})
+
 async function render() {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -36,7 +50,7 @@ async function render() {
   })
   await router.push('/')
   await router.isReady()
-  const wrapper = mount(KnowledgeLibrary, { global: { plugins: [router] } })
+  const wrapper = mount(Harness, { global: { plugins: [router] } })
   await flushPromises()
   return wrapper
 }
@@ -291,6 +305,174 @@ describe('KnowledgeLibrary', () => {
     expect(
       document.querySelector('[role="menu"][aria-label="知识操作 空笔记"]')?.textContent,
     ).toContain('查看失败原因')
+    wrapper.unmount()
+  })
+
+  /**
+   * 交叉引用纸条（#40 R1）。
+   *
+   * 测的是「用户不点任何东西就能看到这张卡依赖哪一条、和哪一条矛盾」——
+   * 这是票面 AC 的原文。因此断言必须落在**卡面上可见的文字**，
+   * 而不是内部是否调过接口：接口调用是手段，纸条读得出内容是目的。
+   */
+  it('在卡片右侧逐卡展示交叉引用纸条', async () => {
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: [
+        { id: 10, title: '笔记', status: 'ready', created_at: '' } as never,
+        { id: 11, title: '另一篇', status: 'ready', created_at: '' } as never,
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+    })
+    const relation = (id: number, type: string, title: string) =>
+      ({
+        id,
+        source_id: 10,
+        target_id: 2,
+        relation_type: type,
+        status: 'confirmed',
+        source: 'manual',
+        confidence: 1,
+        evidence: '',
+        counterpart_id: 2,
+        counterpart_title: title,
+        created_at: '',
+        confirmed_at: '',
+      }) as KnowledgeRelation
+    vi.mocked(listKnowledgeRelations).mockResolvedValue({
+      confirmed: [relation(1, 'depends_on', '基础篇'), relation(2, 'contradicts', '旧结论')],
+      suggested: [],
+      task: null,
+    })
+    const wrapper = await render()
+    // 当前页每一条都要取一次关系，不是只取第一条。
+    expect(listKnowledgeRelations).toHaveBeenCalledTimes(2)
+    expect(listKnowledgeRelations).toHaveBeenCalledWith(10, expect.any(AbortSignal))
+    expect(listKnowledgeRelations).toHaveBeenCalledWith(11, expect.any(AbortSignal))
+    // 纸条文案必须来自 RELATION_TYPE_LABELS，且带对端标题。
+    expect(wrapper.text()).toContain('依赖')
+    expect(wrapper.text()).toContain('基础篇')
+    expect(wrapper.text()).toContain('矛盾')
+    expect(wrapper.text()).toContain('旧结论')
+    wrapper.unmount()
+  })
+
+  it('没有交叉引用时纸条写明「暂无交叉引用」而不是留白', async () => {
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: [{ id: 10, title: '笔记', status: 'ready', created_at: '' } as never],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    // afterEach 只 clearAllMocks（清调用记录），不清实现，所以别的 it 的
+    // mockResolvedValue / mockRejectedValue 会留下来 —— 显式写回，不靠测试顺序。
+    vi.mocked(listKnowledgeRelations).mockResolvedValue({
+      confirmed: [],
+      suggested: [],
+      task: null,
+    })
+    const wrapper = await render()
+    // 成功但为空：纸条仍然要给一句话，不能什么都不显示。
+    expect(wrapper.text()).toContain('暂无交叉引用')
+    wrapper.unmount()
+  })
+
+  it('纸条取不到时说明「读取失败」，不能假装这条知识没有交叉引用', async () => {
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: [{ id: 10, title: '笔记', status: 'ready', created_at: '' } as never],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    // 后端限流（60 req/min/IP）或单卡 500 时，关系请求会失败。
+    // 失败与「确实没有关系」是两件事：前者不能渲染成「暂无交叉引用」——
+    // 那正是 R1 拒绝图谱接口的理由（假阴性比不显示更糟）。
+    vi.mocked(listKnowledgeRelations).mockRejectedValue(new Error('too many requests'))
+    const wrapper = await render()
+
+    expect(wrapper.text()).toContain('读取失败')
+    expect(wrapper.text()).not.toContain('暂无交叉引用')
+    wrapper.unmount()
+  })
+
+  /**
+   * 命中计数（#40 R2）。
+   *
+   * 分母只能来自「首次无筛选加载」那一次的 total —— 不能为了拿分母再打一次
+   * listKnowledge（会打红既有三条 toHaveBeenCalledTimes 断言）。
+   */
+  it('工具栏显示「命中 N / 总数」，无筛选时只显示命中数', async () => {
+    vi.mocked(listKnowledge).mockResolvedValueOnce({
+      items: [{ id: 10, title: '笔记', status: 'ready', created_at: '' } as never],
+      total: 142,
+      page: 1,
+      page_size: 20,
+    })
+    const wrapper = await render()
+    expect(wrapper.get('[data-test="hit-count"]').text()).toContain('命中 142')
+
+    // 带筛选再加载：total 变成命中数，分母仍是首次缓存的 142。
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: [{ id: 10, title: '笔记', status: 'ready', created_at: '' } as never],
+      total: 9,
+      page: 1,
+      page_size: 20,
+    })
+    await wrapper.get('[aria-label="筛选归档"]').trigger('click')
+    await wrapper
+      .findAll('[role="menuitemradio"]')
+      .find(option => option.text() === '仅已归档')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="hit-count"]').text()).toContain('命中 9 / 142')
+    // 两次加载：初次 + 筛选，没有为分母多打一次。
+    expect(listKnowledge).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
+  /**
+   * 表格视图（#35 用户故事 4 / #40 AC 第 3 条）。
+   *
+   * 断言落在**用户看到的东西**上：切过去之后屏幕上是不是真的有一屏 20 行。
+   * 同时钉住「换视图不是换查询」——切视图不许再打一次列表接口，
+   * 否则 60 req/min/IP 的后端限流会在快速来回切时把页面打成 429。
+   */
+  it('切到表格视图后一屏 20 行，且不重新请求列表', async () => {
+    const rows = Array.from({ length: 20 }, (_, index) => ({
+      id: index + 1,
+      title: `第 ${index + 1} 条`,
+      status: 'ready',
+      created_at: '',
+      chunks_total: 0,
+    }))
+    vi.mocked(listKnowledge).mockResolvedValue({
+      items: rows as never,
+      total: 20,
+      page: 1,
+      page_size: 20,
+    })
+    vi.mocked(listKnowledgeRelations).mockResolvedValue({
+      confirmed: [],
+      suggested: [],
+      task: null,
+    })
+    const wrapper = await render()
+    // 默认是卡片视图：此时没有表格。
+    expect(wrapper.find('table').exists()).toBe(false)
+
+    await wrapper.get('[aria-label="表格"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('table').exists()).toBe(true)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(20)
+    // 切视图复用已有 items：列表接口只被调用过首次那一次。
+    expect(listKnowledge).toHaveBeenCalledTimes(1)
+
+    // 切回卡片视图：表格消失，卡片回来。
+    await wrapper.get('[aria-label="卡片"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('table').exists()).toBe(false)
     wrapper.unmount()
   })
 })

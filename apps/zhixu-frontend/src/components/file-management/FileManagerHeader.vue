@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppButton from '../ui/AppButton.vue'
+import AppIcon from '../ui/AppIcon.vue'
 import type { BreadcrumbItem } from '../../types/file'
 
 const props = withDefaults(
@@ -65,31 +66,42 @@ const handleFolderInput = (event: Event) => {
 }
 
 defineExpose({ openFileDialog, openFolderDialog })
-
-const secondaryButtonClass =
-  'flex h-10 items-center gap-1.5 rounded-full bg-surface px-4 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-[background-color,scale] duration-150 hover:bg-surface-secondary hover:text-label active:scale-[0.97]'
 </script>
 
 <template>
-  <div class="mb-6 flex flex-col gap-4 lg:mb-8 lg:flex-row lg:items-center lg:justify-between">
-    <div>
+  <!-- 页头带 64px：文件管理是索引列表原型。左侧是「当前目录名 + 目录路径」，
+       右侧 1 主（上传）+ 2 次（新建文件夹 / 上传进度）。
+       目录路径不是面包屑 —— 它是文件浏览器的导航控件，层级由用户的目录深度决定，
+       不受「三层以上页面才留面包屑」那条规则约束。 -->
+  <header class="shell-band">
+    <div class="min-w-0">
+      <h1 class="truncate text-title text-label">{{ currentFolderName }}</h1>
       <nav
-        class="mb-1.5 flex items-center gap-1.5 overflow-x-auto text-subhead text-label-tertiary"
+        aria-label="目录路径"
+        class="flex items-center gap-1.5 overflow-x-auto font-type text-micro text-label-tertiary"
       >
         <button
-          class="flex items-center rounded-sm transition-colors duration-150 hover:text-primary"
+          class="flex items-center transition-colors hover:text-primary"
           type="button"
           aria-label="返回根目录"
           @click="navigateToBreadcrumb(0)"
         >
-          <Icon class="mr-1 text-[14px]" icon="material-symbols:home" />
+          <AppIcon
+            class="mr-1 atom-glyph"
+            icon="material-symbols:home"
+            :style="{ '--atom-glyph-size': '14px' }"
+          />
           root
         </button>
         <template v-for="(breadcrumb, index) in nestedBreadcrumbs" :key="breadcrumb.id">
-          <Icon class="text-[14px]" icon="material-symbols:chevron-right" />
+          <AppIcon
+            class="atom-glyph"
+            icon="material-symbols:chevron-right"
+            :style="{ '--atom-glyph-size': '14px' }"
+          />
           <button
             v-if="!isLastBreadcrumb(index)"
-            class="rounded-sm transition-colors duration-150 hover:text-primary"
+            class="transition-colors hover:text-primary"
             type="button"
             :aria-label="`导航到 ${breadcrumb.name} 文件夹`"
             @click="navigateToBreadcrumb(index + 1)"
@@ -99,17 +111,20 @@ const secondaryButtonClass =
           <span v-else class="font-medium text-label">{{ breadcrumb.name }}</span>
         </template>
       </nav>
-      <h2 class="text-title-2 text-label">{{ currentFolderName }}</h2>
       <p
         v-if="errorMessage"
-        class="mt-2 flex items-center gap-1.5 text-[13px] font-medium text-danger"
+        class="mt-0.5 flex items-center gap-1.5 text-note font-medium text-danger"
       >
-        <Icon class="text-[14px]" icon="material-symbols:error-outline-rounded" />
+        <AppIcon
+          class="atom-glyph"
+          icon="material-symbols:error-outline-rounded"
+          :style="{ '--atom-glyph-size': '14px' }"
+        />
         {{ errorMessage }}
       </p>
     </div>
 
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="flex flex-none items-center gap-2 pointer-coarse:gap-3">
       <input ref="fileInputRef" type="file" class="hidden" multiple @change="handleFileInput" />
       <input
         ref="folderInputRef"
@@ -120,88 +135,88 @@ const secondaryButtonClass =
         @change="handleFolderInput"
       />
 
-      <button
-        :class="secondaryButtonClass"
-        type="button"
+      <!-- 375px 下三颗按钮 + 文字会顶破 64px 带子的右边界（实测 3 颗
+           各 ~110px，加间距正好超宽）。窄屏只留图标，名字靠 aria-label
+           与 title 保留；≥sm 再露出文字。 -->
+      <AppButton
+        icon="material-symbols:create-new-folder"
         aria-label="新建文件夹"
+        title="新建文件夹"
         @click="emit('create-folder')"
       >
-        <Icon class="text-[18px]" icon="material-symbols:create-new-folder" />
-        新建文件夹
-      </button>
+        <span class="hidden sm:inline">新建文件夹</span>
+      </AppButton>
 
       <!-- 移动端：拆分为两个按钮 -->
-      <div class="flex flex-wrap items-center gap-3 sm:hidden">
-        <button
-          class="flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed"
-          type="button"
+      <div class="flex items-center gap-2 pointer-coarse:gap-3 sm:hidden">
+        <AppButton
+          tone="primary"
+          icon="material-symbols:upload"
           aria-label="上传文件"
+          title="上传文件"
           @click="openFileDialog"
         >
-          <Icon class="text-[18px]" icon="material-symbols:upload" />
-          上传文件
-        </button>
-        <button
-          :class="secondaryButtonClass"
-          type="button"
+          <span class="hidden sm:inline">上传文件</span>
+        </AppButton>
+        <AppButton
+          icon="material-symbols:folder"
           aria-label="上传文件夹"
+          title="上传文件夹"
           @click="openFolderDialog"
         >
-          <Icon class="text-[18px]" icon="material-symbols:folder" />
-          上传文件夹
-        </button>
+          <span class="hidden sm:inline">上传文件夹</span>
+        </AppButton>
       </div>
 
       <!-- 桌面端：上传 split 按钮 + 悬停下拉（菜单从按钮 scale 0.95→1 生长） -->
       <div class="group relative hidden sm:block">
-        <button
-          class="flex h-10 items-center gap-1.5 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-[background-color,scale] duration-150 hover:bg-primary-hover active:scale-[0.97] active:bg-primary-pressed"
-          type="button"
-          aria-label="上传文件或文件夹"
-        >
-          <Icon class="text-[18px]" icon="material-symbols:upload" />
+        <AppButton tone="primary" icon="material-symbols:upload" aria-label="上传文件或文件夹">
           上传
-        </button>
+        </AppButton>
         <div
-          class="invisible absolute right-0 top-full z-40 mt-1.5 w-44 origin-top-right scale-[0.95] rounded-md bg-surface p-1.5 opacity-0 shadow-popover transition-all duration-150 ease-out group-hover:visible group-hover:scale-100 group-hover:opacity-100"
+          class="invisible absolute right-0 top-full z-40 mt-1.5 w-44 bg-surface p-1.5 opacity-0 shadow-popover transition-[opacity,visibility] group-hover:visible group-hover:opacity-100"
         >
           <button
-            class="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-sm text-label transition-colors duration-150 hover:bg-surface-secondary"
+            class="flex h-9 w-full items-center gap-2.5 px-2.5 text-body text-label transition-colors hover:bg-surface-secondary"
             type="button"
             aria-label="上传文件"
             @click="openFileDialog"
           >
-            <Icon class="text-[16px] text-label-secondary" icon="material-symbols:description" />
+            <AppIcon
+              class="atom-glyph text-label-secondary"
+              icon="material-symbols:description"
+              :style="{ '--atom-glyph-size': '16px' }"
+            />
             上传文件
           </button>
           <button
-            class="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-sm text-label transition-colors duration-150 hover:bg-surface-secondary"
+            class="flex h-9 w-full items-center gap-2.5 px-2.5 text-body text-label transition-colors hover:bg-surface-secondary"
             type="button"
             aria-label="上传文件夹"
             @click="openFolderDialog"
           >
-            <Icon class="text-[16px] text-label-secondary" icon="material-symbols:folder" />
+            <AppIcon
+              class="atom-glyph text-label-secondary"
+              icon="material-symbols:folder"
+              :style="{ '--atom-glyph-size': '16px' }"
+            />
             上传文件夹
           </button>
         </div>
       </div>
 
       <!-- 上传进度入口 -->
-      <button
+      <AppButton
         v-if="uploadTaskCount > 0"
-        :class="[secondaryButtonClass, isUploadPanelOpen ? 'bg-surface-secondary' : '']"
-        type="button"
+        :icon="isUploading ? undefined : uploadStatusIcon"
+        :loading="isUploading"
+        :class="isUploadPanelOpen ? 'bg-surface-secondary' : ''"
         aria-label="查看上传进度"
         @click="emit('toggle-upload-panel')"
       >
-        <Icon
-          class="text-[18px]"
-          :icon="uploadStatusIcon"
-          :class="isUploading ? 'animate-spin text-primary' : 'text-primary'"
-        />
         <span v-if="isUploading">{{ normalizedProgress }}%</span>
         <span v-else>{{ completedUploadCount }}/{{ uploadTaskCount }}</span>
-      </button>
+      </AppButton>
     </div>
-  </div>
+  </header>
 </template>

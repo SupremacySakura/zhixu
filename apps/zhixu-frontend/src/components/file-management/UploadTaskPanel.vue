@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../ui/AppIcon.vue'
+import AppLoading from '../ui/AppLoading.vue'
 import {
   AnimatePresence,
   Motion,
@@ -56,7 +57,7 @@ const closePanel = () => {
 }
 
 const iconButtonClass =
-  'flex h-8 w-8 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:bg-surface-secondary hover:text-label'
+  'flex h-8 w-8 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-secondary hover:text-label'
 
 // —— 拖拽换位 + 折叠（DESIGN.md §5.3）——
 const isCollapsed = ref(false)
@@ -82,7 +83,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
 </script>
 
 <template>
-  <!-- 非阻塞浮层：material-thick 不加遮罩（DESIGN.md §3） -->
+  <!-- 非阻塞浮层：不铺遮罩，页面照常可操作（DESIGN.md §Layout） -->
   <div class="pointer-events-none fixed inset-0 z-40">
     <AnimatePresence>
       <Motion
@@ -99,7 +100,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
         :drag-listener="false"
         :drag-momentum="false"
         :drag-elastic="0"
-        class="material-thick pointer-events-auto absolute bottom-4 right-4 flex max-h-[500px] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg shadow-floating backdrop-blur-[20px] backdrop-saturate-[180%] sm:w-96"
+        class="pointer-events-auto absolute bottom-4 right-4 flex max-h-[500px] w-[calc(100vw-2rem)] flex-col overflow-hidden border border-hairline bg-surface shadow-floating sm:w-96"
         @pan-end="handlePanelPanEnd"
       >
         <!-- 拖拽把手：按住标题区拖动换位 -->
@@ -108,13 +109,14 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
           @pointerdown="dragControls.start($event)"
         >
           <div class="flex items-center gap-2">
-            <Icon
-              v-if="isUploading"
-              icon="material-symbols:progress-activity"
-              class="animate-spin text-[18px] text-primary"
+            <AppLoading v-if="isUploading" :size="18" class="text-primary" />
+            <AppIcon
+              v-else
+              icon="material-symbols:check-circle"
+              class="atom-glyph text-primary"
+              :style="{ '--atom-glyph-size': '18px' }"
             />
-            <Icon v-else icon="material-symbols:check-circle" class="text-[18px] text-primary" />
-            <span class="text-[15px] font-semibold text-label">
+            <span class="text-lead font-semibold text-label">
               上传任务 ({{ completedCount }}/{{ tasks.length }})
             </span>
           </div>
@@ -127,10 +129,11 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
               @pointerdown.stop
               @click="isCollapsed = !isCollapsed"
             >
-              <Icon
-                class="text-[18px] transition-transform duration-200"
+              <AppIcon
+                class="atom-glyph transition-transform"
                 :class="isCollapsed ? '-rotate-180' : ''"
                 icon="material-symbols:expand-more"
+                :style="{ '--atom-glyph-size': '18px' }"
               />
             </button>
             <button
@@ -142,7 +145,11 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
               @pointerdown.stop
               @click="emit('clear-completed')"
             >
-              <Icon class="text-[18px]" icon="material-symbols:cleaning-services" />
+              <AppIcon
+                class="atom-glyph"
+                icon="material-symbols:cleaning-services"
+                :style="{ '--atom-glyph-size': '18px' }"
+              />
             </button>
             <button
               :class="iconButtonClass"
@@ -152,7 +159,11 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
               @pointerdown.stop
               @click="closePanel"
             >
-              <Icon class="text-[18px]" icon="material-symbols:close" />
+              <AppIcon
+                class="atom-glyph"
+                icon="material-symbols:close"
+                :style="{ '--atom-glyph-size': '18px' }"
+              />
             </button>
           </div>
         </div>
@@ -165,13 +176,13 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
           class="flex min-h-0 flex-col overflow-hidden"
         >
           <div class="border-b border-hairline bg-surface-secondary px-4 py-2.5">
-            <div class="mb-1 flex items-center justify-between text-caption">
+            <div class="mb-1 flex items-center justify-between text-note">
               <span class="text-label-secondary">总体进度</span>
               <span class="font-semibold text-label">{{ normalizedOverallProgress }}%</span>
             </div>
-            <div class="h-1.5 overflow-hidden rounded-full bg-surface-tertiary">
+            <div class="h-1.5 overflow-hidden bg-surface-tertiary">
               <div
-                class="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+                class="h-full bg-primary transition-[width] duration-standard"
                 :style="{ width: `${normalizedOverallProgress}%` }"
               ></div>
             </div>
@@ -181,61 +192,77 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
             <div
               v-for="row in taskRows"
               :key="row.task.id"
-              class="flex items-center gap-3 rounded-md bg-surface-secondary/70 p-3"
+              class="flex items-center gap-3 bg-surface-secondary/70 p-3"
             >
               <div
-                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm"
+                class="flex h-8 w-8 shrink-0 items-center justify-center"
                 :class="`${row.icon.bg} ${row.icon.fg}`"
               >
-                <Icon :icon="row.icon.icon" class="text-[16px]" />
+                <AppIcon
+                  :icon="row.icon.icon"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '16px' }"
+                />
               </div>
 
               <div class="min-w-0 flex-1">
                 <div class="mb-1 flex items-center justify-between gap-2">
-                  <p class="truncate text-[13px] font-medium text-label">
+                  <p class="truncate text-body font-medium text-label">
                     {{ row.task.file.name }}
                   </p>
-                  <span class="flex-none text-caption font-semibold" :class="row.meta.color">
+                  <span class="flex-none text-note font-semibold" :class="row.meta.color">
                     {{ row.statusLabel }}
                   </span>
                 </div>
-                <div class="h-1 overflow-hidden rounded-full bg-surface-tertiary">
+                <div class="h-1 overflow-hidden bg-surface-tertiary">
                   <div
-                    class="h-full rounded-full transition-[width] duration-200 ease-out"
+                    class="h-full transition-[width] duration-standard"
                     :class="row.meta.bar"
                     :style="{ width: `${row.percent}%` }"
                   ></div>
                 </div>
-                <p class="mt-1 truncate text-[11px] text-label-tertiary">{{ row.task.message }}</p>
+                <p class="mt-1 truncate text-note text-label-tertiary">{{ row.task.message }}</p>
               </div>
 
               <div class="flex flex-none items-center gap-0.5">
                 <button
                   v-if="row.task.status === 'failed'"
-                  class="flex h-7 w-7 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:text-primary"
+                  class="flex h-7 w-7 items-center justify-center text-label-secondary transition-colors tap-target hover:text-primary"
                   type="button"
                   aria-label="重试上传"
                   @click="emit('retry', row.task)"
                 >
-                  <Icon class="text-[16px]" icon="material-symbols:replay" />
+                  <AppIcon
+                    class="atom-glyph"
+                    icon="material-symbols:replay"
+                    :style="{ '--atom-glyph-size': '16px' }"
+                  />
                 </button>
                 <button
                   v-if="row.meta.active"
-                  class="flex h-7 w-7 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:text-danger"
+                  class="flex h-7 w-7 items-center justify-center text-label-secondary transition-colors tap-target hover:text-danger"
                   type="button"
                   aria-label="取消上传"
                   @click="emit('cancel', row.task)"
                 >
-                  <Icon class="text-[16px]" icon="material-symbols:close" />
+                  <AppIcon
+                    class="atom-glyph"
+                    icon="material-symbols:close"
+                    :style="{ '--atom-glyph-size': '16px' }"
+                  />
                 </button>
                 <button
                   v-if="row.removable"
-                  class="flex h-7 w-7 items-center justify-center rounded-sm text-label-secondary transition-colors duration-150 hover:text-danger"
+                  class="flex h-7 w-7 items-center justify-center text-label-secondary transition-colors tap-target hover:text-danger"
                   type="button"
                   aria-label="移除任务"
                   @click="emit('remove', row.task.id)"
                 >
-                  <Icon class="text-[16px]" icon="material-symbols:delete" />
+                  <AppIcon
+                    class="atom-glyph"
+                    icon="material-symbols:delete"
+                    :style="{ '--atom-glyph-size': '16px' }"
+                  />
                 </button>
               </div>
             </div>

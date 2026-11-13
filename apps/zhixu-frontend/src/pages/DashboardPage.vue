@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Icon } from '@iconify/vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 import { useUserStore } from '../stores/user'
 import { useOperationLogs } from '../composables/useOperationLogs'
 import LoginRequiredPlaceholder from '../components/bussiness/LoginRequiredPlaceholder.vue'
@@ -69,12 +69,12 @@ const fileTypeMeta: Record<string, { title: string; icon: string; colorClass: st
   video: {
     title: '视频',
     icon: 'material-symbols:videocam-outline-rounded',
-    colorClass: 'bg-pink-tint text-pink',
+    colorClass: 'bg-danger-tint text-danger',
   },
   audio: {
     title: '音频',
     icon: 'material-symbols:music-note-rounded',
-    colorClass: 'bg-purple-tint text-purple',
+    colorClass: 'bg-primary-tint text-primary',
   },
   document: {
     title: '文档',
@@ -83,7 +83,7 @@ const fileTypeMeta: Record<string, { title: string; icon: string; colorClass: st
   },
   other: {
     title: '其他',
-    icon: 'material-symbols:insert-drive-file-outline-rounded',
+    icon: 'material-symbols:description-outline-rounded',
     colorClass: 'bg-surface-tertiary text-label-secondary',
   },
 }
@@ -185,221 +185,228 @@ watch(
 </script>
 
 <template>
-  <div class="h-full flex-1 overflow-y-auto">
+  <div class="flex min-h-0 flex-1 flex-col">
     <LoginRequiredPlaceholder v-if="!userStore.isLoggedIn" />
 
-    <main v-else class="space-y-6 p-4 sm:p-6 lg:space-y-8 lg:p-8">
-      <!-- 页面标题 -->
-      <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h2 class="text-title-2">仪表盘</h2>
-          <p class="text-subhead text-label-secondary">欢迎回来，这是您的存储情况。</p>
-        </div>
+    <!-- 页头带 64px：仪表盘是索引列表原型（DESIGN 原型 ①b），
+         标题旁边挂的是存储用量这类等宽计数，不是操作按钮。 -->
+    <header v-if="userStore.isLoggedIn" class="shell-band">
+      <div class="min-w-0 flex-1">
+        <h1 class="text-title">仪表盘</h1>
+        <p class="font-type text-micro text-label-tertiary">欢迎回来，这是您的存储情况。</p>
       </div>
+    </header>
 
-      <!-- 待处理提醒：只取摘要计数，点击进演化中心逐条处理 -->
-      <RouterLink
-        to="/home/evolution"
-        class="block rounded-md bg-surface p-6 shadow-card transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-popover"
-        data-test="evolution-card"
-      >
-        <div class="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 class="text-title-3">待处理提醒</h3>
-            <p class="mt-1 text-subhead text-label-secondary">
-              重复、过时与冲突提醒集中在这里，逐条确认后才落地。
-            </p>
-          </div>
-          <span class="text-subhead font-medium text-primary">前往演化中心 →</span>
-        </div>
-
-        <p v-if="evolutionPendingCount === 0" class="mt-4 text-subhead text-label-secondary">
-          暂无待处理提醒
-        </p>
-        <div v-else class="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
-          <div>
-            <p class="text-caption text-label-secondary">待处理</p>
-            <p class="text-title-1 mt-0.5" data-test="evolution-pending-total">
-              {{ evolutionPendingCount }}
-            </p>
-          </div>
-          <div
-            v-for="stat in evolutionTypeStats"
-            :key="stat.key"
-            class="border-l border-hairline pl-8"
-          >
-            <p class="text-caption text-label-secondary">{{ stat.label }}</p>
-            <p class="mt-0.5 text-title-3">{{ stat.count }}</p>
-          </div>
-        </div>
-      </RouterLink>
-
-      <!-- 存储用量 + 类型统计 -->
-      <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-        <!-- 存储卡：品牌绿环形进度（≥90% 转 warning） -->
-        <div class="rounded-md bg-surface p-6 shadow-card lg:col-span-4 lg:self-start">
-          <div class="mb-3 flex items-start justify-between gap-4">
-            <h3 class="text-title-3">存储使用情况</h3>
-            <span
-              class="flex h-9 w-9 flex-none items-center justify-center rounded-sm text-label-tertiary"
-            >
-              <Icon
-                icon="material-symbols:info-outline-rounded"
-                class="text-[20px]"
-                aria-hidden="true"
-              />
-            </span>
-          </div>
-
-          <div class="relative flex items-center justify-center py-3">
-            <svg class="h-32 w-32 -rotate-90">
-              <circle
-                class="text-surface-tertiary"
-                cx="64"
-                cy="64"
-                fill="transparent"
-                r="58"
-                stroke="currentColor"
-                stroke-width="8"
-              />
-              <circle
-                :class="isStorageWarning ? 'text-warning' : 'text-primary'"
-                class="transition-all duration-1000 ease-out"
-                cx="64"
-                cy="64"
-                fill="transparent"
-                r="58"
-                stroke="currentColor"
-                :stroke-dasharray="circumference"
-                :stroke-dashoffset="dashOffset"
-                stroke-width="8"
-                stroke-linecap="round"
-              />
-            </svg>
-            <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span class="text-title-1" :class="isStorageWarning && 'text-danger'">
-                {{ storageUsedPercent }}%
-              </span>
-              <span
-                class="text-caption font-semibold uppercase tracking-[0.08em] text-label-tertiary"
-              >
-                已使用
-              </span>
-            </div>
-          </div>
-
-          <div class="mt-4 space-y-2.5 border-t border-hairline pt-4 text-subhead">
-            <div class="flex items-center justify-between gap-4">
-              <span class="text-label-secondary">已使用</span>
-              <span class="font-semibold text-label">{{ storageUsedStr }}</span>
-            </div>
-            <div class="flex items-center justify-between gap-4">
-              <span class="text-label-secondary">总容量</span>
-              <span class="font-semibold text-label">{{ storageTotalStr }}</span>
-            </div>
-            <div class="flex items-center justify-between gap-4">
-              <span class="text-label-secondary">剩余</span>
-              <span
-                class="font-semibold"
-                :class="isStorageWarning ? 'text-danger' : 'text-primary'"
-                >{{ storageLeftStr }}</span
-              >
-            </div>
-          </div>
-        </div>
-
-        <!-- 文件类型统计：hover 微浮起 + 阴影加深 -->
-        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:col-span-8 xl:grid-cols-3">
-          <div
-            v-for="stat in fileStats"
-            :key="stat.type"
-            class="flex flex-col justify-between rounded-md bg-surface p-5 shadow-card transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-popover"
-          >
-            <div
-              :class="[
-                'mb-4 flex h-10 w-10 items-center justify-center rounded-sm',
-                stat.colorClass,
-              ]"
-            >
-              <Icon :icon="stat.icon" class="text-[20px]" />
-            </div>
+    <main v-if="userStore.isLoggedIn" class="shell-page">
+      <div class="shell-wide space-y-6 lg:space-y-8">
+        <!-- 待处理提醒：只取摘要计数，点击进演化中心逐条处理 -->
+        <RouterLink
+          to="/home/evolution"
+          class="block border border-hairline bg-surface p-6 shadow-card transition-colors hover:bg-surface-secondary"
+          data-test="evolution-card"
+        >
+          <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h4 class="text-subhead text-label-secondary">{{ stat.title }}</h4>
-              <p class="text-title-1 mt-0.5">{{ stat.count }}</p>
-              <p class="text-caption mt-1.5 text-label-tertiary">共 {{ stat.size }}</p>
+              <h3 class="text-title">待处理提醒</h3>
+              <p class="mt-1 text-body text-label-secondary">
+                重复、过时与冲突提醒集中在这里，逐条确认后才落地。
+              </p>
             </div>
+            <span class="text-body font-medium text-primary">前往演化中心 →</span>
           </div>
-        </div>
-      </div>
 
-      <!-- 操作日志：iCloud Drive 风格 48px 行 -->
-      <div class="overflow-hidden rounded-md bg-surface shadow-card">
-        <div class="flex items-center justify-between border-b border-hairline p-6">
-          <h3 class="text-title-3">操作日志</h3>
-          <span class="text-subhead text-label-secondary">{{
-            isOperationLogsLoading ? '加载中...' : `共 ${operationLogTotal} 条`
-          }}</span>
-        </div>
-
-        <!-- 加载骨架 -->
-        <div v-if="isOperationLogsLoading" class="space-y-3.5 p-6">
-          <div v-for="n in 2" :key="n" class="flex animate-pulse items-center gap-3">
-            <div class="h-8 w-8 flex-none rounded-sm bg-surface-secondary"></div>
-            <div class="flex-1 space-y-1.5">
-              <div class="h-3 w-1/2 rounded-full bg-surface-secondary"></div>
-              <div class="h-3 w-1/3 rounded-full bg-surface-secondary"></div>
-            </div>
-          </div>
-        </div>
-
-        <template v-else>
-          <p
-            v-if="operationLogCards.length === 0"
-            class="py-8 text-center text-subhead text-label-secondary"
-          >
-            暂无操作记录
+          <p v-if="evolutionPendingCount === 0" class="mt-4 text-body text-label-secondary">
+            暂无待处理提醒
           </p>
-
-          <template v-for="(card, index) in operationLogCards" :key="card.id">
+          <div v-else class="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
+            <div>
+              <p class="text-note text-label-secondary">待处理</p>
+              <p class="mt-0.5 font-type text-display" data-test="evolution-pending-total">
+                {{ evolutionPendingCount }}
+              </p>
+            </div>
             <div
-              class="flex min-h-12 items-center gap-3 px-6 transition-colors duration-150 hover:bg-surface-secondary"
+              v-for="stat in evolutionTypeStats"
+              :key="stat.key"
+              class="border-l border-hairline pl-8"
             >
-              <div
-                class="flex h-8 w-8 flex-none items-center justify-center rounded-sm"
-                :class="card.colorClass"
-              >
-                <Icon :icon="card.icon" class="text-[16px]" />
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-[15px] font-semibold leading-[22px]">
-                  {{ card.title }}
-                </p>
-                <p class="truncate text-subhead text-label-secondary">
-                  {{ card.subtitle
-                  }}<span v-if="card.highlight" class="text-primary"
-                    >{{ ' ' }}{{ card.highlight }}</span
-                  >
-                </p>
-              </div>
-              <div class="flex-none text-right">
-                <p class="text-caption text-label-tertiary">{{ card.time }}</p>
+              <p class="text-note text-label-secondary">{{ stat.label }}</p>
+              <p class="mt-0.5 font-type text-title">{{ stat.count }}</p>
+            </div>
+          </div>
+        </RouterLink>
+
+        <!-- 存储用量 + 类型统计 -->
+        <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <!-- 存储卡：品牌绿环形进度（≥90% 转 warning） -->
+          <div
+            class="border border-hairline bg-surface p-6 shadow-card lg:col-span-4 lg:self-start"
+          >
+            <div class="mb-3 flex items-start justify-between gap-4">
+              <h3 class="text-title">存储使用情况</h3>
+              <span class="flex h-9 w-9 flex-none items-center justify-center text-label-tertiary">
+                <AppIcon
+                  icon="material-symbols:info-outline-rounded"
+                  class="atom-glyph"
+                  aria-hidden="true"
+                  :style="{ '--atom-glyph-size': '20px' }"
+                />
+              </span>
+            </div>
+
+            <div class="relative flex items-center justify-center py-3">
+              <svg class="h-32 w-32 -rotate-90">
+                <circle
+                  class="text-surface-tertiary"
+                  cx="64"
+                  cy="64"
+                  fill="transparent"
+                  r="58"
+                  stroke="currentColor"
+                  stroke-width="8"
+                />
+                <circle
+                  :class="isStorageWarning ? 'text-warning' : 'text-primary'"
+                  class="transition-[stroke-dashoffset] duration-standard"
+                  cx="64"
+                  cy="64"
+                  fill="transparent"
+                  r="58"
+                  stroke="currentColor"
+                  :stroke-dasharray="circumference"
+                  :stroke-dashoffset="dashOffset"
+                  stroke-width="8"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span class="font-type text-display" :class="isStorageWarning && 'text-danger'">
+                  {{ storageUsedPercent }}%
+                </span>
+                <span class="font-type text-micro uppercase text-label-tertiary"> 已使用 </span>
               </div>
             </div>
-            <div v-if="index < operationLogCards.length - 1" class="ml-17 h-px bg-hairline" />
-          </template>
 
-          <!-- 加载更多 -->
-          <div v-if="hasMore" class="border-t border-hairline px-6 py-3">
-            <button
-              type="button"
-              class="w-full rounded-sm py-2 text-subhead font-medium text-primary transition-colors duration-150 hover:bg-surface-secondary disabled:opacity-50"
-              :disabled="isLoadingMore"
-              @click="loadMoreOperationLogs"
-            >
-              {{ isLoadingMore ? '加载中…' : '加载更多' }}
-            </button>
+            <div class="mt-4 space-y-2.5 border-t border-hairline pt-4 text-body">
+              <div class="flex items-center justify-between gap-4">
+                <span class="text-label-secondary">已使用</span>
+                <span class="font-type font-semibold text-label">{{ storageUsedStr }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-4">
+                <span class="text-label-secondary">总容量</span>
+                <span class="font-type font-semibold text-label">{{ storageTotalStr }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-4">
+                <span class="text-label-secondary">剩余</span>
+                <span
+                  class="font-type font-semibold"
+                  :class="isStorageWarning ? 'text-danger' : 'text-primary'"
+                  >{{ storageLeftStr }}</span
+                >
+              </div>
+            </div>
           </div>
-        </template>
+
+          <!-- 文件类型统计：悬停只改底色（DESIGN.md §Elevation：线/留白/硬偏移三选二，
+               位移与阴影加深属于「第四种手段」，且与知识库硬卡的静止感相冲突）。 -->
+          <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:col-span-8 xl:grid-cols-3">
+            <div
+              v-for="stat in fileStats"
+              :key="stat.type"
+              class="flex flex-col justify-between border border-hairline bg-surface p-5 shadow-card transition-colors hover:bg-surface-secondary"
+              data-test="file-type-card"
+            >
+              <div :class="['mb-4 flex h-10 w-10 items-center justify-center', stat.colorClass]">
+                <AppIcon
+                  :icon="stat.icon"
+                  class="atom-glyph"
+                  :style="{ '--atom-glyph-size': '20px' }"
+                />
+              </div>
+              <div>
+                <h4 class="text-note text-label-secondary">{{ stat.title }}</h4>
+                <p class="mt-0.5 font-type text-title" data-test="file-type-count">
+                  {{ stat.count }}
+                </p>
+                <p class="mt-1.5 font-type text-micro text-label-tertiary">共 {{ stat.size }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 操作日志：iCloud Drive 风格 48px 行 -->
+        <div class="overflow-hidden border border-hairline bg-surface shadow-card">
+          <div class="flex items-center justify-between border-b border-hairline p-6">
+            <h3 class="text-title">操作日志</h3>
+            <span class="font-type text-micro text-label-secondary">{{
+              isOperationLogsLoading ? '加载中...' : `共 ${operationLogTotal} 条`
+            }}</span>
+          </div>
+
+          <!-- 加载骨架 -->
+          <div v-if="isOperationLogsLoading" class="space-y-3.5 p-6">
+            <div v-for="n in 2" :key="n" class="flex items-center gap-3">
+              <div class="h-8 w-8 flex-none bg-hairline"></div>
+              <div class="flex-1 space-y-1.5">
+                <div class="h-3 w-1/2 bg-hairline"></div>
+                <div class="h-3 w-1/3 bg-hairline"></div>
+              </div>
+            </div>
+          </div>
+
+          <template v-else>
+            <p
+              v-if="operationLogCards.length === 0"
+              class="py-8 text-center text-body text-label-secondary"
+            >
+              暂无操作记录
+            </p>
+
+            <template v-for="(card, index) in operationLogCards" :key="card.id">
+              <div
+                class="flex min-h-12 items-center gap-3 px-6 transition-colors hover:bg-surface-secondary"
+              >
+                <div
+                  class="flex h-8 w-8 flex-none items-center justify-center"
+                  :class="card.colorClass"
+                >
+                  <AppIcon
+                    :icon="card.icon"
+                    class="atom-glyph"
+                    :style="{ '--atom-glyph-size': '16px' }"
+                  />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-lead text-label">
+                    {{ card.title }}
+                  </p>
+                  <p class="truncate text-body text-label-secondary">
+                    {{ card.subtitle
+                    }}<span v-if="card.highlight" class="text-primary"
+                      >{{ ' ' }}{{ card.highlight }}</span
+                    >
+                  </p>
+                </div>
+                <div class="flex-none text-right">
+                  <p class="font-type text-micro text-label-tertiary">{{ card.time }}</p>
+                </div>
+              </div>
+              <div v-if="index < operationLogCards.length - 1" class="ml-17 h-px bg-hairline" />
+            </template>
+
+            <!-- 加载更多 -->
+            <div v-if="hasMore" class="border-t border-hairline px-6 py-3">
+              <button
+                type="button"
+                class="w-full py-2 text-body font-medium text-primary transition-colors hover:bg-surface-secondary disabled:opacity-50"
+                :disabled="isLoadingMore"
+                @click="loadMoreOperationLogs"
+              >
+                {{ isLoadingMore ? '加载中…' : '加载更多' }}
+              </button>
+            </div>
+          </template>
+        </div>
       </div>
     </main>
   </div>

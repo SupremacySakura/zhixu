@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import AddKnowledgeDialog from '../../components/knowledge/AddKnowledgeDialog.vue'
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 describe('AddKnowledgeDialog', () => {
   it('opens a modal, submits, and restores focus on close', async () => {
     const trigger = document.createElement('button')

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import KnowledgeActionMenu from '../../components/knowledge/KnowledgeActionMenu.vue'
 import type { KnowledgeItem } from '../../services/apis/knowledge'
 
-vi.mock('@iconify/vue', () => ({ Icon: { template: '<span />' } }))
+vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span />' } }))
 vi.mock('motion-v', () => ({
   AnimatePresence: { template: '<slot />' },
   Motion: { template: '<div><slot /></div>' },

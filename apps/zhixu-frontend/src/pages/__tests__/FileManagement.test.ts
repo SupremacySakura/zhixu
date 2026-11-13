@@ -9,8 +9,8 @@ import {
   getListCountByFolderIDAndUserID,
 } from '../../services/apis/file'
 
-vi.mock('@iconify/vue', () => ({
-  Icon: { template: '<span aria-hidden="true" />' },
+vi.mock('../../components/ui/AppIcon.vue', () => ({
+  default: { template: '<span aria-hidden="true" />' },
 }))
 
 vi.mock('../../services/apis/file', () => ({
@@ -68,7 +68,7 @@ describe('FileManagement', () => {
             routes: [{ path: '/', component: { template: '<div />' } }],
           }),
         ],
-        stubs: { Icon: true },
+        stubs: { AppIcon: true },
       },
     })
     await flushPromises()
