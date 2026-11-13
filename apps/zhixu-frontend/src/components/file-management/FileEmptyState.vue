@@ -1,60 +1,54 @@
 <script setup lang="ts">
+/**
+ * 空态：靠左的一段话 + 一个动作，不是居中的大插画。
+ *
+ * 迁移前这里是「28px 方块套 20px 方块」的居中插画，加两颗装饰方块，
+ * 再配一颗 40px 高的胶囊主按钮。DESIGN.md 的空态条款明确禁止这个组合
+ * （居中大图标 + 胶囊按钮），世界里的空态是索引卡上的一行说明。
+ *
+ * 图标仍保留，但降到与正文同级的 20px、靠左排在文字前，不再当插画用。
+ */
 import { computed } from 'vue'
+import AppButton from '../ui/AppButton.vue'
 import AppIcon from '../ui/AppIcon.vue'
 
 const props = withDefaults(
   defineProps<{
+    /** 搜索关键词：非空说明是「搜不到」，空说明是「还没东西」。 */
     query?: string
   }>(),
-  {
-    query: '',
-  },
+  { query: '' },
 )
 
-const emit = defineEmits<{
-  upload: []
-}>()
+const emit = defineEmits<{ upload: [] }>()
 
 const hasSearchQuery = computed(() => props.query.trim().length > 0)
+
 const illustrationIcon = computed(() =>
   hasSearchQuery.value ? 'material-symbols:search-off' : 'material-symbols:cloud-upload-outline',
 )
+
 const title = computed(() => (hasSearchQuery.value ? '没有找到匹配的文件' : '还没有文件'))
+
 const description = computed(() =>
   hasSearchQuery.value ? '试试其他关键词' : '点击上传按钮，开始管理你的文件',
 )
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center text-center">
-    <!-- 双层圆环插画（FileEmptyState.html 规格） -->
-    <div class="relative mb-5">
-      <div class="flex h-28 w-28 items-center justify-center bg-primary-tint">
-        <div class="flex h-20 w-20 items-center justify-center bg-primary/20 text-primary">
-          <AppIcon
-            class="atom-glyph"
-            :icon="illustrationIcon"
-            :style="{ '--atom-glyph-size': '34px' }"
-          />
-        </div>
-      </div>
-      <div class="absolute right-2 top-1.5 h-3 w-3 bg-primary/20"></div>
-      <div class="absolute bottom-3 left-0 h-2 w-2 bg-primary/15"></div>
+  <div class="flex flex-col items-start gap-3">
+    <div class="flex items-center gap-2 text-label-tertiary">
+      <AppIcon :icon="illustrationIcon" class="atom-glyph" aria-hidden="true" />
+      <p class="text-lead text-label">{{ title }}</p>
     </div>
-    <p class="text-title-3 mb-1">{{ title }}</p>
-    <p class="text-subhead text-label-secondary mb-5">{{ description }}</p>
-    <button
+    <p class="text-note text-label-secondary">{{ description }}</p>
+    <AppButton
       v-if="!hasSearchQuery"
-      class="flex h-10 items-center gap-1.5 px-5 text-sm font-semibold transition-colors knowledge-button-primary"
-      type="button"
+      tone="primary"
+      icon="material-symbols:upload"
       @click="emit('upload')"
     >
-      <AppIcon
-        class="atom-glyph"
-        icon="material-symbols:upload"
-        :style="{ '--atom-glyph-size': '16px' }"
-      />
       上传文件
-    </button>
+    </AppButton>
   </div>
 </template>

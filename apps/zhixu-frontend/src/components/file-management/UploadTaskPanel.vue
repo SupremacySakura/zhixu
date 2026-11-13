@@ -176,7 +176,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
           class="flex min-h-0 flex-col overflow-hidden"
         >
           <div class="border-b border-hairline bg-surface-secondary px-4 py-2.5">
-            <div class="mb-1 flex items-center justify-between text-caption">
+            <div class="mb-1 flex items-center justify-between text-note">
               <span class="text-label-secondary">总体进度</span>
               <span class="font-semibold text-label">{{ normalizedOverallProgress }}%</span>
             </div>
@@ -210,7 +210,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
                   <p class="truncate text-body font-medium text-label">
                     {{ row.task.file.name }}
                   </p>
-                  <span class="flex-none text-caption font-semibold" :class="row.meta.color">
+                  <span class="flex-none text-note font-semibold" :class="row.meta.color">
                     {{ row.statusLabel }}
                   </span>
                 </div>
