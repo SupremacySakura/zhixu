@@ -309,7 +309,45 @@
 /* 页头带 64px：左标题 + 可选等宽计数行 / 右 1 主 + ≤2 次操作。
    下沿一条 hairline，**不吸顶** —— 滚走时腾出高度，这是 DESIGN 的明确要求。 */
 @utility shell-band {
-  @apply flex h-band flex-none items-center justify-between gap-4 border-b border-hairline bg-surface px-4 sm:px-5 lg:px-6;
+  display: flex;
+  height: var(--spacing-band);
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--spacing) * 4);
+  border-bottom: 1px solid var(--color-hairline);
+  background-color: var(--color-surface);
+  /* 左内边距不是常量：wide 是居中的 max-width 盒子，页头带是全宽条，
+     两者左缘只有在「页头带也按同一条居中线留白」时才重合。
+     max(基础留白, (宽度 − 容器)/2) 恰好等于「居中容器在留白区里的左缘」：
+     宽度富余时它等于居中偏移，宽度不足时退回基础留白（16/20/24）。 */
+  padding-inline: max(calc(var(--spacing) * 4), calc((100% - var(--container-wide)) / 2));
+  @media (width >= 40rem) {
+    padding-inline: max(calc(var(--spacing) * 5), calc((100% - var(--container-wide)) / 2));
+  }
+  @media (width >= 64rem) {
+    padding-inline: max(calc(var(--spacing) * 6), calc((100% - var(--container-wide)) / 2));
+  }
+}
+
+/* 表单原型（panel 896）的页头带：同一条居中线，但按 panel 算。
+   1440 下若沿用 wide 的口径，标题会落在 244 而表单在 372 —— 差 128px。 */
+@utility shell-band-panel {
+  display: flex;
+  height: var(--spacing-band);
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--spacing) * 4);
+  border-bottom: 1px solid var(--color-hairline);
+  background-color: var(--color-surface);
+  padding-inline: max(calc(var(--spacing) * 4), calc((100% - var(--container-panel)) / 2));
+  @media (width >= 40rem) {
+    padding-inline: max(calc(var(--spacing) * 5), calc((100% - var(--container-panel)) / 2));
+  }
+  @media (width >= 64rem) {
+    padding-inline: max(calc(var(--spacing) * 6), calc((100% - var(--container-panel)) / 2));
+  }
 }
 
 /* 画布页的悬浮页头带：浮在满铺画布之上，仍是 64px，仍然不吸顶。
@@ -318,6 +356,8 @@
   @apply absolute inset-x-0 top-0 z-toolbar flex h-band items-center justify-between gap-4 border-b border-hairline bg-surface px-4 sm:px-5 lg:px-6;
 }
 
+/* 画布页的页头带用 shell-band-float（容器是 full，没有居中线要对）。 */
+
 /* 页面滚动容器：水平内边距与页头带同一条左边线（16 / 20 / 24）。 */
 @utility shell-page {
   @apply flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-6 lg:px-6 lg:py-8;
@@ -325,7 +365,37 @@
 
 /* 工具栏 48px：搜索 + 筛选 + 右端命中计数。吸顶，z-toolbar，下沿一条 hairline。 */
 @utility shell-toolbar {
-  @apply sticky top-0 z-toolbar flex min-h-12 flex-wrap items-center gap-2 border-b border-hairline bg-surface px-4 py-2 sm:px-5 lg:px-6;
+  @apply sticky top-0 z-toolbar flex min-h-12 flex-wrap items-center gap-2 border-b border-hairline bg-surface py-2;
+}
+
+/* 页头带里的动作按钮：主操作实心蓝 32px、次操作描边 32px。
+   为什么不让页面各自写 knowledge-button-*：那套是 36px 高、px-4，
+   放进 64px 的带子里会顶满上下留白，且三个并排必然溢出 375px。 */
+@utility shell-band-action {
+  @apply inline-flex h-8 flex-none items-center justify-center gap-1.5 bg-surface px-2.5 text-note font-semibold text-label-secondary transition-colors hover:bg-surface-secondary hover:text-label;
+  border: 1px solid var(--color-hairline);
+  @media (width >= 40rem) {
+    padding-inline: calc(var(--spacing) * 3);
+  }
+}
+
+@utility shell-band-action-primary {
+  @apply inline-flex h-8 flex-none items-center justify-center gap-1.5 bg-primary px-2.5 text-note font-semibold text-surface-tertiary transition-colors hover:bg-primary-hover;
+  @media (width >= 40rem) {
+    padding-inline: calc(var(--spacing) * 3);
+  }
+}
+
+/* 满宽场景（外层没有 shell-page 提供 gutter，例如对话页的工具栏）。 */
+@utility shell-toolbar-gutter {
+  @apply sticky top-0 z-toolbar flex min-h-12 flex-wrap items-center gap-2 border-b border-hairline bg-surface py-2;
+  padding-inline: max(calc(var(--spacing) * 4), calc((100% - var(--container-wide)) / 2));
+  @media (width >= 40rem) {
+    padding-inline: max(calc(var(--spacing) * 5), calc((100% - var(--container-wide)) / 2));
+  }
+  @media (width >= 64rem) {
+    padding-inline: max(calc(var(--spacing) * 6), calc((100% - var(--container-wide)) / 2));
+  }
 }
 
 /* 四级容器：只有这四档，别的一律不许出现在页面级容器上。 */

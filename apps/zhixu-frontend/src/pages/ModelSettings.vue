@@ -168,8 +168,8 @@ function reloadConfirmation() {
     <!-- 页头带 64px。设置是表单原型（DESIGN 原型 ④），容器走 panel（896），
          比原来的 max-w-wide（1152）明显窄 —— 这是本批的意图变化，不是回归：
          表单一行太长会读丢，896 是「填得舒服」的上限。 -->
-    <header class="shell-band">
-      <div class="min-w-0">
+    <header class="shell-band-panel">
+      <div class="min-w-0 flex-1">
         <h1 class="text-title">让 AI 按你的方式工作</h1>
         <p class="font-type text-micro text-label-tertiary">仅本人可见</p>
       </div>

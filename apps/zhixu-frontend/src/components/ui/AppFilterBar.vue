@@ -88,7 +88,7 @@ function close() {
       :aria-label="open ? label : undefined"
       :class="
         open
-          ? 'fixed inset-x-0 bottom-0 z-menu flex max-h-[80vh] flex-col gap-2 overflow-y-auto border-t border-hairline bg-surface px-4 pb-6 pt-4'
+          ? 'fixed inset-x-0 bottom-0 z-menu flex max-h-[80vh] flex-col gap-2 overflow-y-auto border-t border-hairline bg-surface px-4 pb-6 pt-4 [&_button[aria-haspopup]]:w-full'
           : 'hidden'
       "
       class="lg:static lg:z-auto lg:contents lg:overflow-visible lg:border-0 lg:bg-transparent lg:p-0"

@@ -153,7 +153,7 @@ onMounted(() => {
          与首页提醒卡片只算 pending 是两套口径，这里沿用页头的待办视野）。
          面包屑已取消 —— 索引页不再重复侧栏已经说明的位置。 -->
     <header class="shell-band">
-      <div class="min-w-0">
+      <div class="min-w-0 flex-1">
         <h1 class="text-title">演化中心</h1>
         <p class="font-type text-micro text-label-tertiary">
           待处理 <span class="font-semibold text-label">{{ pendingCount }}</span> 条

@@ -242,21 +242,39 @@ onMounted(() => {
     <!-- 页头带 64px：左标题 + 等宽计数行，右 1 主 + 2 次操作（DESIGN.md 四段结构第 1 段）。
          面包屑已取消 —— 侧栏已指示位置，索引页再写一遍是浪费 24px。 -->
     <header class="shell-band">
-      <div class="min-w-0">
-        <h1 class="text-title">知识库</h1>
-        <p v-if="!loading" data-test="band-micro" class="font-type text-micro text-label-tertiary">
+      <div class="min-w-0 flex-1">
+        <h1 class="truncate text-title">知识库</h1>
+        <p
+          v-if="!loading"
+          data-test="band-micro"
+          class="truncate font-type text-micro text-label-tertiary"
+        >
           索引 {{ total }} · 命中 {{ items.length }}
         </p>
       </div>
+      <!-- 主次上限 1+2：新建知识是主操作，恒在；另两个是次操作。
+           375px 下三个带字的按钮必然溢出视口 —— 收成图标，功能一个不少。
+           文案留在 DOM 里（只做视觉隐藏），屏幕阅读器与文案断言都还能读到。 -->
       <div class="flex flex-none items-center gap-2">
-        <RouterLink to="/home/files" class="knowledge-button-secondary"
-          ><AppIcon icon="material-symbols:note-add-outline" />从文件加入</RouterLink
+        <RouterLink to="/home/files" class="shell-band-action" title="从文件加入"
+          ><AppIcon icon="material-symbols:note-add-outline" /><span class="hidden sm:inline"
+            >从文件加入</span
+          ></RouterLink
         >
-        <button type="button" class="knowledge-button-secondary" @click="showWebImport = true">
-          <AppIcon icon="material-symbols:language" />从网页导入
+        <button
+          type="button"
+          class="shell-band-action"
+          title="从网页导入"
+          @click="showWebImport = true"
+        >
+          <AppIcon icon="material-symbols:language" /><span class="hidden sm:inline"
+            >从网页导入</span
+          >
         </button>
-        <RouterLink to="/home/knowledge/new" class="knowledge-button-primary"
-          ><AppIcon icon="material-symbols:edit-square-outline" />新建知识</RouterLink
+        <RouterLink to="/home/knowledge/new" class="shell-band-action-primary" title="新建知识"
+          ><AppIcon icon="material-symbols:edit-square-outline" /><span class="hidden sm:inline"
+            >新建知识</span
+          ></RouterLink
         >
       </div>
     </header>

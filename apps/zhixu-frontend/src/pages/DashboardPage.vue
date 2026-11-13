@@ -191,7 +191,7 @@ watch(
     <!-- 页头带 64px：仪表盘是索引列表原型（DESIGN 原型 ①b），
          标题旁边挂的是存储用量这类等宽计数，不是操作按钮。 -->
     <header v-if="userStore.isLoggedIn" class="shell-band">
-      <div class="min-w-0">
+      <div class="min-w-0 flex-1">
         <h1 class="text-title">仪表盘</h1>
         <p class="font-type text-micro text-label-tertiary">欢迎回来，这是您的存储情况。</p>
       </div>

@@ -86,8 +86,8 @@ onScopeDispose(() => controller?.abort())
     <!-- 页头带 64px。面包屑保留（三层以上页面，共 3 处之一）。
          容器走 panel（896）：编辑页是表单原型，正文编辑 + 预览双列在 1152 下
          每列 560px 太宽，反而不利于读写节奏。 -->
-    <header class="shell-band">
-      <div class="min-w-0">
+    <header class="shell-band-panel">
+      <div class="min-w-0 flex-1">
         <div data-test="breadcrumb" class="flex gap-2 text-subhead text-label-secondary">
           <RouterLink to="/home/knowledge" class="text-primary-pressed">知识库</RouterLink
           ><span>/</span><span>{{ editing ? '编辑知识' : '新建知识' }}</span>

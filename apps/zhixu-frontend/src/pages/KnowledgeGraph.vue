@@ -96,7 +96,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
     <!-- 画布页的页头带是**悬浮**的（DESIGN 原型 ③）：它盖在满铺画布上，
          仍然是 64px，仍然不吸顶。所以内容区要自己让出 pt-band 的高度。 -->
     <header class="shell-band-float">
-      <div class="min-w-0">
+      <div class="min-w-0 flex-1">
         <h1 class="text-title">知识图谱</h1>
         <p class="font-type text-micro text-label-tertiary">
           节点 {{ graph.nodes.length }} · 边 {{ visibleEdges.length }}

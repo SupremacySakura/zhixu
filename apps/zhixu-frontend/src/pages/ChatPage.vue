@@ -166,7 +166,7 @@ onMounted(() => {
       <!-- 页头带 64px（与其它九页统一）。面包屑已取消：对话页不在
            「三层以上」那三处里，位置由侧栏的「对话」组说明。 -->
       <header class="shell-band">
-        <div class="flex min-w-0 items-center gap-2">
+        <div class="flex min-w-0 flex-1 items-center gap-2">
           <button
             type="button"
             aria-label="打开会话历史"
@@ -179,24 +179,20 @@ onMounted(() => {
               :style="{ '--atom-glyph-size': '20px' }"
             />
           </button>
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <h1 class="text-title">普通对话</h1>
             <p class="font-type text-micro text-label-tertiary">只发送本次会话中的文字</p>
           </div>
         </div>
         <div class="flex flex-none items-center gap-2">
-          <RouterLink to="/home/settings" class="knowledge-button-secondary h-8 px-3 text-note"
-            >模型设置 ↗</RouterLink
-          ><button
-            type="button"
-            class="knowledge-button-primary h-8 px-3 text-note"
-            @click="newChat"
-          >
-            ＋ 新对话
+          <RouterLink to="/home/settings" class="shell-band-action" title="模型设置"
+            >模型设置<span class="hidden sm:inline"> ↗</span></RouterLink
+          ><button type="button" class="shell-band-action-primary" @click="newChat">
+            ＋<span class="hidden sm:inline"> 新对话</span>
           </button>
         </div>
       </header>
-      <div class="shell-toolbar">
+      <div class="shell-toolbar-gutter">
         <fieldset :disabled="running || loading" class="min-w-0">
           <FilterMenu
             :model-value="model"

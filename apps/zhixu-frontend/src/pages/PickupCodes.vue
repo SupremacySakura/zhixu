@@ -241,15 +241,18 @@ onBeforeUnmount(() => {
   <div class="flex min-w-0 flex-1 flex-col bg-canvas text-label">
     <!-- 页头带 64px：索引列表原型。左标题 + 等宽计数行，右 1 主 + 1 次操作。 -->
     <header class="shell-band">
-      <div class="min-w-0">
-        <h1 class="text-title">取件码管理</h1>
-        <p class="font-type text-micro text-label-tertiary">创建、监控并撤销安全的文件提取码</p>
+      <div class="min-w-0 flex-1">
+        <h1 class="truncate text-title">取件码管理</h1>
+        <p class="truncate font-type text-micro text-label-tertiary">
+          创建、监控并撤销安全的文件提取码
+        </p>
       </div>
       <div class="flex flex-none items-center gap-2">
         <button
-          class="flex h-8 items-center gap-1.5 bg-surface px-3 text-note font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary"
+          class="shell-band-action"
           type="button"
           aria-label="去取件页面"
+          title="去取件"
           @click="goToFilePickup"
         >
           <AppIcon
@@ -258,12 +261,13 @@ onBeforeUnmount(() => {
             aria-hidden="true"
             :style="{ '--atom-glyph-size': '18px' }"
           />
-          <span>去取件</span>
+          <span class="hidden sm:inline">去取件</span>
         </button>
         <button
-          class="knowledge-button-primary h-8 px-3 text-note"
+          class="shell-band-action-primary"
           type="button"
           aria-label="创建新取件码"
+          title="创建新取件码"
           @click="openCreateModal"
         >
           <AppIcon
@@ -272,7 +276,7 @@ onBeforeUnmount(() => {
             aria-hidden="true"
             :style="{ '--atom-glyph-size': '18px' }"
           />
-          <span>创建新取件码</span>
+          <span class="hidden sm:inline">创建新取件码</span>
         </button>
       </div>
     </header>

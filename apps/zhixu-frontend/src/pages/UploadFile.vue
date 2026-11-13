@@ -220,8 +220,8 @@ const badgeClass = (item: QueueItem) => {
     <template v-else>
       <!-- 页头带 64px：上传是表单原型（DESIGN 原型 ④），容器 panel（896）。
            标题原先是页面内 section，现在提到带里，与其他八页对齐。 -->
-      <header class="shell-band">
-        <div class="min-w-0">
+      <header class="shell-band-panel">
+        <div class="min-w-0 flex-1">
           <h1 class="text-title">上传文件</h1>
           <p class="font-type text-micro text-label-tertiary">拖拽或选择文件，保留原件</p>
         </div>
