@@ -151,7 +151,9 @@ onMounted(() => {
 })
 </script>
 <template>
-  <div class="flex h-[calc(100dvh-60px)] min-h-0 lg:h-auto">
+  <!-- 外壳高度：100dvh 减掉移动端全局条。这里用 --spacing-topbar 令牌而不是写死 60，
+       外壳高度一变，这一处跟着变。桌面端没有全局条，lg:h-auto 交还给父级 flex。 -->
+  <div class="flex h-[calc(100dvh-var(--spacing-topbar))] min-h-0 lg:h-auto">
     <div class="hidden h-full lg:block">
       <ConversationSidebar
         ref="sidebarDesktop"
@@ -161,12 +163,14 @@ onMounted(() => {
       />
     </div>
     <main class="flex min-w-0 flex-1 flex-col bg-surface">
-      <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8 lg:py-5">
-        <div class="flex items-center gap-2">
+      <!-- 页头带 64px（与其它九页统一）。面包屑已取消：对话页不在
+           「三层以上」那三处里，位置由侧栏的「对话」组说明。 -->
+      <header class="shell-band">
+        <div class="flex min-w-0 flex-1 items-center gap-2">
           <button
             type="button"
             aria-label="打开会话历史"
-            class="flex h-10 w-10 items-center justify-center border border-hairline bg-surface text-label transition-colors tap-target hover:bg-surface-secondary lg:hidden"
+            class="flex h-8 w-8 flex-none items-center justify-center border border-rule bg-surface text-label transition-colors tap-target hover:bg-surface-secondary lg:hidden"
             @click="historyOpen = true"
           >
             <AppIcon
@@ -175,21 +179,20 @@ onMounted(() => {
               :style="{ '--atom-glyph-size': '20px' }"
             />
           </button>
-          <div>
-            <p class="mb-1 hidden text-caption text-label-secondary lg:block">工作空间 / 对话</p>
-            <h1 class="text-title-3">普通对话</h1>
+          <div class="min-w-0 flex-1">
+            <h1 class="text-title">普通对话</h1>
+            <p class="font-type text-micro text-label-tertiary">只发送本次会话中的文字</p>
           </div>
         </div>
-        <div class="flex items-center gap-4 text-caption">
-          <RouterLink to="/home/settings" class="text-primary-pressed">模型设置 ↗</RouterLink
-          ><button type="button" class="knowledge-button-secondary" @click="newChat">
-            ＋ 新对话
+        <div class="flex flex-none items-center gap-2">
+          <RouterLink to="/home/settings" class="shell-band-action" title="模型设置"
+            >模型设置<span class="hidden sm:inline"> ↗</span></RouterLink
+          ><button type="button" class="shell-band-action-primary" @click="newChat">
+            ＋<span class="hidden sm:inline"> 新对话</span>
           </button>
         </div>
       </header>
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 border-y border-hairline px-5 py-3 sm:px-8"
-      >
+      <div class="shell-toolbar-gutter">
         <fieldset :disabled="running || loading" class="min-w-0">
           <FilterMenu
             :model-value="model"
@@ -214,14 +217,14 @@ onMounted(() => {
           {{ error
           }}<button type="button" class="knowledge-text-action ml-3" @click="load">重新加载</button>
         </div>
-        <div v-else-if="!selected" class="mx-auto max-w-2xl px-6 py-16 text-center">
+        <div v-else-if="!selected" class="shell-wide px-6 py-16 text-center">
           <h2 class="text-title-2">先连接一个对话模型</h2>
           <p class="my-5 text-subhead leading-7 text-label-secondary">
             请选择可用对话模型，或前往设置添加模型与凭据。<br />普通对话不需要 Embedding 配置。
           </p>
           <RouterLink to="/home/settings" class="knowledge-button-primary">前往模型设置</RouterLink>
         </div>
-        <div v-else-if="!messages.length" class="mx-auto max-w-3xl px-6 py-12 sm:px-10">
+        <div v-else-if="!messages.length" class="shell-wide px-6 py-12 sm:px-10">
           <p class="mb-5 text-caption tracking-widest text-primary-pressed">从一句话开始</p>
           <h2 class="text-display font-semibold leading-snug tracking-tight sm:text-display">
             先聊聊，<br />看看模型是否回应。
@@ -246,7 +249,7 @@ onMounted(() => {
           </div>
           <p class="mt-5 text-caption text-label-secondary">对话自动保存，可在左侧历史记录中回看</p>
         </div>
-        <div v-else class="mx-auto max-w-3xl space-y-8 px-6 py-7 sm:px-10">
+        <div v-else class="shell-wide space-y-8 px-6 py-7 sm:px-10">
           <article
             v-for="(message, index) in messages"
             :key="index"
@@ -331,9 +334,7 @@ onMounted(() => {
           </article>
         </div>
       </section>
-      <div
-        class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8"
-      >
+      <div class="shell-wide shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
         <p role="status" class="min-h-7 text-caption text-label-secondary">
           {{
             running
@@ -397,7 +398,7 @@ onMounted(() => {
           :animate="{ opacity: 1 }"
           :exit="{ opacity: 0 }"
           :transition="fadeTransition"
-          class="fixed inset-0 z-40 flex lg:hidden"
+          class="fixed inset-0 z-menu flex lg:hidden"
           @click="historyOpen = false"
         >
           <div class="absolute inset-0 bg-scrim"></div>
@@ -408,10 +409,13 @@ onMounted(() => {
             :exit="{ x: '-100%' }"
             :transition="springBouncy"
             drag="x"
-            :drag-constraints="{ left: -320, right: 0 }"
+            :drag-constraints="{ left: -240, right: 0 }"
             :drag-elastic="{ left: 0.2, right: 0 }"
             :drag-momentum="false"
-            class="relative flex h-full w-[min(18rem,86vw)] flex-col bg-surface shadow-popover"
+            role="dialog"
+            aria-modal="true"
+            aria-label="会话历史"
+            class="relative flex h-full w-drawer flex-col bg-surface-secondary shadow-popover"
             @click.stop
             @pan-end="handleDrawerPanEnd"
           >

@@ -127,9 +127,10 @@ function onOrganized(updated: KnowledgeItem) {
 }
 </script>
 <template>
-  <main class="overflow-y-auto p-4 sm:p-6 lg:p-8">
-    <div class="mx-auto max-w-wide">
-      <div class="mb-5 flex gap-3 text-subhead text-label-secondary">
+  <main class="shell-page">
+    <div class="shell-measure">
+      <!-- 面包屑：三层以上页面保留（知识库 → 知识详情），共 3 处之一。 -->
+      <div data-test="breadcrumb" class="mb-5 flex gap-3 text-subhead text-label-secondary">
         <RouterLink to="/home/knowledge" class="text-primary-pressed">知识库</RouterLink
         ><span>/</span><span>知识详情</span>
       </div>
@@ -256,7 +257,10 @@ function onOrganized(updated: KnowledgeItem) {
         <p v-if="evolveHint" class="mb-5 text-subhead text-label-secondary" role="status">
           {{ evolveHint }}
         </p>
-        <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_15rem]">
+        <!-- 长文页的容器是 measure（40em），正文必须独占这个宽度。
+             这里**不再**开 xl 双列：measure 里再切 15rem 侧栏会把正文压到 400px 以下，
+             侧栏那几块（关系 / 整理 / 向量 / 标签 / 来源）改为正文下方堆叠。 -->
+        <div class="flex flex-col gap-6">
           <article
             class="min-w-0 border border-hairline bg-surface p-6 sm:p-9"
             aria-label="知识正文"

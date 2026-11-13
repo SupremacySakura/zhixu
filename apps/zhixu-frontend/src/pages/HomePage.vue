@@ -8,22 +8,46 @@ import SideBar, { type NavItem } from '../components/bussiness/SideBar.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import AppToast from '../components/ui/AppToast.vue'
 import { getProfile } from '../services/apis/auth'
+import { getKnowledgeCounts } from '../services/apis/knowledge'
 import { useUserStore } from '../stores/user'
 
+/**
+ * 九个导航项分五组（DESIGN.md §Layout）。
+ *
+ * 分组不是装饰：外壳是索引卡盒，侧栏就是盒子侧面那排标签页。
+ * 组名让「知识」与「来源」在视觉上先分开，再靠组内顺序表达依赖
+ * （知识库 → 知识图谱 → 演化中心是一条工作流）。
+ */
 const NavItems: NavItem[] = [
-  { label: '仪表盘', icon: 'material-symbols:dashboard', to: '/home/dashboard' },
-  { label: '文件管理', icon: 'material-symbols:folder-open', to: '/home/files' },
-  { label: '知识库', icon: 'material-symbols:menu-book-outline', to: '/home/knowledge' },
+  { label: '仪表盘', icon: 'material-symbols:dashboard', to: '/home/dashboard', group: '总览' },
+  {
+    label: '知识库',
+    icon: 'material-symbols:menu-book-outline',
+    to: '/home/knowledge',
+    group: '知识',
+  },
   {
     label: '知识图谱',
     icon: 'material-symbols:account-tree-outline',
     to: '/home/knowledge/graph',
+    group: '知识',
   },
-  { label: '演化中心', icon: 'material-symbols:sync-alt-rounded', to: '/home/evolution' },
-  { label: '对话', icon: 'material-symbols:chat-bubble-outline', to: '/home/chat' },
-  { label: '取件码', icon: 'material-symbols:key-outline', to: '/home/pickup-codes' },
-  { label: '上传', icon: 'material-symbols:cloud-upload', to: '/home/upload' },
-  { label: '设置', icon: 'material-symbols:settings-outline', to: '/home/settings' },
+  {
+    label: '演化中心',
+    icon: 'material-symbols:sync-alt-rounded',
+    to: '/home/evolution',
+    group: '知识',
+  },
+  { label: '文件管理', icon: 'material-symbols:folder-open', to: '/home/files', group: '来源' },
+  { label: '上传', icon: 'material-symbols:cloud-upload', to: '/home/upload', group: '来源' },
+  {
+    label: '取件码',
+    icon: 'material-symbols:key-outline',
+    to: '/home/pickup-codes',
+    group: '来源',
+  },
+  { label: '对话', icon: 'material-symbols:chat-bubble-outline', to: '/home/chat', group: '对话' },
+  { label: '设置', icon: 'material-symbols:settings-outline', to: '/home/settings', group: '系统' },
 ]
 
 const route = useRoute()
@@ -31,6 +55,15 @@ const router = useRouter()
 const userStore = useUserStore()
 const isMobileMenuOpen = ref(false)
 const logoutConfirmOpen = ref(false)
+
+/**
+ * 侧栏底部计数。取不到时保持 null，侧栏显示「索引 — · 分块 —」。
+ * 为什么放在外壳而不是各页面：DESIGN.md §四段结构第 4 条
+ * 「页面级计数与同步时间下沉到侧栏底部」—— 每页各算一遍会得到
+ * 九个不同的数字，而且每页都要多背一次请求。
+ */
+const indexCount = ref<number | null>(null)
+const chunkCount = ref<number | null>(null)
 
 // 进入主框架时静默刷新用户信息；401 由请求拦截器统一登出并跳转
 async function loadProfile() {
@@ -42,8 +75,20 @@ async function loadProfile() {
   }
 }
 
+async function loadCounts() {
+  try {
+    const counts = await getKnowledgeCounts()
+    indexCount.value = counts.index
+    chunkCount.value = counts.chunks
+  } catch {
+    // 计数是方位感，不是关键路径：失败就留占位符，不打扰用户
+  }
+}
+
 onMounted(() => {
-  if (userStore.isLoggedIn) void loadProfile()
+  if (!userStore.isLoggedIn) return
+  void loadProfile()
+  void loadCounts()
 })
 
 function confirmLogout() {
@@ -102,6 +147,8 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
         :nav-items="NavItems"
         :brand-title="'知序'"
         :brand-subtitle="''"
+        :index-count="indexCount"
+        :chunk-count="chunkCount"
         :user-name="userStore.profile?.username || ''"
         :user-email="userStore.profile?.email || ''"
         :user-avatar="userStore.profile?.avatar_url || ''"
@@ -110,16 +157,17 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
     </div>
 
     <div class="flex min-h-screen min-w-0 flex-1 flex-col lg:min-h-0">
-      <!-- 移动端顶栏：sticky + 半透明材质（DESIGN.md §3） -->
+      <!-- 移动端全局条 60px：桌面端没有全局顶栏，这一条只在 <1024 存在。
+           内容 = 「知序 + 当前页名」+ 40px 汉堡，与侧栏品牌区同一套字标语言。 -->
       <header
-        class="material sticky top-0 z-20 flex h-[60px] items-center justify-between border-b border-hairline px-4 lg:hidden"
+        class="sticky top-0 z-toolbar flex h-topbar flex-none items-center justify-between border-b border-hairline bg-surface px-4 lg:hidden"
       >
-        <div class="min-w-0">
-          <p class="text-read font-bold tracking-[-0.01em] text-label">知序</p>
-          <p class="truncate text-caption text-label-secondary">{{ currentNavLabel }}</p>
+        <div class="flex min-w-0 items-baseline gap-2">
+          <p class="flex-none font-semibold tracking-[0.2em] text-label">知序</p>
+          <p class="truncate font-type text-micro text-label-tertiary">{{ currentNavLabel }}</p>
         </div>
         <button
-          class="flex h-10 w-10 flex-none items-center justify-center border border-hairline bg-surface text-label transition-colors tap-target hover:bg-surface-secondary"
+          class="flex h-10 w-10 flex-none items-center justify-center border border-rule bg-surface text-label transition-colors tap-target hover:bg-surface-secondary"
           type="button"
           aria-label="打开导航菜单"
           @click="isMobileMenuOpen = true"
@@ -135,7 +183,10 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
       <router-view id="main-content" class="min-h-0 min-w-0 flex-1" tabindex="-1" />
     </div>
 
-    <!-- 导航抽屉：面板弹簧滑入（damping ≈ 0.8 轻微回弹），可拖拽左滑关闭 -->
+    <!-- 导航抽屉：面板弹簧滑入（damping ≈ 0.8 轻微回弹），可拖拽左滑关闭。
+         宽度走 w-drawer = min(15rem, 84vw)：375 下恰好 240px，更宽视口封顶 240px。
+         面板本身**不能**是 <aside>：ChatPage.test.ts 用 findAll('aside') 计数
+         （桌面 1 / 抽屉开 2 / 关 1），外壳再贡献一个 aside 就会把这套计数打乱。 -->
     <AnimatePresence>
       <Motion
         v-if="isMobileMenuOpen"
@@ -144,27 +195,30 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
         :animate="{ opacity: 1 }"
         :exit="{ opacity: 0 }"
         :transition="fadeTransition"
-        class="fixed inset-0 z-40 flex lg:hidden"
+        class="fixed inset-0 z-menu flex lg:hidden"
         @click="isMobileMenuOpen = false"
       >
         <div class="absolute inset-0 bg-scrim"></div>
         <Motion
           :ref="setPanelRef"
+          role="dialog"
+          aria-modal="true"
+          aria-label="导航菜单"
           :initial="{ x: '-100%' }"
           :animate="{ x: 0 }"
           :exit="{ x: '-100%' }"
           :transition="springBouncy"
           drag="x"
-          :drag-constraints="{ left: -320, right: 0 }"
+          :drag-constraints="{ left: -240, right: 0 }"
           :drag-elastic="{ left: 0.2, right: 0 }"
           :drag-momentum="false"
-          class="relative flex h-full w-[min(18rem,86vw)] flex-col bg-surface shadow-popover"
+          class="relative flex h-full w-drawer flex-col bg-surface-secondary shadow-popover"
           @click.stop
           @pan-end="handleDrawerPanEnd"
         >
-          <div class="flex flex-none items-center justify-end border-b border-hairline px-3 py-2.5">
+          <div class="flex flex-none items-center justify-end px-3 py-2">
             <button
-              class="flex h-10 w-10 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-surface-secondary hover:text-label"
+              class="flex h-9 w-9 items-center justify-center text-label-secondary transition-colors tap-target hover:bg-nav-active hover:text-label"
               type="button"
               aria-label="关闭导航菜单"
               @click="isMobileMenuOpen = false"
@@ -181,6 +235,8 @@ const handleDrawerPanEnd = (_event: unknown, info: PanInfo) => {
               :nav-items="NavItems"
               :brand-title="'知序'"
               :brand-subtitle="''"
+              :index-count="indexCount"
+              :chunk-count="chunkCount"
               :compact="true"
               :user-name="userStore.profile?.username || ''"
               :user-email="userStore.profile?.email || ''"

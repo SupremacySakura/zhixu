@@ -67,15 +67,22 @@ const handleFolderInput = (event: Event) => {
 
 defineExpose({ openFileDialog, openFolderDialog })
 
+// 页头带的动作是 32px（DESIGN 四段结构：主操作实心蓝 32px + 次操作描边 32px）。
 const secondaryButtonClass =
-  'flex h-10 items-center gap-1.5 bg-surface px-4 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary hover:text-label'
+  'flex h-8 items-center gap-1.5 bg-surface px-3 text-note font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary hover:text-label'
 </script>
 
 <template>
-  <div class="mb-6 flex flex-col gap-4 lg:mb-8 lg:flex-row lg:items-center lg:justify-between">
-    <div>
+  <!-- 页头带 64px：文件管理是索引列表原型。左侧是「当前目录名 + 目录路径」，
+       右侧 1 主（上传）+ 2 次（新建文件夹 / 上传进度）。
+       目录路径不是面包屑 —— 它是文件浏览器的导航控件，层级由用户的目录深度决定，
+       不受「三层以上页面才留面包屑」那条规则约束。 -->
+  <header class="shell-band">
+    <div class="min-w-0">
+      <h1 class="truncate text-title text-label">{{ currentFolderName }}</h1>
       <nav
-        class="mb-1.5 flex items-center gap-1.5 overflow-x-auto text-subhead text-label-tertiary"
+        aria-label="目录路径"
+        class="flex items-center gap-1.5 overflow-x-auto font-type text-micro text-label-tertiary"
       >
         <button
           class="flex items-center transition-colors hover:text-primary"
@@ -108,10 +115,9 @@ const secondaryButtonClass =
           <span v-else class="font-medium text-label">{{ breadcrumb.name }}</span>
         </template>
       </nav>
-      <h2 class="text-title-2 text-label">{{ currentFolderName }}</h2>
       <p
         v-if="errorMessage"
-        class="mt-2 flex items-center gap-1.5 text-body font-medium text-danger"
+        class="mt-0.5 flex items-center gap-1.5 text-note font-medium text-danger"
       >
         <AppIcon
           class="atom-glyph"
@@ -122,7 +128,7 @@ const secondaryButtonClass =
       </p>
     </div>
 
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="flex flex-none items-center gap-2">
       <input ref="fileInputRef" type="file" class="hidden" multiple @change="handleFileInput" />
       <input
         ref="folderInputRef"
@@ -148,9 +154,9 @@ const secondaryButtonClass =
       </button>
 
       <!-- 移动端：拆分为两个按钮 -->
-      <div class="flex flex-wrap items-center gap-3 sm:hidden">
+      <div class="flex items-center gap-2 sm:hidden">
         <button
-          class="flex h-10 items-center gap-1.5 px-4 text-sm font-semibold transition-colors knowledge-button-primary"
+          class="flex h-8 items-center gap-1.5 px-3 text-note font-semibold transition-colors knowledge-button-primary"
           type="button"
           aria-label="上传文件"
           @click="openFileDialog"
@@ -180,7 +186,7 @@ const secondaryButtonClass =
       <!-- 桌面端：上传 split 按钮 + 悬停下拉（菜单从按钮 scale 0.95→1 生长） -->
       <div class="group relative hidden sm:block">
         <button
-          class="flex h-10 items-center gap-1.5 px-5 text-sm font-semibold transition-colors knowledge-button-primary"
+          class="flex h-8 items-center gap-1.5 px-3 text-note font-semibold transition-colors knowledge-button-primary"
           type="button"
           aria-label="上传文件或文件夹"
         >
@@ -242,5 +248,5 @@ const secondaryButtonClass =
         <span v-else>{{ completedUploadCount }}/{{ uploadTaskCount }}</span>
       </button>
     </div>
-  </div>
+  </header>
 </template>

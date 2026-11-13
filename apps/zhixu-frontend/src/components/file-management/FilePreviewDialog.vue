@@ -199,9 +199,9 @@ watch(
                 </div>
               </div>
 
-              <!-- 浮动下载条：material-thick 胶囊 -->
+              <!-- 浮动下载条：浮在预览画面上的一条窄工具条 -->
               <div
-                class="material-thick absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 p-1.5 shadow-floating"
+                class="absolute bottom-6 left-1/2 z-toolbar flex -translate-x-1/2 items-center gap-1 border border-hairline bg-surface p-1.5 shadow-floating"
               >
                 <button
                   class="flex h-9 items-center gap-1.5 px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 knowledge-button-primary"

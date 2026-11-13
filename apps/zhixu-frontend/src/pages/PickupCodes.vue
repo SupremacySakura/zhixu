@@ -239,46 +239,50 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex min-w-0 flex-1 flex-col bg-canvas text-label">
-    <main class="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <div class="flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:space-y-8 lg:p-8">
-        <!-- 页头 -->
-        <div class="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div class="space-y-1">
-            <h2 class="text-title-1">取件码管理</h2>
-            <p class="text-subhead text-label-secondary">创建、监控并撤销安全的文件提取码。</p>
-          </div>
-          <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-            <button
-              class="flex h-10 w-full items-center justify-center gap-2 bg-surface px-5 text-sm font-semibold text-label-secondary ring-1 ring-hairline transition-colors hover:bg-surface-secondary sm:w-auto"
-              type="button"
-              aria-label="去取件页面"
-              @click="goToFilePickup"
-            >
-              <AppIcon
-                icon="material-symbols:download-rounded"
-                class="atom-glyph"
-                aria-hidden="true"
-                :style="{ '--atom-glyph-size': '18px' }"
-              />
-              <span>去取件</span>
-            </button>
-            <button
-              class="flex h-10 w-full items-center justify-center gap-2 px-5 text-sm font-semibold transition-colors sm:w-auto knowledge-button-primary"
-              type="button"
-              aria-label="创建新取件码"
-              @click="openCreateModal"
-            >
-              <AppIcon
-                icon="material-symbols:add-rounded"
-                class="atom-glyph"
-                aria-hidden="true"
-                :style="{ '--atom-glyph-size': '18px' }"
-              />
-              <span>创建新取件码</span>
-            </button>
-          </div>
-        </div>
+    <!-- 页头带 64px：索引列表原型。左标题 + 等宽计数行，右 1 主 + 1 次操作。 -->
+    <header class="shell-band">
+      <div class="min-w-0 flex-1">
+        <h1 class="truncate text-title">取件码管理</h1>
+        <p class="truncate font-type text-micro text-label-tertiary">
+          创建、监控并撤销安全的文件提取码
+        </p>
+      </div>
+      <div class="flex flex-none items-center gap-2">
+        <button
+          class="shell-band-action"
+          type="button"
+          aria-label="去取件页面"
+          title="去取件"
+          @click="goToFilePickup"
+        >
+          <AppIcon
+            icon="material-symbols:download-rounded"
+            class="atom-glyph"
+            aria-hidden="true"
+            :style="{ '--atom-glyph-size': '18px' }"
+          />
+          <span class="hidden sm:inline">去取件</span>
+        </button>
+        <button
+          class="shell-band-action-primary"
+          type="button"
+          aria-label="创建新取件码"
+          title="创建新取件码"
+          @click="openCreateModal"
+        >
+          <AppIcon
+            icon="material-symbols:add-rounded"
+            class="atom-glyph"
+            aria-hidden="true"
+            :style="{ '--atom-glyph-size': '18px' }"
+          />
+          <span class="hidden sm:inline">创建新取件码</span>
+        </button>
+      </div>
+    </header>
 
+    <main class="shell-page">
+      <div class="shell-wide space-y-6 lg:space-y-8">
         <!-- 统计卡 -->
         <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
           <div class="flex flex-col gap-3.5 bg-surface p-5 shadow-card">

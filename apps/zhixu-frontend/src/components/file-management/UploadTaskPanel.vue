@@ -83,7 +83,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
 </script>
 
 <template>
-  <!-- 非阻塞浮层：material-thick 不加遮罩（DESIGN.md §3） -->
+  <!-- 非阻塞浮层：不铺遮罩，页面照常可操作（DESIGN.md §Layout） -->
   <div class="pointer-events-none fixed inset-0 z-40">
     <AnimatePresence>
       <Motion
@@ -100,7 +100,7 @@ const handlePanelPanEnd = (_event: unknown, _info: PanInfo) => {
         :drag-listener="false"
         :drag-momentum="false"
         :drag-elastic="0"
-        class="material-thick pointer-events-auto absolute bottom-4 right-4 flex max-h-[500px] w-[calc(100vw-2rem)] flex-col overflow-hidden shadow-floating sm:w-96"
+        class="pointer-events-auto absolute bottom-4 right-4 flex max-h-[500px] w-[calc(100vw-2rem)] flex-col overflow-hidden border border-hairline bg-surface shadow-floating sm:w-96"
         @pan-end="handlePanelPanEnd"
       >
         <!-- 拖拽把手：按住标题区拖动换位 -->

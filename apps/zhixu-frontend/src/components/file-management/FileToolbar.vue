@@ -84,7 +84,7 @@ const segButtonClass =
   <!-- 粘性材质工具栏：内容滚动时从底下穿过（FileToolbar.html） -->
   <div
     ref="rootRef"
-    class="material sticky top-3 z-20 mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 px-3 py-2 shadow-card"
+    class="sticky top-3 z-toolbar mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border border-hairline bg-surface-secondary px-3 py-2 shadow-card"
   >
     <div class="flex w-full flex-wrap items-center gap-2.5 lg:w-auto">
       <!-- 胶囊搜索 -->
