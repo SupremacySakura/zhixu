@@ -53,6 +53,7 @@ AI 工具进入项目时应优先读取的必读层。
 - [adr/0001-knowledge-relation-model.md](./adr/0001-knowledge-relation-model.md) — ADR-0001 知识关系模型（有向行、五种类型、唯一键含类型）
 - [adr/0002-conflict-relation-type.md](./adr/0002-conflict-relation-type.md) — ADR-0002 冲突关系类型 contradicts（对称类型、不进 AI 推荐白名单）
 - [adr/0003-visual-world-replacement.md](./adr/0003-visual-world-replacement.md) — ADR-0003 视觉世界替换（redesign 而非 refinement、三份权威边界、扩展—迁移—收缩）
+- [adr/0004-retire-legacy-design-samples.md](./adr/0004-retire-legacy-design-samples.md) — ADR-0004 退役 2026-09 静态设计样张（Git 历史存档、保留对话交互约束）
 
 ### 详细结构参考
 

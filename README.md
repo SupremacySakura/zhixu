@@ -34,7 +34,6 @@ zhixu/
 │   ├── zhixu-frontend/   # 前端 SPA（页面 / 路由 / 状态管理 / API 层）
 │   └── zhixu-backend/    # 后端 HTTP API（路由 / 业务服务 / 数据访问 / 鉴权中间件）
 ├── docs/                 # 文档中心（brain 全局认知 / tasks 学习日志 / skills 能力沉淀）
-├── design/               # UI 设计稿（HTML 静态稿）
 ├── ops/mysql/            # MySQL 初始化与导入脚本
 ├── scripts/              # 本地开发辅助脚本
 ├── docker-compose.yml    # 编排：MySQL + 后端 + 前端（按需启用 profile）

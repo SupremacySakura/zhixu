@@ -72,7 +72,7 @@
 - `apps/zhixu-frontend/PRODUCT.md:82` 的「现行设计规范：`DESIGN.md`（279 行…浅色 Apple 风格世界）」已成陈旧表述；因 PRODUCT.md 是人工审阅产物，改由议题交付建议，不擅自改写事实记录。
 - `docs/design/产品设计文档.md:364` 的「偏 Apple 风格」表述同步过时，改写建议以议题交付、**待人工提交**，`docs/design/` 全程未被 AI 修改。
 - 旧 `tailwind.config.js` 的定位进一步明确：仅作迁移对照，令牌唯一来源是 `style.css` 的 `@theme`，令牌语义表以 `DESIGN.md` v2 为准。
-- 仓库根 `design/` 下的 40 个 HTML/CSS 样张（`MarkdownKnowledge.html`、`Chat.html`、`DashboardPage.html` 等）是**旧视觉世界的历史样张**，只作交互结构对照，视觉口径一律以 `DESIGN.md` v2 为准。已在 `docs/markdown-knowledge-frontend.md` 的正文里标注这一点，避免被下一个读者当成视觉依据。
+- 仓库根 `design/` 下的 40 个 HTML/CSS 样张（`MarkdownKnowledge.html`、`Chat.html`、`DashboardPage.html` 等）是**旧视觉世界的历史样张**，只作交互结构对照，视觉口径一律以 `DESIGN.md` v2 为准。已在 `docs/markdown-knowledge-frontend.md` 的正文里标注这一点，避免被下一个读者当成视觉依据。2026-11-14 后续：ADR-0004 已将这些样张从工作区退役，完整内容保留在 Git 历史中。
 
 ## 备选方案
 
