@@ -18,18 +18,16 @@ import type {
 } from '../../services/apis/knowledge'
 import {
   graphEdgeStyle,
-  graphNodeBorderType,
   graphNodeSize,
+  graphNodeSymbol,
   resolveGraphPalette,
   type GraphPalette,
 } from '../../utils/knowledgeGraph'
+import { knowledgeSourceLabel } from '../../utils/knowledge'
 import { relationTypeLabel } from '../../utils/relation'
 
 // 按需注册：只打包力导向图、提示框、Canvas 渲染器与标签布局，避免整包引入 echarts。
 use([GraphChart, TooltipComponent, CanvasRenderer, LabelLayout])
-
-/** 节点描边宽：1px 在 18px 的方块上读不出线型差异，2px 才让实线/虚线/点线分得开。 */
-const NODE_BORDER_WIDTH = 2
 
 /**
  * 标签避让只作用于节点，边标签一律跳过。
@@ -46,10 +44,12 @@ const props = withDefaults(
     nodes: KnowledgeGraphNode[]
     edges: KnowledgeGraphEdge[]
     selectedId?: number | null
+    /** 局部图谱的起点；只有它会拿到书签带。 */
+    centerId?: number | null
     /** 测试或嵌入场景可直接注入解析好的令牌颜色。 */
     palette?: GraphPalette
   }>(),
-  { selectedId: null, palette: undefined },
+  { selectedId: null, centerId: null, palette: undefined },
 )
 
 const emit = defineEmits<{ 'node-click': [id: number] }>()
@@ -57,8 +57,6 @@ const emit = defineEmits<{ 'node-click': [id: number] }>()
 const container = ref<HTMLDivElement | null>(null)
 let chart: EChartsType | null = null
 let activePalette: GraphPalette | null = null
-/** 图表内部当前选中的节点索引；null 表示无选中。 */
-let selectedIndex: number | null = null
 
 function handleClick(params: ECElementEvent) {
   if (params.dataType !== 'node' || !params.data || typeof params.data !== 'object') return
@@ -67,36 +65,48 @@ function handleClick(params: ECElementEvent) {
   emit('node-click', id)
 }
 
-function buildOption(): EChartsCoreOption {
+function buildNodes() {
   const palette = activePalette ?? resolveGraphPalette(container.value)
-  const nodes = props.nodes.map(node => ({
-    id: String(node.id),
-    name: node.title,
-    value: node.degree,
-    // 方形节点（AC③）：尺寸仍由度数决定，只是把圆形换成方形。
-    symbol: 'rect',
-    symbolSize: graphNodeSize(node.degree),
-    itemStyle: {
-      // 填充统一纸白 —— 深底上 15.23:1。语义不靠填充色（8 种来源只有 4 个可见色，
-      // 这条路已经用到极限），靠描边样式承载。
-      color: palette.nodeFill,
-      borderColor: palette.nodeBorder,
-      borderWidth: NODE_BORDER_WIDTH,
-      borderType: graphNodeBorderType(node.source_type),
-    },
-    // 标签在方块右侧的深底上，用岛上文字色；纸世界的 #181818 在 #16191c 上只有 1.01:1。
-    label: {
-      show: true,
-      position: 'right',
-      distance: 5,
-      color: palette.label,
-      fontSize: 12,
-      width: 120,
-      overflow: 'truncate',
-    },
-  }))
-  const links = props.edges.map(edge => {
+  return props.nodes.map(node => {
+    const [width, height] = graphNodeSize(node.degree)
+    return {
+      id: String(node.id),
+      name: node.title,
+      value: node.degree,
+      source_type: node.source_type,
+      // 多色书本走 SVG 符号：纸白封面 + 蓝书脊 + 纸白缝线无法用单个 path 表达。
+      symbol: graphNodeSymbol({
+        width,
+        height,
+        sourceType: node.source_type,
+        center: props.centerId === node.id,
+        selected: props.selectedId === node.id,
+        palette,
+      }),
+      symbolSize: [width, height],
+      // 标签在书本右侧的深底上，用岛上文字色；纸世界的 #181818 在 #16191c 上只有 1.01:1。
+      label: {
+        show: true,
+        position: 'right',
+        distance: 5,
+        color: palette.label,
+        fontSize: 12,
+        width: 120,
+        overflow: 'truncate',
+      },
+    }
+  })
+}
+
+function buildLinks() {
+  const palette = activePalette ?? resolveGraphPalette(container.value)
+  return props.edges.map(edge => {
     const style = graphEdgeStyle(palette, edge)
+    // 选中节点的邻接边持续提亮，不依赖 hover：抽屉打开后鼠标会离开画布，
+    // emphasis 状态随即消失，选中态就只剩一个环。这里把提亮写进数据本身。
+    const adjacent =
+      props.selectedId != null &&
+      (edge.source_id === props.selectedId || edge.target_id === props.selectedId)
     return {
       id: String(edge.id),
       source: String(edge.source_id),
@@ -111,11 +121,17 @@ function buildOption(): EChartsCoreOption {
         type: style.type,
         // 用 opacity 让 canvas 自己混色，而不是预合成一个更暗的 hex
         // —— 预合成会让「调透明度」这个轴在 option 里彻底消失。
-        opacity: style.opacity,
+        opacity: adjacent ? 1 : style.opacity,
         curveness: 0.08,
       },
     }
   })
+}
+
+function buildOption(): EChartsCoreOption {
+  const palette = activePalette ?? resolveGraphPalette(container.value)
+  const nodes = buildNodes()
+  const links = buildLinks()
   return {
     // 深色岛由 canvas 自己铺底，避免图表与容器之间出现一帧纸色。
     backgroundColor: palette.island,
@@ -126,13 +142,22 @@ function buildOption(): EChartsCoreOption {
       textStyle: { color: palette.nodeInk, fontSize: 12 },
       formatter: (params: {
         dataType?: string
-        data?: { name?: string; value?: number; relation_type?: string }
+        data?: {
+          name?: string
+          value?: number
+          relation_type?: string
+          source_type?: string
+        }
       }) => {
         if (params.dataType === 'edge') {
           const type = params.data?.relation_type as RelationType | undefined
           return type ? relationTypeLabel(type) : '关系'
         }
-        return params.data?.name ? `${params.data.name}（度数 ${params.data.value ?? 0}）` : ''
+        if (!params.data?.name) return ''
+        const source = params.data.source_type
+          ? ` · 来源：${knowledgeSourceLabel(params.data.source_type)}`
+          : ''
+        return `${params.data.name}（度数 ${params.data.value ?? 0}）${source}`
       },
     },
     series: [
@@ -141,14 +166,8 @@ function buildOption(): EChartsCoreOption {
         layout: 'force',
         roam: true,
         draggable: true,
-        selectedMode: 'single',
-        // 选中态只改描边，避免为了高亮重建整张图（重建会丢失力导向位置与缩放）。
-        select: {
-          itemStyle: {
-            borderWidth: 3,
-            borderColor: palette.selectRing,
-          },
-        },
+        // 选中环画在书本 SVG 里（见 graphNodeSymbol）：image symbol 走 ZRImage，
+        // select.itemStyle 只会应用 opacity，不会画描边。
         // series 级箭头只作为兜底；真正的箭头形状由每条 link 的 symbol 决定。
         edgeSymbol: ['none', 'arrow'],
         edgeSymbolSize: 6,
@@ -171,7 +190,8 @@ function buildOption(): EChartsCoreOption {
           layoutAnimation: true,
         },
         // 高亮只提不透明度，不改线宽 —— 改线宽会把「四轴编码」里的宽度轴抹掉。
-        emphasis: { focus: 'adjacency', lineStyle: { opacity: 1 } },
+        // scale: false 是硬约束：ECharts 默认会在 hover 时把 symbol 放大 1.1 倍。
+        emphasis: { scale: false, focus: 'adjacency', lineStyle: { opacity: 1 } },
         /**
          * 节点标签防重叠。
          *
@@ -188,27 +208,18 @@ function buildOption(): EChartsCoreOption {
   }
 }
 
-/** 当前 props.selectedId 对应的节点索引；节点不在图内时视为无选中。 */
-function resolveSelectedIndex(): number | null {
-  if (props.selectedId == null) return null
-  const index = props.nodes.findIndex(node => node.id === props.selectedId)
-  return index >= 0 ? index : null
-}
-
 /**
- * 通过 select / unselect 动作同步选中态。
+ * 只更新节点符号与邻接边透明度（选中/中心变化）。
+ *
  * 不能走 setOption(notMerge=true)：那会重建 series，重置力导向布局与 roam 缩放。
+ * 这里用非 merge 的局部 setOption，只换 data / links；节点 id 不变时 ECharts 会复用图元。
  */
-function applySelection() {
+function updateSelectionVisuals() {
   if (!chart) return
-  const next = resolveSelectedIndex()
-  if (selectedIndex != null && selectedIndex !== next) {
-    chart.dispatchAction({ type: 'unselect', seriesIndex: 0, dataIndex: selectedIndex })
-  }
-  if (next != null && next !== selectedIndex) {
-    chart.dispatchAction({ type: 'select', seriesIndex: 0, dataIndex: next })
-  }
-  selectedIndex = next
+  chart.setOption({ series: [{ data: buildNodes(), links: buildLinks() }] })
+  // 边样式更新会走 LineDraw.updateData；重新打标，避免后续缩放时边标签被
+  // labelLayout 当成全局坐标。边 id 不变时图元会复用，这里是幂等的保险。
+  attachEdgeLabelOptOut()
 }
 
 /**
@@ -225,7 +236,7 @@ function applySelection() {
  * disableLabelLayout 就整个跳过（ECharts 自己的 treemap 就这么用）。所以顺序必须是
  * **先渲染出图元 → 给边标签打标 → 再挂 labelLayout**：反过来打标时图元还没生成。
  *
- * 只打边标签：节点标签的宿主是 path（节点方块），边标签的宿主是 group（线组），
+ * 只打边标签：节点标签的宿主是节点图元（书本 image），边标签的宿主是 group（线组），
  * 32 节点 / 19 边在实测中一一对应，据此区分不会误伤。
  */
 function attachEdgeLabelOptOut() {
@@ -254,8 +265,6 @@ function attachEdgeLabelOptOut() {
 
 function render() {
   if (!chart) return
-  // setOption 重建 series 后选中态清空，重新按 props.selectedId 选中。
-  selectedIndex = null
   // 分两步：先不带 labelLayout 渲染（此时边标签还没被打标，得先有图元才能打），
   // 打标之后再挂 labelLayout —— 顺序反了边标签就已被 LabelManager 改成全局坐标。
   const option = buildOption()
@@ -263,7 +272,6 @@ function render() {
   chart.setOption({ ...option, series: [{ ...series, labelLayout: null }] }, true)
   attachEdgeLabelOptOut()
   chart.setOption({ series: [{ labelLayout: nodeOnlyLabelLayout }] })
-  applySelection()
 }
 
 function handleResize() {
@@ -287,8 +295,8 @@ watch(
   },
 )
 
-// 选中变化只更新选中态，不重建图表。
-watch(() => props.selectedId, applySelection)
+// 选中/中心变化只换节点符号与邻接边样式，不重建图表。
+watch(() => [props.selectedId, props.centerId], updateSelectionVisuals)
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)

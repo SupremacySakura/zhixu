@@ -14,9 +14,9 @@ vi.mock('../../components/ui/AppIcon.vue', () => ({ default: { template: '<span 
 
 const chartStub = {
   name: 'KnowledgeGraphChart',
-  props: ['nodes', 'edges', 'selectedId'],
+  props: ['nodes', 'edges', 'selectedId', 'centerId'],
   emits: ['node-click'],
-  template: `<div data-test="chart" :data-node-count="nodes.length" :data-edge-count="edges.length"><span v-for="edge in edges" :key="edge.id" :data-edge-id="edge.id" :data-edge-status="edge.status" :data-edge-type="edge.relation_type" /><button v-for="node in nodes" :key="node.id" :data-node-id="node.id" @click="$emit('node-click', node.id)">{{ node.title }}</button></div>`,
+  template: `<div data-test="chart" :data-node-count="nodes.length" :data-edge-count="edges.length" :data-center-id="centerId"><span v-for="edge in edges" :key="edge.id" :data-edge-id="edge.id" :data-edge-status="edge.status" :data-edge-type="edge.relation_type" /><button v-for="node in nodes" :key="node.id" :data-node-id="node.id" @click="$emit('node-click', node.id)">{{ node.title }}</button></div>`,
 }
 
 const graph = {
@@ -337,6 +337,11 @@ describe('KnowledgeGraph 页面', () => {
     expect(legend.text()).toContain('手动关联')
     expect(legend.find('.border-solid').exists()).toBe(true)
     expect(legend.find('.border-dashed').exists()).toBe(true)
+    expect(legend.find('[data-test="graph-book-legend"]').exists()).toBe(true)
+    expect(legend.text()).toContain('书本 = 知识')
+    expect(legend.text()).toContain('手动/网页')
+    expect(legend.text()).toContain('文档导入')
+    expect(legend.text()).toContain('表格导入')
   })
 
   it('图中有矛盾边时图例补一条矛盾关系', async () => {
@@ -498,6 +503,11 @@ describe('KnowledgeGraph 页面', () => {
       expect.any(AbortSignal),
     )
     expect(wrapper.text()).toContain('没有符合筛选条件的知识')
+  })
+
+  it('把 URL 中心传给图表，供中心节点画书签带', async () => {
+    const { wrapper } = await render('/home/knowledge/graph?center=2')
+    expect(wrapper.find('[data-test="chart"]').attributes('data-center-id')).toBe('2')
   })
 
   it('搜索知识并选中后以它为中心重绘', async () => {

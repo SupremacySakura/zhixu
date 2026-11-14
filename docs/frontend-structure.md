@@ -55,7 +55,7 @@
 ## 知识关系与图谱
 
 - 知识详情页右栏最上方为「相关知识」面板 `components/knowledge/KnowledgeRelationsPanel.vue`：已确认关系（中文类型、来源 ai/manual、可改类型/删除）与待确认建议（置信度、可展开 AI 理由、确认/忽略）；「查找相关知识」在任务运行中禁用并 3 秒轮询，卸载时清理定时器与 AbortController；底部「在图谱中查看」跳转 `/home/knowledge/graph?center=<id>`。
-- 图谱页 `pages/KnowledgeGraph.vue`（路由 `/home/knowledge/graph`，懒加载）+ `components/knowledge/KnowledgeGraphChart.vue`：ECharts 按需引入（core + GraphChart + Tooltip + Canvas + LabelLayout），力导向布局；节点大小按度数、颜色按来源类型从 `src/style.css` 的 `@theme` 令牌解析；边区分 AI/手动来源，建议关系虚线并显示中文关系类型标签。
+- 图谱页 `pages/KnowledgeGraph.vue`（路由 `/home/knowledge/graph`，懒加载）+ `components/knowledge/KnowledgeGraphChart.vue`：ECharts 按需引入（core + GraphChart + Tooltip + Canvas + LabelLayout），力导向布局；节点是**书本节点**（一个节点 = 一条知识 = 一本合上的书），3:4 纵向、高度按度数 24–60px，纸白封面 + 图书馆蓝书脊 + 墨色外框；来源类型由书脊装订区分（实心 = 手动/网页，短缝线 = 文档导入，点线 = 表格导入），中心节点加蓝色书签带。颜色令牌仍从 `src/style.css` 的 `@theme` 解析；边按 AI/手动来源分色，六类关系用线型/箭头/线宽/透明度四轴编码，建议边只压暗透明度、不强制虚线，边标签显示中文关系类型。
 - 页面交互与副作用（三个请求的取消、250ms 搜索防抖、路由 center 同步、筛选与建议边开关状态）集中在 `composables/useKnowledgeGraph.ts`；页面只保留展示与事件编排。工具栏含标签下拉（`GET /api/tags`）、来源类型下拉（manual/web 与文件格式）、关系类型下拉（全部 + 六种类型）、「显示建议边」开关与图例；点击节点打开右侧抽屉（摘要、一跳关系、跳详情、以此为中心），空图按"无知识 / 无关系 / 筛选无结果"分别引导。
 - 关系类型筛选只在客户端按 `edge.relation_type` 裁剪边（`visibleEdges`），不发新请求、不裁节点——图例说明的是线型，筛选若交给后端会连节点一起裁掉。选项文案复用 `utils/relation.ts` 的 `RELATION_TYPE_OPTIONS`，与图例、详情页关系面板同源；它计入 `filtersActive`，因此「清空筛选」能一并复位，选中类型没有边时给 `data-test="relation-filter-empty"` 提示而不是退化成空图引导。
 - 前端 API 契约集中在 `services/apis/knowledge.ts`（`getKnowledgeRelations`、`createKnowledgeRelation`、`updateRelation`、`deleteRelation`、`confirmRelation`、`rejectRelation`、`regenerateKnowledgeRelations`、`getKnowledgeGraph`）。

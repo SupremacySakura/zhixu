@@ -6,7 +6,6 @@ import KnowledgeGraphChart from '../KnowledgeGraphChart.vue'
 const mocks = vi.hoisted(() => {
   const chart = {
     setOption: vi.fn(),
-    dispatchAction: vi.fn(),
     resize: vi.fn(),
     dispose: vi.fn(),
     on: vi.fn(),
@@ -29,6 +28,9 @@ const palette = {
   nodeFill: 'rgb(240 238 228)',
   nodeInk: 'rgb(24 24 24)',
   nodeBorder: 'rgb(96 89 73)',
+  nodeSpine: 'rgb(31 78 121)',
+  nodeStitch: 'rgb(251 248 239)',
+  nodePage: 'rgb(226 221 208)',
   selectRing: 'rgb(74 138 192)',
   edgeAI: 'rgb(10 11 12)',
   edgeManual: 'rgb(13 14 15)',
@@ -96,8 +98,8 @@ interface FullSeries {
   roam?: boolean
   data: any[]
   links: any[]
+  emphasis: { scale: boolean; focus: string; lineStyle: { opacity: number } }
   edgeLabel: { show: boolean; fontSize: number; formatter: (params: any) => string }
-  select: { itemStyle: { borderWidth: number } }
   labelLayout?: any
 }
 
@@ -117,7 +119,7 @@ beforeEach(() => {
 })
 
 describe('KnowledgeGraphChart', () => {
-  it('初始化力导向图配置：节点大小按度数、来源类型靠描边样式区分', async () => {
+  it('初始化力导向图配置：书本节点按度数定尺寸、来源靠书脊装订区分', async () => {
     const wrapper = render()
     await nextTick()
     expect(mocks.init).toHaveBeenCalledTimes(1)
@@ -126,22 +128,30 @@ describe('KnowledgeGraphChart', () => {
     expect(option.series[0].type).toBe('graph')
     expect(option.series[0].layout).toBe('force')
     expect(option.series[0].roam).toBe(true)
+    // 书本节点不随 hover 放大；邻接边提亮是唯一的状态变化。
+    expect(option.series[0].emphasis).toEqual({
+      scale: false,
+      focus: 'adjacency',
+      lineStyle: { opacity: 1 },
+    })
     const data = option.series[0].data
     const center = data.find((item: { id: string }) => item.id === '1')
     const neighbor = data.find((item: { id: string }) => item.id === '2')
-    expect(center.symbolSize).toBe(18)
-    expect(neighbor.symbolSize).toBe(26)
-    // 方形节点：票面 AC③ 要求节点是方形纸白块，不再是圆形色点。
-    expect(center.symbol).toBe('rect')
-    expect(neighbor.symbol).toBe('rect')
-    // 填充统一纸白（深底上才看得见），语义由描边承载。
-    expect(center.itemStyle.color).toBe(palette.nodeFill)
-    expect(neighbor.itemStyle.color).toBe(palette.nodeFill)
-    // 标签画在方块外侧的深底上，必须用岛上文字色（纸世界墨色 #181818 在深底上等于隐形）。
+    expect(center.symbolSize).toEqual([18, 24])
+    expect(neighbor.symbolSize).toEqual([23, 30])
+    // 多色书本走 SVG data URI，不再是 rect 方块。
+    expect(center.symbol.startsWith('image://data:image/svg+xml')).toBe(true)
+    expect(neighbor.symbol.startsWith('image://data:image/svg+xml')).toBe(true)
+    const centerSvg = decodeURIComponent(center.symbol.slice(center.symbol.indexOf(',') + 1))
+    const neighborSvg = decodeURIComponent(neighbor.symbol.slice(neighbor.symbol.indexOf(',') + 1))
+    // 纸白封面 + 图书馆蓝书脊
+    expect(centerSvg).toContain(`fill="${palette.nodeFill}"`)
+    expect(centerSvg).toContain(`fill="${palette.nodeSpine}"`)
+    // 标签画在书本外侧的深底上，必须用岛上文字色（纸世界墨色 #181818 在深底上等于隐形）。
     expect(center.label.color).toBe(palette.label)
-    // 来源类型靠描边样式区分：手动创建是实线，PDF 是虚线。
-    expect(center.itemStyle.borderType).toBe('solid')
-    expect(neighbor.itemStyle.borderType).toBe('dashed')
+    // 来源类型靠书脊装订区分：手动创建是实心蓝脊，PDF 是纸白短缝线。
+    expect(centerSvg).not.toContain('stroke-dasharray=')
+    expect(neighborSvg).toContain('stroke-dasharray=')
     wrapper.unmount()
   })
 
@@ -226,6 +236,21 @@ describe('KnowledgeGraphChart', () => {
     wrapper.unmount()
   })
 
+  it('节点 tooltip 显示标题、度数与确切来源类型', async () => {
+    const wrapper = render()
+    await nextTick()
+    const option = lastFullOption() as unknown as {
+      tooltip: { formatter: (params: unknown) => string }
+    }
+    expect(
+      option.tooltip.formatter({
+        dataType: 'node',
+        data: { name: 'PDF 知识', value: 2, source_type: 'pdf' },
+      }),
+    ).toBe('PDF 知识（度数 2） · 来源：PDF')
+    wrapper.unmount()
+  })
+
   it('矛盾边使用矛盾色并标注「矛盾」', async () => {
     const contradiction = {
       id: 12,
@@ -290,57 +315,91 @@ describe('KnowledgeGraphChart', () => {
     wrapper.unmount()
   })
 
-  it('选中样式由 series.select 提供，节点数据内置选中标志已移除', async () => {
+  it('选中节点用 SVG 变体画出 3px 蓝色环，其他书本没有', async () => {
     const wrapper = render({ selectedId: 1 })
     await nextTick()
     const option = lastFullOption()
-    expect(option.series[0].select.itemStyle.borderWidth).toBe(3)
-    expect(
-      option.series[0].data.every((item: Record<string, unknown>) => !('selected' in item)),
-    ).toBe(true)
+    const selected = option.series[0].data.find((item: { id: string }) => item.id === '1')
+    const other = option.series[0].data.find((item: { id: string }) => item.id === '2')
+    const selectedSvg = decodeURIComponent(selected.symbol.slice(selected.symbol.indexOf(',') + 1))
+    const otherSvg = decodeURIComponent(other.symbol.slice(other.symbol.indexOf(',') + 1))
+    expect(selectedSvg).toContain(`stroke="${palette.selectRing}"`)
+    expect(otherSvg).not.toContain(`stroke="${palette.selectRing}"`)
     wrapper.unmount()
   })
 
-  it('切换选中节点只派发 select/unselect，不重建图表', async () => {
-    const wrapper = render({ selectedId: 1 })
+  it('只有中心节点带书签带', async () => {
+    const wrapper = render({ centerId: 2 })
     await nextTick()
-    expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
-    expect(mocks.chart.dispatchAction).toHaveBeenCalledWith({
-      type: 'select',
-      seriesIndex: 0,
-      dataIndex: 0,
-    })
+    const option = lastFullOption()
+    const center = option.series[0].data.find((item: { id: string }) => item.id === '2')
+    const other = option.series[0].data.find((item: { id: string }) => item.id === '1')
+    const centerSvg = decodeURIComponent(center.symbol.slice(center.symbol.indexOf(',') + 1))
+    const otherSvg = decodeURIComponent(other.symbol.slice(other.symbol.indexOf(',') + 1))
+    expect(centerSvg).toContain('M58 ')
+    expect(otherSvg).not.toContain('M58 ')
+    wrapper.unmount()
+  })
 
-    await wrapper.setProps({ selectedId: 2 })
+  it('切换选中节点只更新节点与邻接边样式，不重建整张图', async () => {
+    const third = {
+      id: 3,
+      title: '第三本知识',
+      source_type: 'web',
+      summary: '',
+      degree: 1,
+      updated_at: '2026-11-08T10:00:00+08:00',
+    }
+    const bridge = {
+      id: 12,
+      source_id: 2,
+      target_id: 3,
+      relation_type: 'related' as const,
+      status: 'confirmed' as const,
+      source: 'ai' as const,
+      confidence: 0.8,
+    }
+    const wrapper = render({ nodes: [...nodes, third], edges: [...edges, bridge] })
     await nextTick()
-    // 仍是同一张图：没有新的 setOption（重建会重置力导向布局与缩放）。
     expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
-    expect(mocks.chart.dispatchAction).toHaveBeenCalledWith({
-      type: 'unselect',
-      seriesIndex: 0,
-      dataIndex: 0,
-    })
-    expect(mocks.chart.dispatchAction).toHaveBeenCalledWith({
-      type: 'select',
-      seriesIndex: 0,
-      dataIndex: 1,
-    })
+    const baseline = lastFullOption().series[0].links
+
+    await wrapper.setProps({ selectedId: 3 })
+    await nextTick()
+    // 只补 data/links，不带 type，避免重建 series 丢力导向位置。
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(3)
+    const patch = mocks.chart.setOption.mock.calls.at(-1)?.[0]
+    expect(patch.series[0].type).toBeUndefined()
+    const adjacent = patch.series[0].links.find((item: { id: string }) => item.id === '12')
+    const other = patch.series[0].links.find((item: { id: string }) => item.id === '10')
+    const baselineOther = baseline.find((item: { id: string }) => item.id === '10')
+    expect(adjacent.lineStyle.opacity).toBe(1)
+    expect(other.lineStyle.opacity).toBe(baselineOther.lineStyle.opacity)
+    const selected = patch.series[0].data.find((item: { id: string }) => item.id === '3')
+    const selectedSvg = decodeURIComponent(selected.symbol.slice(selected.symbol.indexOf(',') + 1))
+    expect(selectedSvg).toContain(`stroke="${palette.selectRing}"`)
 
     await wrapper.setProps({ selectedId: null })
     await nextTick()
-    expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
-    expect(mocks.chart.dispatchAction).toHaveBeenLastCalledWith({
-      type: 'unselect',
-      seriesIndex: 0,
-      dataIndex: 1,
-    })
+    expect(mocks.chart.setOption).toHaveBeenCalledTimes(4)
+    const cleared = mocks.chart.setOption.mock.calls.at(-1)?.[0]
+    const clearedAdjacent = cleared.series[0].links.find((item: { id: string }) => item.id === '12')
+    const baselineAdjacent = baseline.find((item: { id: string }) => item.id === '12')
+    expect(clearedAdjacent.lineStyle.opacity).toBe(baselineAdjacent.lineStyle.opacity)
+    for (const item of cleared.series[0].data) {
+      const svg = decodeURIComponent(item.symbol.slice(item.symbol.indexOf(',') + 1))
+      expect(svg).not.toContain(`stroke="${palette.selectRing}"`)
+    }
     wrapper.unmount()
   })
 
-  it('selectedId 指向图外节点时不选中任何节点', async () => {
+  it('selectedId 指向图外节点时所有书本都是常态', async () => {
     const wrapper = render({ selectedId: 99 })
     await nextTick()
-    expect(mocks.chart.dispatchAction).not.toHaveBeenCalled()
+    for (const item of lastFullOption().series[0].data) {
+      const svg = decodeURIComponent(item.symbol.slice(item.symbol.indexOf(',') + 1))
+      expect(svg).not.toContain(`stroke="${palette.selectRing}"`)
+    }
     wrapper.unmount()
   })
 

@@ -18,6 +18,7 @@ const {
   loading,
   error,
   selectedId,
+  centerId,
   searchTerm,
   searchResults,
   searchOpen,
@@ -118,6 +119,16 @@ const edgeLegend = computed<
     }
   }),
 )
+
+/** 书本图例：三种书脊装订对应三组来源形态，和节点 SVG 用同一套语言。 */
+const bookLegend: Array<{
+  binding: 'solid' | 'dashed' | 'dotted'
+  label: string
+}> = [
+  { binding: 'solid', label: '手动/网页' },
+  { binding: 'dashed', label: '文档导入' },
+  { binding: 'dotted', label: '表格导入' },
+]
 
 const STATUS_LABELS: Record<RelationStatus, string> = {
   suggested: '建议',
@@ -331,6 +342,7 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
               :nodes="graph.nodes"
               :edges="visibleEdges"
               :selected-id="selectedId"
+              :center-id="centerId"
               @node-click="selectedId = $event"
             />
             <div
@@ -395,6 +407,57 @@ const STATUS_LABELS: Record<RelationStatus, string> = {
                     class="h-0 w-8 shrink-0 border-t-2 border-dashed border-graph-edge-contradicts"
                   />
                   矛盾关系
+                </span>
+              </div>
+              <!-- 书本节点：三种书脊装订 = 三组来源形态。 -->
+              <div
+                class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-graph-island-rule pt-3 text-micro text-graph-island-label-secondary"
+                data-test="graph-book-legend"
+              >
+                <span class="text-graph-island-label">书本 = 知识</span>
+                <span
+                  v-for="item in bookLegend"
+                  :key="item.binding"
+                  class="flex items-center gap-2"
+                >
+                  <svg class="h-4 w-3 shrink-0" viewBox="0 0 15 20" aria-hidden="true">
+                    <rect
+                      x="0.5"
+                      y="0.5"
+                      width="14"
+                      height="19"
+                      fill="var(--color-surface)"
+                      stroke="var(--color-graph-node-border)"
+                      stroke-width="1"
+                    />
+                    <rect x="0.5" y="0.5" width="3.5" height="19" fill="var(--color-primary)" />
+                    <line
+                      x1="4"
+                      y1="0.5"
+                      x2="4"
+                      y2="19.5"
+                      stroke="var(--color-graph-node-border)"
+                      stroke-opacity="0.55"
+                    />
+                    <line
+                      v-if="item.binding !== 'solid'"
+                      x1="2.25"
+                      y1="2"
+                      x2="2.25"
+                      y2="18"
+                      stroke="var(--color-surface-tertiary)"
+                      stroke-width="1"
+                      :stroke-dasharray="item.binding === 'dashed' ? '2 2' : '1 2'"
+                      :stroke-linecap="item.binding === 'dotted' ? 'round' : 'butt'"
+                    />
+                    <path
+                      d="M6 2 H13 M6 4 H11"
+                      fill="none"
+                      stroke="var(--color-graph-node-border)"
+                      stroke-opacity="0.45"
+                    />
+                  </svg>
+                  {{ item.label }}
                 </span>
               </div>
             </div>

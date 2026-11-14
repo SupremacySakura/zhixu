@@ -15,8 +15,10 @@ import type { RelationType } from '../../services/apis/knowledge'
 import {
   GRAPH_EDGE_TYPES,
   graphEdgeStyle,
-  graphNodeBorderType,
+  graphNodeBinding,
   graphNodeSize,
+  graphNodeSvg,
+  graphNodeSymbol,
   resolveGraphPalette,
   type GraphPalette,
 } from '../knowledgeGraph'
@@ -29,6 +31,9 @@ const palette: GraphPalette = {
   nodeFill: '#f2eee4',
   nodeInk: '#181818',
   nodeBorder: '#605949',
+  nodeSpine: '#1f4e79',
+  nodeStitch: '#fbf8ef',
+  nodePage: '#e2ddd0',
   selectRing: '#4a8ac0',
   edgeAI: '#b2cae1',
   edgeManual: '#c3c8cb',
@@ -178,27 +183,80 @@ describe('六类关系的四轴编码', () => {
 })
 
 describe('节点', () => {
-  it('尺寸按度数递增，度数 0 是 18px、度数 2 是 26px', () => {
-    expect(graphNodeSize(0)).toBe(18)
-    expect(graphNodeSize(2)).toBe(26)
+  it('书本尺寸按度数递增：度数 0 是 18×24、度数 2 是 23×30', () => {
+    expect(graphNodeSize(0)).toEqual([18, 24])
+    expect(graphNodeSize(2)).toEqual([23, 30])
     // 度数封顶 12，避免超级节点吃掉整张画布
-    expect(graphNodeSize(99)).toBe(graphNodeSize(12))
+    expect(graphNodeSize(99)).toEqual(graphNodeSize(12))
   })
 
-  it('来源类型靠描边样式区分：非文件 / 单文档 / 表格三档', () => {
+  it('来源类型靠书脊装订区分：非文件 / 单文档 / 表格三档', () => {
     // 非文件来源（人直接建立或网页摘录）
-    expect(graphNodeBorderType('manual')).toBe('solid')
-    expect(graphNodeBorderType('web')).toBe('solid')
+    expect(graphNodeBinding('manual')).toBe('solid')
+    expect(graphNodeBinding('web')).toBe('solid')
     // 单文档（可解析出正文）
-    expect(graphNodeBorderType('markdown')).toBe('dashed')
-    expect(graphNodeBorderType('text')).toBe('dashed')
-    expect(graphNodeBorderType('docx')).toBe('dashed')
-    expect(graphNodeBorderType('pdf')).toBe('dashed')
+    expect(graphNodeBinding('markdown')).toBe('dashed')
+    expect(graphNodeBinding('text')).toBe('dashed')
+    expect(graphNodeBinding('docx')).toBe('dashed')
+    expect(graphNodeBinding('pdf')).toBe('dashed')
     // 表格（结构化）
-    expect(graphNodeBorderType('csv')).toBe('dotted')
-    expect(graphNodeBorderType('xlsx')).toBe('dotted')
+    expect(graphNodeBinding('csv')).toBe('dotted')
+    expect(graphNodeBinding('xlsx')).toBe('dotted')
     // 未知类型退回最中性的一档，不抛错
-    expect(graphNodeBorderType('unknown-type')).toBe('solid')
+    expect(graphNodeBinding('unknown-type')).toBe('solid')
+  })
+
+  it('书本 SVG 同时画出封面、蓝书脊、页口与外框', () => {
+    const svg = graphNodeSvg({
+      width: 18,
+      height: 24,
+      sourceType: 'manual',
+      center: false,
+      selected: false,
+      palette,
+    })
+    expect(svg).toContain('viewBox="0 0 75 100"')
+    expect(svg).toContain(`fill="${palette.nodeFill}"`)
+    expect(svg).toContain(`fill="${palette.nodeSpine}"`)
+    expect(svg).toContain('M71.5 6 V96')
+    // 24px 高不画书名线，避免糊成一团
+    expect(svg).not.toContain('M20 28 H44')
+    // 非中心节点没有书签带
+    expect(svg).not.toContain('M58 ')
+    // 非选中节点没有选中环
+    expect(svg).not.toContain(palette.selectRing)
+  })
+
+  it('书脊装订、中心书签、书名线与选中环只在对应状态下出现', () => {
+    const svg = graphNodeSvg({
+      width: 23,
+      height: 30,
+      sourceType: 'pdf',
+      center: true,
+      selected: true,
+      palette,
+    })
+    // PDF 是文档导入：蓝脊上有一条纸白短缝线
+    expect(svg).toContain(`stroke="${palette.nodeStitch}"`)
+    expect(svg).toContain('stroke-dasharray=')
+    // 30px 高开始画两条书名线
+    expect(svg).toContain('M20 28 H44')
+    // 中心节点书签带
+    expect(svg).toContain('M58 ')
+    // 选中环
+    expect(svg).toContain(`stroke="${palette.selectRing}"`)
+  })
+
+  it('书本符号是可直接交给 ECharts 的 SVG data URI', () => {
+    const symbol = graphNodeSymbol({
+      width: 18,
+      height: 24,
+      sourceType: 'manual',
+      center: false,
+      selected: false,
+      palette,
+    })
+    expect(symbol.startsWith('image://data:image/svg+xml')).toBe(true)
   })
 })
 
@@ -215,7 +273,10 @@ describe('深色岛调色板', () => {
       '--color-graph-edge-manual': '#c3c8cb',
       '--color-graph-edge-contradicts': '#d16559',
       '--color-surface': '#f2eee4',
+      '--color-surface-secondary': '#e2ddd0',
+      '--color-surface-tertiary': '#fbf8ef',
       '--color-label': '#181818',
+      '--color-primary': '#1f4e79',
     }
     const root = {
       nodeType: 1,
@@ -233,6 +294,10 @@ describe('深色岛调色板', () => {
       // 节点填充与墨色直接复用纸世界令牌：纸白填充在深底上 15.23:1
       expect(resolved.nodeFill).toBe('#f2eee4')
       expect(resolved.nodeInk).toBe('#181818')
+      // 书脊用图书馆蓝、缝线用纸白，二者都落在纸白节点内部
+      expect(resolved.nodeSpine).toBe('#1f4e79')
+      expect(resolved.nodeStitch).toBe('#fbf8ef')
+      expect(resolved.nodePage).toBe('#e2ddd0')
       // 岛上文字绝不能是纸世界的 #181818（在 #16191c 上只有 1.01:1，等于隐形）
       expect(resolved.label).not.toBe('#181818')
     } finally {
