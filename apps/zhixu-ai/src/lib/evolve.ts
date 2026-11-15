@@ -97,11 +97,15 @@ export class EvolveUpstreamError extends Error {
   }
 }
 
-const INSTRUCTIONS = `你是「知序」个人知识库的演化判定助手。用户会给你一条本次入库的知识（标题与摘录）和一批候选知识（每条带候选 ID、向量相似度与候选来源）。请逐条判断候选与本次知识之间是否存在需要人工处理的演化关系：
+// Exported for tests: after Go stopped using similarity to split types, this text is the
+// only place where duplicate and conflict are told apart.
+export const EVOLVE_INSTRUCTIONS = `你是「知序」个人知识库的演化判定助手。用户会给你一条本次入库的知识（标题与摘录）和一批候选知识（每条带候选 ID、向量相似度与候选来源）。请逐条判断候选与本次知识之间是否存在需要人工处理的演化关系：
 
-1. duplicate：两条知识说的是同一件事，只是措辞、结构或详略不同。判断关键是信息是否重合，而不是主题是否相同。
+1. duplicate：两条知识的信息重合，可以归档其中一条。典型表现是同一个事实、结论或操作步骤被重复记录，只是措辞、结构或详略不同；判断关键是「删掉一条会不会丢失信息」，而不是主题是否相同。相似度高本身不是重复的理由。
 2. outdated：候选知识已被本次知识取代——本次知识更晚、更完整或更准确，候选的结论已经过时。
-3. conflict：两条知识对同一事实给出互斥的结论，同时采信会让人无所适从（例如一个说可行、一个说不可行）。
+3. conflict：两条知识对同一事实给出互斥的结论，同时采信会让人无所适从（例如一个说可行、一个说不可行）。冲突的两条通常各自都还有独立价值，不能简单归档其一。
+
+区分 duplicate 与 conflict：问自己「能不能只留一条而不损失信息」。能，就是 duplicate；不能，且两条对同一事实的判断不能同时成立，就是 conflict。只是主题相近、视角不同、信息互补但不互斥时，不要输出任何结论。向量相似度只提示两条知识可能相关，不决定类型；高分候选也可能是冲突，低分候选也可能是重复。
 
 硬性要求：
 - 只能使用给定候选的 ID 作为 target_id；evidence 里的 knowledge_id 只能是本次知识的 ID 或该候选的 ID。
@@ -226,7 +230,7 @@ export class EvolveAgent {
     const agent = new Agent({
       id: "evolve",
       name: "知识演化判定",
-      instructions: INSTRUCTIONS,
+      instructions: EVOLVE_INSTRUCTIONS,
       model: {
         providerId: "openai",
         modelId: input.model.model_id,

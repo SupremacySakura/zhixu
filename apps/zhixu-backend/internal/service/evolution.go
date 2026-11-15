@@ -28,14 +28,11 @@ var (
 	ErrEvolutionUnsupported = errors.New("该裁决动作尚未启用")
 )
 
-// 演化检测阈值。与关系推荐常量同风格，先进代码不进配置：调参只改这里，不动结构。
+// 演化检测常量。与关系推荐常量同风格，先进代码不进配置：调参只改这里，不动结构。
 const (
-	// EvolveDuplicateMinScore 只接受重复结论的相似度下限。
-	EvolveDuplicateMinScore = 0.90
-	// EvolveConflictMinScore 冲突判定的下限，与重复阈值之间留出带宽。
-	EvolveConflictMinScore = 0.75
-	// EvolveOutdatedMinScore 过时判定的弱信号候选门槛。
-	EvolveOutdatedMinScore = 0.80
+	// EvolveCandidateMinScore 演化候选进入模型判定的最低向量相似度。
+	// 它只回答「这条候选值不值得送模型」，不决定结论类型；类型由模型判定。
+	EvolveCandidateMinScore = 0.65
 	// EvolveVectorTopK 向量召回条数：比关系推荐的 50 小，因为一次要给三类结论分派。
 	EvolveVectorTopK = 30
 	// EvolveCandidateMax 送模型的候选上限。

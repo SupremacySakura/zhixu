@@ -509,9 +509,9 @@ type pairOutcome struct {
 	TriggerID   uint   `json:"trigger_id"`
 	CandidateID uint   `json:"candidate_id"`
 	// Similarity 与生产一致：标题 + 正文前 1000 字的向量余弦相似度。
-	// 它决定这条候选能否进入判定（重复 ≥0.90、冲突 ≥0.75、过时 ≥0.80）。
+	// 它只决定这条候选能否进入判定，进入后的结论类型由模型判断。
 	Similarity float64 `json:"similarity"`
-	// ThresholdNote 说明相似度是否足以让期望结论通过分派。
+	// ThresholdNote 说明相似度是否足以让候选进入模型判定。
 	ThresholdNote string `json:"threshold_note"`
 	Note        string `json:"note"`
 }
@@ -600,30 +600,17 @@ func similarityText(item *model.KnowledgeItem) string {
 	return item.Title + "\n" + string(body)
 }
 
-// thresholdNote 说明这条样本在真实流水线里能否进入期望类型的判定。
+// thresholdNote 说明这条样本在真实流水线里能否进入模型判定。
 func thresholdNote(expected string, similarity float64) string {
-	// 生产在分派结论类型之前还有一道候选门槛：低于 EvolveOutdatedMinScore 的近邻
-	// 根本不会进入模型判定（见 evolve_task.go 的 candidates）。所以这里先判门槛，
-	// 否则会把「没进判定」误写成「可判定」。
-	if similarity < service.EvolveOutdatedMinScore {
-		return fmt.Sprintf("相似度低于候选门槛 %.2f，未进入模型判定", service.EvolveOutdatedMinScore)
+	// 生产只有一道候选门槛：低于 EvolveCandidateMinScore 的近邻不会进入模型判定
+	// （见 evolve_task.go 的 candidates），进入后的结论类型完全由模型决定。
+	if similarity < service.EvolveCandidateMinScore {
+		return fmt.Sprintf("相似度低于候选门槛 %.2f，未进入模型判定", service.EvolveCandidateMinScore)
 	}
-	switch expected {
-	case "duplicate":
-		if similarity >= service.EvolveDuplicateMinScore {
-			return "可判重复"
-		}
-		return "相似度低于重复阈值 0.90，真实流水线会漏检"
-	case "conflict":
-		if similarity >= service.EvolveDuplicateMinScore {
-			return "相似度过高，会被判为重复而非冲突"
-		}
-		return "可判冲突"
-	case "outdated":
-		return "可判过时"
-	default:
-		return "对照样本"
+	if expected == "none" {
+		return "对照样本进入模型判定，存在误报风险"
 	}
+	return "已进入模型判定，结论类型由模型判断"
 }
 
 // loadPairs 优先读取 seed 阶段写下的映射；缺失时按标题重新解析，便于单独重跑评测。
@@ -656,7 +643,7 @@ func loadPairs(user *model.UserModel, dataDir, outDir string) []pairRecord {
 }
 
 // judgePairs 把标注好的候选对直接交给生产 EvolveClient：相似度按 0.95 传入，
-// 让三类结论都不被相似度分派挡掉，从而单独衡量模型判定本身的质量。
+// 让所有候选都通过门槛，从而单独衡量模型判定本身的质量。
 func judgePairs(user *model.UserModel, pairs []pairRecord, cfg *config.Config) []pairOutcome {
 	chat := newChatService(cfg)
 	client := &service.EvolveClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret}
@@ -698,7 +685,7 @@ func judgePairs(user *model.UserModel, pairs []pairRecord, cfg *config.Config) [
 	return outcomes
 }
 
-// collectAlerts 读取真实流水线写下的提醒，衡量端到端效果（含候选召回与相似度分派）。
+// collectAlerts 读取真实流水线写下的提醒，衡量端到端效果（含候选召回与模型判定）。
 func collectAlerts(user *model.UserModel, pairs []pairRecord) []pairOutcome {
 	var alerts []model.EvolutionAlert
 	if err := database.DB.Where("user_id = ?", user.ID).Find(&alerts).Error; err != nil {
@@ -830,33 +817,23 @@ func mustSweep(outDir string) {
 		fatal(err)
 	}
 
-	// 每个候选阈值组合：重复下限、冲突下限、过时下限。系统当前是 0.90/0.75/0.80。
-	// 注意过时阈值同时充当候选准入门槛（evolve_task.go 里按 EvolveOutdatedMinScore
-	// 过滤近邻），所以调低它会连带放宽「哪些候选能进模型」，表中三列必须一起读。
-	type candidate struct{ duplicate, conflict, outdated float64 }
-	candidates := []candidate{
-		{0.90, 0.75, 0.80},
-		{0.85, 0.70, 0.75},
-		{0.80, 0.65, 0.70},
-		{0.75, 0.60, 0.65},
-		{0.70, 0.55, 0.60},
-	}
+	// 相似度只决定候选能否进入判定，敏感性分析因此只有一个维度：候选门槛。
+	gates := []float64{0.60, 0.65, 0.70, 0.75, 0.80}
 
 	var b strings.Builder
-	b.WriteString("| 重复阈值 | 冲突阈值 | 过时/准入阈值 | 重复可判定 | 冲突可判定 | 过时可判定 | 对照误入 |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
-	for _, c := range candidates {
+	b.WriteString("| 候选门槛 | 重复可判定 | 冲突可判定 | 过时可判定 | 对照误入 |\n")
+	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	for _, gate := range gates {
 		counts := map[string][2]int{} // 类型 -> [可判定, 总数]
 		for _, outcome := range outcomes {
 			pair := counts[outcome.PairType]
 			pair[1]++
-			if passThreshold(outcome.PairType, outcome.Similarity, c.duplicate, c.conflict, c.outdated) {
+			if passThreshold(outcome.PairType, outcome.Similarity, gate) {
 				pair[0]++
 			}
 			counts[outcome.PairType] = pair
 		}
-		fmt.Fprintf(&b, "| %.2f | %.2f | %.2f | %s | %s | %s | %s |\n",
-			c.duplicate, c.conflict, c.outdated,
+		fmt.Fprintf(&b, "| %.2f | %s | %s | %s | %s |\n", gate,
 			fraction(counts["duplicate"]), fraction(counts["conflict"]),
 			fraction(counts["outdated"]), fraction(counts["negative"]))
 	}
@@ -864,32 +841,13 @@ func mustSweep(outDir string) {
 	fmt.Println(b.String())
 }
 
-func passThreshold(pairType string, similarity, duplicate, conflict, outdated float64) bool {
-	// 先过候选门槛：低于过时阈值的近邻在生产里不会进入模型判定，
-	// 后面的类型分派再准也没有机会生效。
-	if similarity < outdated {
-		return false
-	}
-	switch pairType {
-	case "duplicate":
-		return similarity >= duplicate
-	case "conflict":
-		// 与生产一致：相似度过高会被判重复，冲突只在 [冲突阈值, 重复阈值) 中段生效。
-		// 候选门槛已在上方判过，这里只判类型带宽。
-		return similarity >= conflict && similarity < duplicate
-	case "outdated":
-		return true
-	default:
-		// 对照样本本身不产生提醒，这里统计的是「会不会被送进判定」。
-		return true
-	}
+// passThreshold 判断样本是否达到候选门槛；达到后类型交给模型，不再按分数分派。
+func passThreshold(_ string, similarity, gate float64) bool {
+	return similarity >= gate
 }
 
-// mustGrid 穷举阈值组合，回答「只调阈值，端到端准确率最多能到多少」。
-//
-// 这张表的意义在于区分两类问题：如果最优组合能接近 pairwise 的水平，说明调参就够了；
-// 如果最优组合也上不去，说明三类样本的相似度分布本身重叠，必须换嵌入模型或补判定路径。
-// 判定逻辑按生产规则复刻：先过候选门槛，再按互斥区间分派允许的结论类型。
+// mustGrid 穷举单一候选门槛，回答「只调门槛，估计准确率最多能到多少」。
+// 估计口径假设进入判定的候选模型都能判对，模型本身的效果由 pairwise 实测。
 func mustGrid(outDir string) {
 	path := filepath.Join(outDir, "evolution-collect-outcomes.json")
 	data, err := os.ReadFile(path)
@@ -902,66 +860,55 @@ func mustGrid(outDir string) {
 	}
 
 	type result struct {
-		duplicate, conflict, outdated float64
-		correct                       int
+		gate    float64
+		correct int
 	}
 	var best []result
 	bestCorrect := -1
-	// 步长 0.01，范围覆盖所有样本的相似度区间；冲突阈值必须低于重复阈值，
-	// 否则冲突带宽为空，与生产的互斥约束不符。
-	for dup := 0.60; dup <= 0.95+1e-9; dup += 0.01 {
-		for con := 0.50; con < dup-1e-9; con += 0.01 {
-			for out := 0.50; out <= dup+1e-9; out += 0.01 {
-				correct := 0
-				for _, outcome := range outcomes {
-					if allowsType(outcome.Similarity, dup, con, out, outcome.Expected) {
-						correct++
-					}
-				}
-				if correct > bestCorrect {
-					bestCorrect = correct
-					best = []result{{dup, con, out, correct}}
-				} else if correct == bestCorrect {
-					best = append(best, result{dup, con, out, correct})
-				}
+	for gate := 0.50; gate <= 0.95+1e-9; gate += 0.01 {
+		correct := 0
+		for _, outcome := range outcomes {
+			if allowsType(outcome.Similarity, gate, outcome.Expected) {
+				correct++
 			}
+		}
+		if correct > bestCorrect {
+			bestCorrect = correct
+			best = []result{{gate, correct}}
+		} else if correct == bestCorrect {
+			best = append(best, result{gate, correct})
 		}
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "网格搜索范围：重复 0.60–0.95、冲突 0.50–重复阈值、过时/准入 0.50–重复阈值，步长 0.01。\n\n")
-	fmt.Fprintf(&b, "最优准确率 %.3f（%d/%d），达到该准确率的组合共 %d 个。\n\n",
+	fmt.Fprintf(&b, "网格搜索范围：候选门槛 0.50–0.95，步长 0.01。\n\n")
+	fmt.Fprintf(&b, "最优估计准确率 %.3f（%d/%d），达到该准确率的门槛共 %d 个。\n\n",
 		ratio(bestCorrect, len(outcomes)), bestCorrect, len(outcomes), len(best))
-	b.WriteString("| 重复阈值 | 冲突阈值 | 过时/准入阈值 | 准确率 |\n")
-	b.WriteString("| --- | --- | --- | --- |\n")
-	// 组合可能成百上千，只列前 10 个，避免表格失去可读性。
+	b.WriteString("| 候选门槛 | 估计准确率 |\n")
+	b.WriteString("| --- | --- |\n")
 	for i, item := range best {
 		if i == 10 {
-			fmt.Fprintf(&b, "| … | … | … | 其余 %d 个组合相同 |\n", len(best)-10)
+			fmt.Fprintf(&b, "| … | 其余 %d 个门槛相同 |\n", len(best)-10)
 			break
 		}
-		fmt.Fprintf(&b, "| %.2f | %.2f | %.2f | %.3f |\n", item.duplicate, item.conflict, item.outdated,
+		fmt.Fprintf(&b, "| %.2f | %.3f |\n", item.gate,
 			ratio(item.correct, len(outcomes)))
 	}
 
-	// 与生产当前阈值对比，量化「不调参会损失多少」。
+	// 与生产当前门槛对比，量化「不调门槛会损失多少」。
 	current := 0
 	for _, outcome := range outcomes {
-		if allowsType(outcome.Similarity, service.EvolveDuplicateMinScore,
-			service.EvolveConflictMinScore, service.EvolveOutdatedMinScore, outcome.Expected) {
+		if allowsType(outcome.Similarity, service.EvolveCandidateMinScore, outcome.Expected) {
 			current++
 		}
 	}
-	fmt.Fprintf(&b, "\n当前生产阈值（%.2f/%.2f/%.2f）准确率 %.3f（%d/%d），与最优相差 %.3f。\n",
-		service.EvolveDuplicateMinScore, service.EvolveConflictMinScore, service.EvolveOutdatedMinScore,
+	fmt.Fprintf(&b, "\n当前生产门槛 %.2f 的估计准确率 %.3f（%d/%d），与最优相差 %.3f。\n",
+		service.EvolveCandidateMinScore,
 		ratio(current, len(outcomes)), current, len(outcomes),
 		ratio(bestCorrect-current, len(outcomes)))
 
 	b.WriteString("\n## 分布重叠检查\n\n")
 	b.WriteString(distributionOverlap(outcomes))
-
-	b.WriteString("\n## 假设：只用相似度做候选门槛，重复与冲突交给模型区分\n\n")
-	b.WriteString(gateOnlySweep(outcomes))
 
 	writeText(filepath.Join(outDir, "evolution-threshold-grid.md"), b.String())
 	fmt.Println(b.String())
@@ -969,8 +916,8 @@ func mustGrid(outDir string) {
 
 // distributionOverlap 检查三类样本的相似度区间是否可分。
 //
-// 这决定了「调阈值」有没有意义：如果重复样本的最高分低于冲突样本的最低分，阈值就能切开；
-// 如果两类区间互相包含，那么无论阈值取多少，都会有一类被另一类的带宽吃掉。
+// 这决定了相似度能否单独区分类型：如果重复样本的最高分低于冲突样本的最低分，就能切开；
+// 如果两类区间互相包含，那么任何按分数分派类型的规则都会在一类样本上出错。
 func distributionOverlap(outcomes []pairOutcome) string {
 	ranges := map[string][2]float64{}
 	counts := map[string]int{}
@@ -1005,87 +952,25 @@ func distributionOverlap(outcomes []pairOutcome) string {
 	if dupOK && conflictOK {
 		if conflict[0] < dup[0] && conflict[1] > dup[1] {
 			fmt.Fprintf(&b, "\n重复区间 [%.3f, %.3f] 被冲突区间 [%.3f, %.3f] 完整包含，"+
-				"两者在相似度维度上不可分。任何重复阈值只要低到能覆盖全部重复样本，"+
-				"就会把落在其上方的冲突样本一并划进重复带宽，反之亦然。\n",
+				"两者在相似度维度上不可分。任何按相似度分派类型的规则只要低到能覆盖全部重复样本，"+
+				"就会把落在其上方的冲突样本误判成重复，反之亦然。\n",
 				dup[0], dup[1], conflict[0], conflict[1])
 		} else {
-			b.WriteString("\n重复与冲突区间存在可分间隙，阈值可以单独调节。\n")
+			b.WriteString("\n重复与冲突区间存在可分间隙，但类型仍由模型判定。\n")
 		}
 	}
 	return b.String()
 }
 
-// gateOnlySweep 估算「相似度只当候选门槛、类型由模型判断」时的效果。
-//
-// 这是针对分布重叠的改进方案：既然相似度分不开重复与冲突，就不要用它分派类型，
-// 只用它决定候选是否值得送给模型。估算口径是「期望类型落在允许集合内」，
-// 相当于假设模型在候选批次里仍能判对——该假设由 pairwise 的实测结果支撑。
-func gateOnlySweep(outcomes []pairOutcome) string {
-	var b strings.Builder
-	b.WriteString("| 候选门槛 | 正样本进入判定 | 对照误入 | 估计准确率 |\n| --- | --- | --- | --- |\n")
-	bestGate, bestCorrect := 0.0, -1
-	for gate := 0.50; gate <= 0.95+1e-9; gate += 0.01 {
-		positive, falseAlarm, correct := 0, 0, 0
-		for _, outcome := range outcomes {
-			if outcome.Similarity >= gate {
-				if outcome.PairType == "negative" {
-					falseAlarm++
-					continue
-				}
-				positive++
-				correct++
-			} else if outcome.PairType == "negative" {
-				// 对照样本没过门槛，正确地不产生提醒。
-				correct++
-			}
-		}
-		if correct > bestCorrect {
-			bestCorrect, bestGate = correct, gate
-		}
-		if positive+falseAlarm == 0 {
-			continue
-		}
-		fmt.Fprintf(&b, "| %.2f | %d/%d | %d/%d | %.3f |\n", gate, positive, countType(outcomes, false),
-			falseAlarm, countType(outcomes, true), ratio(correct, len(outcomes)))
+// allowsType 判断在给定候选门槛下，这条样本的期望结论是否有机会被判出。
+// 门槛只决定是否送模型；进入后类型不再受相似度限制，因此正样本过了门槛就算「判得出」。
+// 对照样本本身不产生提醒，过门槛即说明存在误报风险。
+func allowsType(similarity, gate float64, expected string) bool {
+	passed := similarity >= gate
+	if expected == "none" {
+		return !passed
 	}
-	fmt.Fprintf(&b, "\n最佳候选门槛 %.2f，估计准确率 %.3f（%d/%d）。"+
-		"该值高于当前 0.409，说明瓶颈是「用相似度分派类型」这个设计，而不只是阈值高低。\n",
-		bestGate, ratio(bestCorrect, len(outcomes)), bestCorrect, len(outcomes))
-	return b.String()
-}
-
-func countType(outcomes []pairOutcome, negative bool) int {
-	total := 0
-	for _, outcome := range outcomes {
-		if (outcome.PairType == "negative") == negative {
-			total++
-		}
-	}
-	return total
-}
-
-// allowsType 判断在给定阈值下，这条样本的期望结论是否有机会被判出。
-//
-// 生产的分派只规定「允许哪些类型」，最终选哪个由模型决定。所以只要期望类型在允许集合内，
-// 就算这条样本「判得出」——这与 collect 的实测口径一致：E06 的相似度同时允许冲突与过时，
-// 模型选了过时并判对。若按「取第一个允许类型」推算，会把这类样本误算成判错。
-func allowsType(similarity, duplicate, conflict, outdated float64, expected string) bool {
-	if similarity < outdated {
-		return expected == "none"
-	}
-	switch expected {
-	case "duplicate":
-		return similarity >= duplicate
-	case "conflict":
-		return similarity >= conflict && similarity < duplicate
-	case "outdated":
-		return true
-	case "none":
-		// 对照样本本身不产生提醒，能进入判定就说明存在误报风险。
-		return false
-	default:
-		return false
-	}
+	return passed
 }
 
 func fraction(pair [2]int) string {

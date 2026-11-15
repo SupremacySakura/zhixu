@@ -27,8 +27,13 @@ registerHooks({
   },
 });
 
-const { buildEvolvePrompt, evolveItemSchema, evolveSchema, sanitizeJudgements } =
-  await import("../lib/evolve.ts");
+const {
+  EVOLVE_INSTRUCTIONS,
+  buildEvolvePrompt,
+  evolveItemSchema,
+  evolveSchema,
+  sanitizeJudgements,
+} = await import("../lib/evolve.ts");
 const { evolveRoute } = await import("../mastra/evolve.ts");
 
 // Go sends the model configuration plus the trigger knowledge and at most eight candidates.
@@ -278,6 +283,17 @@ test("buildEvolvePrompt carries the trigger, every candidate and its origin", ()
   assert.match(prompt, /候选 2（ID 22）/);
   assert.match(prompt, /更新关系/);
   assert.match(prompt, /revised_content/);
+});
+
+test("evolve instructions tell duplicate and conflict apart without similarity", () => {
+  // Go no longer rewrites types by score, so the prompt is the only type judge.
+  assert.match(EVOLVE_INSTRUCTIONS, /duplicate：两条知识的信息重合，可以归档其中一条/);
+  assert.match(
+    EVOLVE_INSTRUCTIONS,
+    /conflict：两条知识对同一事实给出互斥的结论/,
+  );
+  assert.match(EVOLVE_INSTRUCTIONS, /向量相似度只提示两条知识可能相关，不决定类型/);
+  assert.match(EVOLVE_INSTRUCTIONS, /没有需要处理的候选时输出空数组/);
 });
 
 test("evolve route rejects callers without the internal bearer", async () => {
