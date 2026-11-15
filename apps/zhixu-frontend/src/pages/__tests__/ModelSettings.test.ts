@@ -53,6 +53,7 @@ const fixture = (): AIConfiguration => ({
     embedding_model_id: 3,
     rag_top_k: 5,
     rag_min_score: 0.5,
+    evolve_candidate_min_score: 0.65,
     config_version: 5,
     embedding_version: 1,
     needs_reindex: false,
@@ -126,6 +127,7 @@ describe('ModelSettings', () => {
         embedding_model_id: 4,
         rag_top_k: 5,
         rag_min_score: 0.5,
+        evolve_candidate_min_score: 0.65,
         expected_version: 5,
         confirm_reindex: true,
       },
@@ -150,6 +152,7 @@ describe('ModelSettings', () => {
         embedding_model_id: 3,
         rag_top_k: 20,
         rag_min_score: 0.7,
+        evolve_candidate_min_score: 0.65,
         expected_version: 5,
         confirm_reindex: false,
       },
@@ -168,6 +171,46 @@ describe('ModelSettings', () => {
     await flushPromises()
     expect(saveAIDefaults).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('相似度阈值需在 0.05–1 之间')
+    wrapper.unmount()
+  })
+  it('submits the evolution candidate gate alongside the other defaults', async () => {
+    vi.mocked(saveAIDefaults).mockResolvedValue(fixture())
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    const gate = wrapper.get<HTMLInputElement>('#evolve-candidate-min-score')
+    expect(gate.element.value).toBe('0.65')
+    expect(wrapper.text()).toContain('低于该值的近邻不会进入判定')
+    await gate.setValue(0.5)
+    await wrapper
+      .findAll('button')
+      .find(b => b.text() === '保存默认模型')!
+      .trigger('click')
+    await flushPromises()
+    expect(saveAIDefaults).toHaveBeenCalledWith(
+      {
+        chat_model_id: 2,
+        embedding_model_id: 3,
+        rag_top_k: 5,
+        rag_min_score: 0.5,
+        evolve_candidate_min_score: 0.5,
+        expected_version: 5,
+        confirm_reindex: false,
+      },
+      expect.any(AbortSignal),
+    )
+    wrapper.unmount()
+  })
+  it('rejects an evolution gate outside 0.45–1 before saving', async () => {
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    await wrapper.get<HTMLInputElement>('#evolve-candidate-min-score').setValue(0.3)
+    await wrapper
+      .findAll('button')
+      .find(b => b.text() === '保存默认模型')!
+      .trigger('click')
+    await flushPromises()
+    expect(saveAIDefaults).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('演化候选门槛需在 0.45–1 之间')
     wrapper.unmount()
   })
   it('retains the editor on save failure and clears it only after success', async () => {

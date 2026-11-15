@@ -52,6 +52,7 @@ const chat = ref('0')
 const embedding = ref('0')
 const ragTopK = ref(5)
 const ragMinScore = ref(0.5)
+const evolveCandidateMinScore = ref(0.65)
 const confirmDefaults = ref(false)
 watch(configuration, value => {
   if (!value) return
@@ -60,6 +61,8 @@ watch(configuration, value => {
   // Settings rows predating the retrieval columns report zero; mirror the backend defaults.
   ragTopK.value = value.settings.rag_top_k || 5
   ragMinScore.value = value.settings.rag_min_score || 0.5
+  // Zero means the row predates the gate column; show the backend default instead of 0.
+  evolveCandidateMinScore.value = value.settings.evolve_candidate_min_score || 0.65
 })
 function options(kind: ModelKind) {
   return [
@@ -84,7 +87,9 @@ const dirty = computed(
       Number(embedding.value) !== configuration.value.settings.embedding_model_id ||
       Math.round(ragTopK.value) !== (configuration.value.settings.rag_top_k || 5) ||
       Math.round(ragMinScore.value * 100) / 100 !==
-        (configuration.value.settings.rag_min_score || 0.5)),
+        (configuration.value.settings.rag_min_score || 0.5) ||
+      Math.round(evolveCandidateMinScore.value * 100) / 100 !==
+        (configuration.value.settings.evolve_candidate_min_score || 0.65)),
 )
 function openEditor(provider: AIProvider | null = null, preset: ProviderPreset | null = null) {
   clearError()
@@ -121,6 +126,7 @@ async function submitDefaults(confirmed: boolean) {
   if (!configuration.value) return
   const topK = Math.round(ragTopK.value)
   const score = Math.round(ragMinScore.value * 100) / 100
+  const gate = Math.round(evolveCandidateMinScore.value * 100) / 100
   if (!Number.isFinite(topK) || topK < 1 || topK > 50) {
     displayToast('参考条数需为 1–50 的整数', 'error')
     return
@@ -129,12 +135,17 @@ async function submitDefaults(confirmed: boolean) {
     displayToast('相似度阈值需在 0.05–1 之间', 'error')
     return
   }
+  if (!Number.isFinite(gate) || gate < 0.45 || gate > 1) {
+    displayToast('演化候选门槛需在 0.45–1 之间', 'error')
+    return
+  }
   if (
     await saveDefaults({
       chat_model_id: Number(chat.value),
       embedding_model_id: Number(embedding.value),
       rag_top_k: topK,
       rag_min_score: score,
+      evolve_candidate_min_score: gate,
       expected_version: configuration.value.settings.config_version,
       confirm_reindex: confirmed,
     })
@@ -306,6 +317,24 @@ function reloadConfirmation() {
                           max="1"
                           step="0.05"
                         />
+                      </div>
+                      <div class="sm:col-span-2">
+                        <label
+                          for="evolve-candidate-min-score"
+                          class="mb-2 block text-note font-semibold"
+                          >演化候选门槛</label
+                        ><input
+                          id="evolve-candidate-min-score"
+                          v-model.number="evolveCandidateMinScore"
+                          class="atom-field w-full"
+                          type="number"
+                          min="0.45"
+                          max="1"
+                          step="0.05"
+                        />
+                        <p class="mt-2 text-note text-label-secondary">
+                          低于该值的近邻不会进入判定；它只决定送不送，不决定判定结论的类型。
+                        </p>
                       </div>
                     </div>
                     <p class="mt-3 text-note text-label-secondary">
