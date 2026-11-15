@@ -32,6 +32,28 @@ export interface EvolutionPayload {
   suggested_action: EvolutionAction
   revised_title?: string
   revised_content?: string
+  /**
+   * 这条提醒承载的全部结论，主结论排在最前。
+   *
+   * 同一对知识从两个方向检查会得到两条结论，后端按知识对收敛成一条提醒；
+   * 顶层字段始终跟随主结论，只读顶层字段的调用方不受影响。
+   */
+  conclusions?: EvolutionConclusion[]
+}
+
+/** 一条结论：某个方向（以哪条知识为本次检查对象）得出的判定。 */
+export interface EvolutionConclusion {
+  type: EvolutionAlertType
+  /** 得出这条结论时「本次检查的知识」的 ID，用来区分两侧判定。 */
+  trigger_id: number
+  reason: string
+  evidence: EvolutionEvidence[]
+  suggested_action: EvolutionAction
+  severity: EvolutionSeverity
+  revised_title?: string
+  revised_content?: string
+  /** 候选来源：更新关系是用户声明的强信号，向量近邻只是相似。 */
+  origin?: string
 }
 
 /** 提醒涉及的知识；subjects[0] 是本次触发检查的知识，subjects[1] 是被比对的知识。 */

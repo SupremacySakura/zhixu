@@ -25,6 +25,21 @@ func (t EvolutionAlertType) Valid() bool {
 	}
 }
 
+// Priority 是同一对知识出现多种结论时的收敛优先级，数值小的优先。
+// 重复的处置（归档其一）最明确，冲突次之，过时最后。
+func (t EvolutionAlertType) Priority() int {
+	switch t {
+	case EvolutionAlertTypeDuplicate:
+		return 0
+	case EvolutionAlertTypeConflict:
+		return 1
+	case EvolutionAlertTypeOutdated:
+		return 2
+	default:
+		return 3
+	}
+}
+
 // EvolutionAlertStatus 提醒的审核状态：待处理 → 已处理/已忽略，或暂不处理（可回到待处理）。
 // 与 KnowledgeStatus 无关：那是知识的处理状态，不是审核状态。
 type EvolutionAlertStatus string
@@ -111,12 +126,35 @@ func (a EvolutionAction) AllowedFor(alertType EvolutionAlertType) bool {
 	}
 }
 
+// EvolutionMergeFunc 把一条新提醒并入同一知识对的已有提醒，返回合并结果与处置。
+// existing 为 nil 表示这一对还没有提醒；返回 nil 提醒表示本次不写库。
+type EvolutionMergeFunc func(existing, incoming *EvolutionAlert) (*EvolutionAlert, EvolutionUpsertOutcome)
+
+// EvolutionUpsertOutcome 描述一次提醒写入的结果。
+type EvolutionUpsertOutcome string
+
+const (
+	// EvolutionAlertCreated 新建了一条待处理提醒。
+	EvolutionAlertCreated EvolutionUpsertOutcome = "created"
+	// EvolutionAlertRefreshed 同一条提醒被再次命中，刷新了时间或结论。
+	EvolutionAlertRefreshed EvolutionUpsertOutcome = "refreshed"
+	// EvolutionAlertRevived 终态或「暂不处理」的提醒因正文变化回到待处理。
+	EvolutionAlertRevived EvolutionUpsertOutcome = "revived"
+	// EvolutionAlertSuppressed 正文未变且提醒已裁决，抑制本次提醒。
+	EvolutionAlertSuppressed EvolutionUpsertOutcome = "suppressed"
+)
+
 // EvolutionAlert 是一条待裁决的演化提醒。
 //
 // SubjectIDs 存 JSON 数组且**有序**：第 0 位是本次触发检查的知识，第 1 位是被比对的知识，
-// 前端按这个顺序左右并排展示。指纹计算时改用排序后的 ID，避免同一对被判反方向时算出两个指纹。
-// DedupeKey 是提醒指纹（类型 + 排序后的 ID + 证据引文），带唯一索引且**终态不清空**：
-// 终态仍占位才能抑制同一证据再次弹提醒。
+// 前端按这个顺序左右并排展示。
+//
+// PairKey 是提醒身份（两个知识 ID 排序后的哈希），带唯一索引：一对知识只允许一条提醒，
+// 双向检查产出的是同一条。PairVersions 记录生成结论时两侧的正文版本，任一侧版本变化说明
+// 用户改过正文，此前的裁决不再适用，允许重新提醒。
+//
+// DedupeKey 是证据指纹（类型 + 排序后的 ID + 证据引文），不带唯一约束：它只用来区分
+// 「同一证据再次命中」与「同一对知识出现了新证据」，不再决定提醒的身份。
 type EvolutionAlert struct {
 	ID         uint                   `gorm:"primaryKey" json:"id"`
 	UserID     uint                   `gorm:"not null;index:idx_evolution_alert_user_status,priority:1" json:"-"`
@@ -124,9 +162,20 @@ type EvolutionAlert struct {
 	Status     EvolutionAlertStatus   `gorm:"type:varchar(16);not null;default:'pending';index:idx_evolution_alert_user_status,priority:2" json:"status"`
 	Severity   EvolutionAlertSeverity `gorm:"type:varchar(16);not null;default:'review'" json:"severity"`
 	SubjectIDs string                 `gorm:"type:json;not null" json:"-"`
+	// PairKey 是知识对身份，一对知识只有一行提醒。
+	//
+	// 唯一索引刻意不写在这里：AutoMigrate 先于历史回填执行，而库里已有的提醒行 pair_key
+	// 全是空串，tag 上的唯一索引会当场建在重复值上失败，整个迁移返回错误、服务起不来。
+	// 索引由迁移末尾的显式 DDL 创建，那时回填已经收敛完毕。
+	PairKey string `gorm:"type:char(64);not null;default:'';index:idx_evolution_alert_pair" json:"-"`
+	// PairVersions 是生成结论时两侧知识的正文版本，JSON 对象 {"10":2,"11":5}。
+	//
+	// 刻意用 varchar 而不是 JSON 列：给已有表追加 NOT NULL 的 JSON 列时 MySQL 会用空串
+	// 回填历史行并报 ERROR 3140，迁移直接失败。取值仍按 JSON 解析，列类型只是存储形态。
+	PairVersions string `gorm:"type:varchar(512);not null;default:''" json:"-"`
 	// Payload 是结构化判定结果（理由、证据、建议动作、冲突时的修订稿），解析见服务层。
 	Payload        string          `gorm:"type:json;not null" json:"-"`
-	DedupeKey      string          `gorm:"type:char(64);not null;uniqueIndex:uniq_evolution_alert_dedupe" json:"-"`
+	DedupeKey      string          `gorm:"type:char(64);not null;index:idx_evolution_alert_dedupe" json:"-"`
 	ResolvedAt     *time.Time      `json:"resolved_at"`
 	ResolvedAction EvolutionAction `gorm:"type:varchar(32);not null;default:''" json:"resolved_action"`
 	ResolutionNote string          `gorm:"type:varchar(1000);not null;default:''" json:"resolution_note"`
@@ -160,3 +209,29 @@ func (a *EvolutionAlert) SetSubjectIDs(ids []uint) error {
 
 // Active 报告提醒是否仍在待办视野内。
 func (a EvolutionAlert) Active() bool { return a.Status.Open() }
+
+// SetPairVersions 写入两侧知识的正文版本；nil 或空 map 写空对象，保证列不为 NULL。
+func (a *EvolutionAlert) SetPairVersions(versions map[uint]uint) error {
+	if len(versions) == 0 {
+		a.PairVersions = "{}"
+		return nil
+	}
+	encoded, err := json.Marshal(versions)
+	if err != nil {
+		return err
+	}
+	a.PairVersions = string(encoded)
+	return nil
+}
+
+// PairVersionMap 解析两侧版本；脏数据按空 map 处理，不影响合并判断。
+func (a *EvolutionAlert) PairVersionMap() map[uint]uint {
+	if a == nil || a.PairVersions == "" {
+		return nil
+	}
+	var versions map[uint]uint
+	if err := json.Unmarshal([]byte(a.PairVersions), &versions); err != nil {
+		return nil
+	}
+	return versions
+}

@@ -299,6 +299,38 @@ func TestEvolutionListDecoratesSubjects(t *testing.T) {
 	require.Equal(t, "正文完全一致", views[0].Payload.Reason)
 }
 
+// 列表视图要带出结论集合：详情页靠它展示两侧判定，缺了就只能看到主结论。
+func TestEvolutionListViewCarriesConclusions(t *testing.T) {
+	f := newEvolutionFixture()
+	alert := f.addAlert(1, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{10, 11})
+	alert.Payload = mustMarshalPayload(t, EvolutionConclusion{
+		Type: model.EvolutionAlertTypeOutdated, TriggerID: 10, Reason: "本次知识更新",
+		Evidence:        []EvolutionEvidence{{KnowledgeID: 11, Quote: "同一段正文"}},
+		SuggestedAction: model.EvolutionActionMarkOutdated, Severity: model.EvolutionSeverityStrong,
+		Origin: EvolveOriginUpdateRelation,
+	}, []EvolutionConclusion{
+		{
+			Type: model.EvolutionAlertTypeOutdated, TriggerID: 10, Reason: "本次知识更新",
+			Evidence:        []EvolutionEvidence{{KnowledgeID: 11, Quote: "同一段正文"}},
+			SuggestedAction: model.EvolutionActionMarkOutdated, Severity: model.EvolutionSeverityStrong,
+			Origin: EvolveOriginUpdateRelation,
+		},
+		{
+			Type: model.EvolutionAlertTypeDuplicate, TriggerID: 11, Reason: "另一侧认为信息重合",
+			Evidence:        []EvolutionEvidence{{KnowledgeID: 10, Quote: "同一段正文"}},
+			SuggestedAction: model.EvolutionActionArchiveOne, Severity: model.EvolutionSeverityReview,
+		},
+	})
+
+	views, _, err := f.service.List(context.Background(), 2, 1, 20, "", nil, true)
+
+	require.NoError(t, err)
+	require.Len(t, views, 1)
+	require.Len(t, views[0].Payload.Conclusions, 2)
+	require.Equal(t, model.EvolutionAlertTypeOutdated, views[0].Payload.Conclusions[0].Type, "主结论在最前")
+	require.Equal(t, uint(11), views[0].Payload.Conclusions[1].TriggerID, "次要结论保留自己的方向")
+}
+
 func TestEvolutionListRejectsInvalidFilter(t *testing.T) {
 	f := newEvolutionFixture()
 	for _, tc := range []struct {
@@ -462,8 +494,11 @@ func TestEvolutionResolveRejectsMismatchedAction(t *testing.T) {
 }
 
 // 采纳修订：把载荷里的修订稿写成知识的新版本，提醒随之关闭。
+// 正向检查时触发侧本来就是较新的一条，修订落在它上面。
 func TestEvolutionResolveAcceptRevisionWritesNewVersion(t *testing.T) {
 	f := newEvolutionFixture()
+	f.knowledge.items[10].UpdatedAt = time.Now()
+	f.knowledge.items[11].UpdatedAt = time.Now().Add(-24 * time.Hour)
 	f.addConflictAlert(1, []uint{10, 11}, "HNSW 的召回率", "HNSW 的分层图结构在召回率上优于 IVF。")
 
 	view, changed, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionAcceptRevision})
@@ -473,7 +508,7 @@ func TestEvolutionResolveAcceptRevisionWritesNewVersion(t *testing.T) {
 	require.Equal(t, model.EvolutionAlertResolved, view.Status)
 	require.Len(t, f.reviser.calls, 1)
 	require.Equal(t, uint(2), f.reviser.calls[0].userID)
-	require.Equal(t, uint(10), f.reviser.calls[0].id, "修订稿落在触发侧的知识上")
+	require.Equal(t, uint(10), f.reviser.calls[0].id, "正向检查时修订稿落在触发侧（即较新的一侧）")
 	require.Equal(t, "HNSW 的召回率", f.reviser.calls[0].title)
 	require.Equal(t, "HNSW 的分层图结构在召回率上优于 IVF。", f.reviser.calls[0].content)
 	require.Len(t, f.logs.entries, 1, "裁决写一条操作日志")
@@ -489,6 +524,55 @@ func TestEvolutionResolveAcceptRevisionRequiresRevision(t *testing.T) {
 	require.ErrorIs(t, err, ErrEvolutionInvalid)
 	require.Empty(t, f.reviser.calls)
 	require.Equal(t, model.EvolutionAlertPending, f.store.alerts[0].Status, "动作被拒时提醒状态不变")
+}
+
+// 反向检查：旧知识作为触发方去比对新知识，修订稿仍要落在较新的那条上。
+// 若按触发侧写回，就会用旧内容覆盖新内容。
+func TestEvolutionResolveAcceptRevisionWritesNewerSideOnReverseAlert(t *testing.T) {
+	f := newEvolutionFixture()
+	// subject_ids[0] 是触发方（较旧的原件），[1] 是被比对的新导入知识。
+	older, newer := time.Now().Add(-48*time.Hour), time.Now()
+	f.knowledge.items[11].UpdatedAt = older
+	f.knowledge.items[10].UpdatedAt = newer
+	f.addConflictAlert(1, []uint{11, 10}, "HNSW 的召回率", "HNSW 的分层图结构在召回率上优于 IVF。")
+
+	_, changed, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionAcceptRevision})
+
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Len(t, f.reviser.calls, 1)
+	require.Equal(t, uint(10), f.reviser.calls[0].id, "修订稿落在更新时间较晚的知识上")
+}
+
+// 两条知识更新时间相同时取 ID 较大的一侧：同一对知识无论从哪边检查，落点都一样。
+func TestEvolutionResolveAcceptRevisionBreaksTieByHigherID(t *testing.T) {
+	f := newEvolutionFixture()
+	same := time.Now()
+	f.knowledge.items[10].UpdatedAt = same
+	f.knowledge.items[11].UpdatedAt = same
+	// 触发侧是 ID 较小的一条，若不按 ID 兜底就会写到它上面。
+	f.addConflictAlert(1, []uint{10, 11}, "HNSW 的召回率", "HNSW 的分层图结构在召回率上优于 IVF。")
+
+	_, _, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionAcceptRevision})
+
+	require.NoError(t, err)
+	require.Len(t, f.reviser.calls, 1)
+	require.Equal(t, uint(11), f.reviser.calls[0].id, "更新时间相同时落在 ID 较大的一侧")
+}
+
+// 取不到两条知识时不能因为「判断不了新旧」就把裁决拒掉：退回触发侧，保持旧行为。
+func TestEvolutionResolveAcceptRevisionFallsBackToTriggerSide(t *testing.T) {
+	f := newEvolutionFixture()
+	f.addConflictAlert(1, []uint{10, 11}, "HNSW 的召回率", "HNSW 的分层图结构在召回率上优于 IVF。")
+	// 被比对的那条已不可见（例如刚被删除），批量读取只返回一条。
+	delete(f.knowledge.items, 11)
+
+	_, changed, err := f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionAcceptRevision})
+
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Len(t, f.reviser.calls, 1)
+	require.Equal(t, uint(10), f.reviser.calls[0].id, "判断不了新旧时退回触发侧")
 }
 
 // 未接修订能力时明确返回「尚未启用」，而不是静默成功。
@@ -546,6 +630,34 @@ func TestEvolutionResolveMarkOutdatedMarksComparedKnowledge(t *testing.T) {
 	require.NotNil(t, f.outdated.calls[0].at)
 	require.NotEmpty(t, f.outdated.calls[0].reason)
 	require.Len(t, f.logs.entries, 1, "裁决写一条操作日志")
+}
+
+// 按知识对收敛后，SubjectIDs 跟随最近一次检查的方向，不一定与主结论的方向一致。
+// 过时目标必须取自「主结论的对立面」，否则反向检查之后会把较新的那条标记为过时。
+func TestEvolutionResolveMarkOutdatedFollowsPrimaryConclusion(t *testing.T) {
+	f := newEvolutionFixture()
+	// 主结论是 10 更新了 11（11 被取代），但最近一次检查是 11 检查 10，
+	// 于是 SubjectIDs[1] 恰好是较新的 10。
+	alert := f.addAlert(1, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{11, 10})
+	payload, err := json.Marshal(EvolutionPayload{
+		Type: model.EvolutionAlertTypeOutdated, Reason: "10 给出了更新后的值",
+		SuggestedAction: model.EvolutionActionMarkOutdated,
+		Evidence:        []EvolutionEvidence{{KnowledgeID: 11, Quote: "旧值"}},
+		Conclusions: []EvolutionConclusion{{
+			Type: model.EvolutionAlertTypeOutdated, TriggerID: 10, Reason: "10 给出了更新后的值",
+			Evidence: []EvolutionEvidence{{KnowledgeID: 11, Quote: "旧值"}},
+			Severity: model.EvolutionSeverityStrong, Origin: EvolveOriginUpdateRelation,
+		}},
+	})
+	require.NoError(t, err)
+	alert.Payload = string(payload)
+
+	_, _, err = f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionMarkOutdated})
+
+	require.NoError(t, err)
+	require.Len(t, f.outdated.calls, 1)
+	require.Equal(t, uint(11), f.outdated.calls[0].id,
+		"被取代的是主结论触发侧的对立面（11），不是 SubjectIDs[1]（较新的 10）")
 }
 
 // 标记已核实清除过时标记；重复提醒的核实不碰过时标记，避免顺手抹掉别的判定。

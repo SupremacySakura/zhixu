@@ -96,6 +96,26 @@ const pendingCount = computed(() => pendingTotal(summary.value))
 const archived = (alert: EvolutionAlert) => alert.subjects.some(subject => subject.archived)
 const hasRevision = (alert: EvolutionAlert) => Boolean(alert.payload.revised_content?.trim())
 
+/**
+ * 提醒承载的结论集合，主结论排在最前。
+ *
+ * 旧数据只有顶层字段，没有 conclusions，此时用顶层字段合成一条，渲染路径保持单一。
+ */
+const conclusionsOf = (alert: EvolutionAlert) => {
+  const conclusions = alert.payload.conclusions ?? []
+  if (conclusions.length > 0) return conclusions
+  return [
+    {
+      type: alert.payload.type,
+      trigger_id: alert.subjects[0]?.id ?? 0,
+      reason: alert.payload.reason,
+      evidence: alert.payload.evidence,
+      suggested_action: alert.payload.suggested_action,
+      severity: alert.severity,
+    },
+  ]
+}
+
 const actionsOf = (alert: EvolutionAlert) => TYPE_ACTIONS[alert.alert_type]
 
 /** 置灰原因：归档知识只能忽略或标记已核实，无修订稿不能采纳修订。 */
@@ -382,6 +402,43 @@ onMounted(() => {
           >
             该提醒没有修订稿，暂不能采纳修订
           </p>
+
+          <!-- 两侧判定：主结论决定可执行动作，次要结论只读，让用户看到另一侧的判断而不是替它做决定。 -->
+          <section
+            v-if="conclusionsOf(selectedAlert).length > 1"
+            class="mt-5"
+            data-test="conclusions"
+          >
+            <h3 class="text-lead">两侧判定</h3>
+            <ul class="mt-3 space-y-3">
+              <li
+                v-for="(conclusion, index) in conclusionsOf(selectedAlert)"
+                :key="`${conclusion.type}-${conclusion.trigger_id}-${index}`"
+                class="border border-hairline p-3"
+                data-test="conclusion"
+                :data-primary="index === 0 ? 'true' : 'false'"
+              >
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-body font-medium text-label">
+                    {{ TYPE_LABELS[conclusion.type] }}
+                  </span>
+                  <span
+                    v-if="index === 0"
+                    class="bg-surface-secondary px-2 py-0.5 text-note text-label-secondary"
+                  >
+                    当前结论
+                  </span>
+                  <span v-else class="text-note text-label-tertiary">另一侧的判定</span>
+                </div>
+                <p class="mt-2 text-body leading-7 text-label-secondary">
+                  {{ conclusion.reason }}
+                </p>
+                <p v-if="index > 0" class="mt-2 text-note text-label-tertiary">
+                  仅作参考，可执行动作以当前结论为准。
+                </p>
+              </li>
+            </ul>
+          </section>
 
           <section class="mt-5">
             <h3 class="text-lead">证据对照</h3>

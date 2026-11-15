@@ -113,6 +113,7 @@ export const EVOLVE_INSTRUCTIONS = `你是「知序」个人知识库的演化�
 - reason 用不超过 100 个汉字说明判定依据，必须具体，不要写「内容相似」这类空话。
 - severity：引文能直接支撑结论时用 strong，需要读者自行推断时用 review。
 - 判定为 conflict 时额外给出 revised_title 与 revised_content：把两条知识里站得住脚的结论合并成一份可取代原文的修订稿，正文不超过 20000 字；无法确定哪一侧正确就不要给修订稿。
+- 修订稿以较新的一侧为基底：本次知识通常比候选更新，因此修订稿应当保留本次知识的表述与结构，只把候选里仍然成立、且本次知识缺失的结论并进来。不要输出一份「以候选原文为主、把本次结论塞进去」的稿子——采纳修订会直接写回较新的一侧，以旧稿为主等于用旧内容覆盖新内容。
 - 没有需要处理的候选时输出空数组；宁缺毋滥，不要为了凑数给出结论。
 - 不要输出 Markdown、解释或额外字段，只输出符合结构的 JSON。`;
 
@@ -213,7 +214,6 @@ export function sanitizeJudgements(raw: unknown): EvolveJudgement[] | null {
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(parsed.data);
-    if (out.length === 5) break;
   }
   // A well-formed empty list is a legitimate "nothing to review"; a non-empty list with
   // no single usable entry is a schema failure worth one internal retry.

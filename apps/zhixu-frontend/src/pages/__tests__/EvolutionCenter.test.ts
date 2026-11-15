@@ -268,6 +268,58 @@ describe('EvolutionCenter', () => {
     expect(panel.text()).toContain('人工确认是必要的')
   })
 
+  it('详情页展示两侧判定，次要结论只读且不渲染动作按钮', async () => {
+    listMock.mockResolvedValue(
+      pageOf([
+        makeAlert({
+          id: 7,
+          alert_type: 'outdated',
+          payload: {
+            type: 'outdated',
+            reason: '本次知识给出了更晚的结论。',
+            evidence: [
+              { knowledge_id: 11, quote: '演化提醒需要人工确认' },
+              { knowledge_id: 12, quote: '人工确认是必要的' },
+            ],
+            suggested_action: 'mark_outdated',
+            conclusions: [
+              {
+                type: 'outdated',
+                trigger_id: 11,
+                reason: '本次知识给出了更晚的结论。',
+                evidence: [{ knowledge_id: 12, quote: '人工确认是必要的' }],
+                suggested_action: 'mark_outdated',
+                severity: 'strong',
+                origin: 'update_relation',
+              },
+              {
+                type: 'duplicate',
+                trigger_id: 12,
+                reason: '另一侧认为两条知识信息重合。',
+                evidence: [{ knowledge_id: 11, quote: '演化提醒需要人工确认' }],
+                suggested_action: 'archive_one',
+                severity: 'review',
+              },
+            ],
+          },
+        }),
+      ]),
+    )
+    const wrapper = await render()
+    await openDetail(wrapper)
+
+    const items = wrapper.findAll('[data-test="conclusion"]')
+    expect(items).toHaveLength(2)
+    expect(items[0]!.attributes('data-primary')).toBe('true')
+    expect(items[1]!.attributes('data-primary')).toBe('false')
+    expect(items[1]!.text()).toContain('另一侧的判定')
+    expect(items[1]!.text()).toContain('另一侧认为两条知识信息重合')
+    // 次要结论不渲染动作按钮：动作只由主结论决定。
+    expect(items[1]!.findAll('button[data-action]')).toHaveLength(0)
+    // 主结论仍是过时，动作集合不变。
+    expect(actionIds(wrapper)).toEqual(['mark_outdated', 'mark_verified', 'dismiss', 'defer'])
+  })
+
   it('裁决时带上备注并在成功后关闭面板', async () => {
     listMock.mockResolvedValue(pageOf([makeAlert()]))
     resolveMock.mockResolvedValue(makeAlert({ status: 'resolved', resolved_action: 'keep_both' }))

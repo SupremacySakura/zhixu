@@ -2,12 +2,8 @@ package service
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -57,70 +53,6 @@ func EffectiveEvolveCandidateGate(gate float64) float64 {
 		return EvolveCandidateMinScoreDefault
 	}
 	return gate
-}
-
-// EvolutionEvidence 是一条证据：某条知识正文里的原话。
-// 引文必须能在正文中定位，定位不到就不该作为证据展示给用户。
-type EvolutionEvidence struct {
-	KnowledgeID uint   `json:"knowledge_id"`
-	Quote       string `json:"quote"`
-}
-
-// EvolutionPayload 是提醒的结构化判定结果，整体存在提醒行的 payload 列里。
-// 冲突场景额外带修订稿；修订稿缺失时前端把「采纳修订」置灰。
-type EvolutionPayload struct {
-	Type            model.EvolutionAlertType `json:"type"`
-	Reason          string                   `json:"reason"`
-	Evidence        []EvolutionEvidence      `json:"evidence"`
-	SuggestedAction model.EvolutionAction    `json:"suggested_action"`
-	RevisedTitle    string                   `json:"revised_title,omitempty"`
-	RevisedContent  string                   `json:"revised_content,omitempty"`
-}
-
-// ParseEvolutionPayload 解析载荷；脏数据返回空载荷，不让列表整体失败。
-func ParseEvolutionPayload(raw string) EvolutionPayload {
-	var payload EvolutionPayload
-	if raw == "" {
-		return payload
-	}
-	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
-		return EvolutionPayload{}
-	}
-	return payload
-}
-
-// evolutionEvidenceFingerprint 把证据数组压成一个稳定字符串：
-// 先按知识 ID、再按引文排序，避免同一组证据因顺序不同算出两个指纹。
-func evolutionEvidenceFingerprint(evidence []EvolutionEvidence) string {
-	items := make([]EvolutionEvidence, len(evidence))
-	copy(items, evidence)
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].KnowledgeID != items[j].KnowledgeID {
-			return items[i].KnowledgeID < items[j].KnowledgeID
-		}
-		return items[i].Quote < items[j].Quote
-	})
-	var builder strings.Builder
-	for _, item := range items {
-		builder.WriteString(fmt.Sprintf("%d:%s\n", item.KnowledgeID, item.Quote))
-	}
-	return builder.String()
-}
-
-// EvolutionDedupeKey 计算提醒指纹：类型 + 排序后的涉及知识 ID + 证据引文指纹。
-// 与 AI 任务的幂等键不同，这个指纹在终态也保留，用来抑制同一证据重复弹提醒；
-// 引文随正文变化时指纹随之改变，于是同一条知识的新问题会被当成新提醒。
-func EvolutionDedupeKey(alertType model.EvolutionAlertType, subjectIDs []uint, evidence []EvolutionEvidence) string {
-	ids := make([]uint, len(subjectIDs))
-	copy(ids, subjectIDs)
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	parts := make([]string, 0, len(ids))
-	for _, id := range ids {
-		parts = append(parts, fmt.Sprintf("%d", id))
-	}
-	raw := fmt.Sprintf("%s|%s|%s", alertType, strings.Join(parts, ","), evolutionEvidenceFingerprint(evidence))
-	sum := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(sum[:])
 }
 
 // validEvidence 过滤掉在正文里定位不到的引文。
@@ -403,8 +335,13 @@ func (s *EvolutionService) effectFor(ctx context.Context, action model.Evolution
 			if strings.TrimSpace(payload.RevisedTitle) == "" || strings.TrimSpace(payload.RevisedContent) == "" {
 				return fmt.Errorf("%w: 该提醒没有可采纳的修订稿", ErrEvolutionInvalid)
 			}
-			// 修订稿写在触发侧的知识上：它是本次检查的对象，被比对的一条只是参照。
-			if _, err := s.Reviser.AcceptRevision(ctx, alert.UserID, ids[0], payload.RevisedTitle, payload.RevisedContent); err != nil {
+			// 修订稿写在较新的一侧：模型给的稿子通常是「以新修旧」，落到触发侧会在
+			// 反向检查时用旧内容覆盖新内容。取不到知识时退回触发侧，保持旧行为。
+			target := ids[0]
+			if newer, ok := s.newerSubject(ctx, alert.UserID, ids); ok {
+				target = newer
+			}
+			if _, err := s.Reviser.AcceptRevision(ctx, alert.UserID, target, payload.RevisedTitle, payload.RevisedContent); err != nil {
 				return evolutionEffectError(err)
 			}
 			return nil
@@ -456,14 +393,68 @@ func subjectPair(alert *model.EvolutionAlert) ([]uint, error) {
 	return ids, nil
 }
 
-// outdatedSubject 取过时提醒里被判定过时的那条知识：subject_ids[1] 是被比对的知识，
-// 本次触发的知识（[0]）是新的一方。过时只做跨条目判定，因此这里必须落在 [1] 上。
+// outdatedSubject 取过时提醒里被判定过时的那条知识，也就是「被取代的一侧」。
+//
+// 按知识对收敛后，subject_ids 跟随最近一次检查的方向，不是主结论的方向：主结论可能是
+// 10 更新了 11，而最近一次检查是 11 检查 10。此时 subject_ids[1] 反而是较新的那条，
+// 照它标记过时就会把新知识判成旧的——正是本改造要消除的「以旧覆新」。
+//
+// 因此优先按主结论的方向取对立面：主结论的 TriggerID 是「新的一方」，被取代的是另一侧。
+// 主结论缺方向信息时（历史载荷只有顶层字段）退回 subject_ids[1]，与改造前行为一致。
 func outdatedSubject(alert *model.EvolutionAlert) (uint, error) {
 	ids, err := subjectPair(alert)
 	if err != nil {
 		return 0, err
 	}
+	conclusions := conclusionsOf(ParseEvolutionPayload(alert.Payload))
+	if len(conclusions) == 0 {
+		return ids[1], nil
+	}
+	primary := primaryConclusion(conclusions)
+	if primary.TriggerID == 0 {
+		return ids[1], nil
+	}
+	for _, id := range ids {
+		if id != primary.TriggerID {
+			return id, nil
+		}
+	}
+	// 主结论的触发侧不在这一对里说明载荷与 subject_ids 不同步，退回旧口径。
 	return ids[1], nil
+}
+
+// newerSubject 取提醒涉及的两条知识里更新时间较晚的一条，用于决定修订稿的落点。
+// 时间相同时取 ID 较大的一侧，保证同一对知识从任一方向检查都落到同一条上。
+//
+// 用更新时间而不是创建时间：知识被编辑后创建时间不变，据此判断新旧会得出相反的结论。
+// 读取失败时返回 false，由调用方退回触发侧——判定不了新旧不该让裁决直接失败。
+func (s *EvolutionService) newerSubject(ctx context.Context, userID uint, ids []uint) (uint, bool) {
+	if s.Knowledge == nil || len(ids) < 2 {
+		return 0, false
+	}
+	items, err := s.Knowledge.ListByIDs(ctx, userID, ids)
+	if err != nil {
+		return 0, false
+	}
+	byID := make(map[uint]model.KnowledgeItem, len(items))
+	for _, item := range items {
+		byID[item.ID] = item
+	}
+	first, firstOK := byID[ids[0]]
+	second, secondOK := byID[ids[1]]
+	if !firstOK || !secondOK {
+		return 0, false
+	}
+	if first.UpdatedAt.After(second.UpdatedAt) {
+		return first.ID, true
+	}
+	if second.UpdatedAt.After(first.UpdatedAt) {
+		return second.ID, true
+	}
+	if first.ID > second.ID {
+		return first.ID, true
+	}
+	return second.ID, true
 }
 
 // recordResolve 写一条裁决操作日志；日志失败不影响裁决结果。

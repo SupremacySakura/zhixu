@@ -16,56 +16,78 @@ func newTestAlert(dedupeKey string) *model.EvolutionAlert {
 	alert := &model.EvolutionAlert{
 		UserID: 2, AlertType: model.EvolutionAlertTypeDuplicate, Status: model.EvolutionAlertPending,
 		Severity: model.EvolutionSeverityReview, Payload: `{}`, DedupeKey: dedupeKey,
+		PairKey: "pair-10-11",
 	}
 	_ = alert.SetSubjectIDs([]uint{10, 11})
+	_ = alert.SetPairVersions(map[uint]uint{10: 1, 11: 1})
 	return alert
+}
+
+// testMerge 是仓储测试用的合并函数：把新提醒当作结果，保留原行 ID。
+// 仓储只负责读写与并发重试，合并规则本身在服务层用表驱动测试覆盖。
+func testMerge(existing, incoming *model.EvolutionAlert) (*model.EvolutionAlert, model.EvolutionUpsertOutcome) {
+	if existing == nil {
+		return incoming, model.EvolutionAlertCreated
+	}
+	merged := *existing
+	merged.Payload = incoming.Payload
+	return &merged, model.EvolutionAlertRefreshed
 }
 
 // 指纹首次出现：新建一条待处理提醒。
 func TestEvolutionUpsertCreatesNewAlert(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
-	mock.ExpectQuery("SELECT .* FROM `evolution_alerts` WHERE user_id = .*dedupe_key").
+	mock.ExpectQuery("SELECT .* FROM `evolution_alerts` WHERE user_id = .*pair_key").
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `evolution_alerts`").WillReturnResult(sqlmock.NewResult(7, 1))
 	mock.ExpectCommit()
 
-	outcome, err := NewEvolutionAlertRepository(db).Upsert(context.Background(), newTestAlert("k1"))
+	outcome, err := NewEvolutionAlertRepository(db).Upsert(context.Background(), newTestAlert("k1"), testMerge)
 
 	require.NoError(t, err)
 	require.Equal(t, EvolutionAlertCreated, outcome)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// 指纹已处于终态：抑制本次提醒，不新建也不改状态。
-func TestEvolutionUpsertSuppressesResolvedAlert(t *testing.T) {
+// 已存在同一知识对的提醒：仓储把旧行交给合并函数，并按合并结果写回原行。
+func TestEvolutionUpsertMergesIntoExistingPair(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
-	mock.ExpectQuery("SELECT .* FROM `evolution_alerts` WHERE user_id = .*dedupe_key").
+	mock.ExpectQuery("SELECT .* FROM `evolution_alerts` WHERE user_id = .*pair_key").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status"}).AddRow(7, 2, "resolved"))
-
-	outcome, err := NewEvolutionAlertRepository(db).Upsert(context.Background(), newTestAlert("k1"))
-
-	require.NoError(t, err)
-	require.Equal(t, EvolutionAlertSuppressed, outcome)
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-// 指纹处于「暂不处理」：重新检查命中后回到待处理，并清掉上一次的裁决痕迹。
-func TestEvolutionUpsertRevivesDeferredAlert(t *testing.T) {
-	db, mock, cleanup := setupMockDB(t)
-	defer cleanup()
-	mock.ExpectQuery("SELECT .* FROM `evolution_alerts` WHERE user_id = .*dedupe_key").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status"}).AddRow(7, 2, "deferred"))
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `evolution_alerts`").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	outcome, err := NewEvolutionAlertRepository(db).Upsert(context.Background(), newTestAlert("k1"))
+	var sawExisting bool
+	outcome, err := NewEvolutionAlertRepository(db).Upsert(context.Background(), newTestAlert("k1"),
+		func(existing, incoming *model.EvolutionAlert) (*model.EvolutionAlert, model.EvolutionUpsertOutcome) {
+			sawExisting = existing != nil && existing.ID == 7
+			return existing, model.EvolutionAlertRevived
+		})
 
 	require.NoError(t, err)
+	require.True(t, sawExisting, "仓储必须把库里已有的那一行交给合并函数")
 	require.Equal(t, EvolutionAlertRevived, outcome)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 合并函数判定抑制：仓储不写库。
+func TestEvolutionUpsertSkipsWriteWhenSuppressed(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectQuery("SELECT .* FROM `evolution_alerts` WHERE user_id = .*pair_key").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status"}).AddRow(7, 2, "resolved"))
+
+	outcome, err := NewEvolutionAlertRepository(db).Upsert(context.Background(), newTestAlert("k1"),
+		func(_, _ *model.EvolutionAlert) (*model.EvolutionAlert, model.EvolutionUpsertOutcome) {
+			return nil, model.EvolutionAlertSuppressed
+		})
+
+	require.NoError(t, err)
+	require.Equal(t, EvolutionAlertSuppressed, outcome)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -73,13 +95,13 @@ func TestEvolutionUpsertRevivesDeferredAlert(t *testing.T) {
 func TestEvolutionUpsertRefreshesPendingAlert(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
-	mock.ExpectQuery("SELECT .* FROM `evolution_alerts` WHERE user_id = .*dedupe_key").
+	mock.ExpectQuery("SELECT .* FROM `evolution_alerts` WHERE user_id = .*pair_key").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status"}).AddRow(7, 2, "pending"))
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `evolution_alerts`").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	outcome, err := NewEvolutionAlertRepository(db).Upsert(context.Background(), newTestAlert("k1"))
+	outcome, err := NewEvolutionAlertRepository(db).Upsert(context.Background(), newTestAlert("k1"), testMerge)
 
 	require.NoError(t, err)
 	require.Equal(t, EvolutionAlertRefreshed, outcome)
