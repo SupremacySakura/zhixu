@@ -4,6 +4,7 @@
 //	eval clean     --user <用户名> --data <数据集目录>
 //	eval retrieval --user <用户名> --data <数据集目录> [--out <输出目录>]
 //	eval evolution --user <用户名> --data <数据集目录> --mode pairwise|collect
+//	eval reevolve  --user <用户名> --data <数据集目录>
 //	eval sweep     [--out <输出目录>]
 //	eval check     --data <数据集目录>
 //	eval grid      [--out <输出目录>]
@@ -116,6 +117,8 @@ func main() {
 		mustRetrieval(user, *dataDir, *outDir, *topK, cfg)
 	case "evolution":
 		mustEvolution(user, *dataDir, *outDir, *mode, cfg)
+	case "reevolve":
+		mustReevolve(user, *dataDir, *outDir, cfg)
 	default:
 		usage()
 	}
@@ -127,6 +130,7 @@ func usage() {
   eval clean     --user <用户名> [--data 实验]
   eval retrieval --user <用户名> [--data 实验] [--out 实验/结果] [--topk 5]
   eval evolution --user <用户名> [--data 实验] [--out 实验/结果] --mode pairwise|collect
+  eval reevolve  --user <用户名> [--data 实验] [--out 实验/结果]
   eval sweep     [--out 实验/结果]
   eval grid      [--out 实验/结果]
   eval check     [--data 实验]`)
@@ -549,6 +553,65 @@ func mustEvolution(user *model.UserModel, dataDir, outDir, mode string, cfg *con
 	table := evolutionTable(outcomes, tableGate)
 	writeText(filepath.Join(outDir, "evolution-"+mode+"-summary.md"), table)
 	fmt.Println(table)
+}
+
+// mustReevolve 为 collect 模式准备一份干净的现场：清掉实验知识产生的旧提醒，
+// 再把两侧知识重新入队，让它们按当前门槛与当前提示词真正跑一遍。
+//
+// 必须清旧提醒而不是直接重跑：提醒按知识对收敛，一对知识只有一行，终态也不清空。
+// 旧提醒还在库里时，新判定只会被当成「刷新」或直接抑制，collect 读到的仍是改造前的数据，
+// 看起来像漏报。
+//
+// 删除范围严格限定在实验知识上：只删涉及知识全部落在实验集合内的提醒，
+// 避免误删账号里其它知识之间的真实提醒。
+func mustReevolve(user *model.UserModel, dataDir, outDir string, cfg *config.Config) {
+	pairs := loadPairs(user, dataDir, outDir)
+	experimental := make(map[uint]bool, len(pairs)*2)
+	for _, pair := range pairs {
+		experimental[pair.TriggerID] = true
+		experimental[pair.CandidateID] = true
+	}
+
+	var alerts []model.EvolutionAlert
+	if err := database.DB.Where("user_id = ?", user.ID).Find(&alerts).Error; err != nil {
+		fatal(err)
+	}
+	removed := 0
+	for i := range alerts {
+		ids := alerts[i].SubjectIDList()
+		if len(ids) == 0 {
+			continue
+		}
+		inside := true
+		for _, id := range ids {
+			if !experimental[id] {
+				inside = false
+				break
+			}
+		}
+		if !inside {
+			continue
+		}
+		if err := database.DB.Delete(&model.EvolutionAlert{}, alerts[i].ID).Error; err != nil {
+			fatal(err)
+		}
+		removed++
+	}
+	fmt.Printf("已清理 %d 条实验相关提醒（共检查 %d 条）。\n", removed, len(alerts))
+
+	tasks := service.NewAiTaskService(&repository.AiTaskRepository{DB: database.DB})
+	queued := 0
+	for id := range experimental {
+		item := mustKnowledge(user.ID, id)
+		// baseVersion 取知识当前版本：任务据此判断检查期间知识是否被改过。
+		if err := tasks.EnqueueEvolve(context.Background(), user.ID, item.ID, item.Version); err != nil {
+			fmt.Fprintf(os.Stderr, "知识 %d 入队失败: %v\n", id, err)
+			continue
+		}
+		queued++
+	}
+	fmt.Printf("已重新入队 %d 条知识的演化检查。\n", queued)
+	fmt.Println("等 ai_tasks 里 evolve 任务全部结束后再跑 evolution --mode collect。")
 }
 
 // annotateThresholds 给每条样本附上实测相似度与进入判定的说明。
