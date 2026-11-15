@@ -128,3 +128,50 @@ func TestMergeEvolutionAlertRevivesDeferred(t *testing.T) {
 	require.Equal(t, repository.EvolutionAlertRevived, outcome)
 	require.Equal(t, model.EvolutionAlertPending, alert.Status)
 }
+
+// 主结论是冲突时，修订稿必须留在载荷顶层：裁决动作读的是顶层字段，
+// 丢了它「采纳修订」会变成 400。
+func TestMergeEvolutionAlertKeepsRevisionWhenConflictIsPrimary(t *testing.T) {
+	conflict := mergeAlert(t, model.EvolutionAlertTypeConflict, model.EvolutionAlertPending, 10, 11, map[uint]uint{10: 1, 11: 1}, "新值")
+	p := ParseEvolutionPayload(conflict.Payload)
+	p.RevisedTitle = "合并后的标题"
+	p.RevisedContent = "合并后的正文"
+	conflict.Payload = encodeEvolutionPayload(p)
+
+	// 新来一条过时结论：优先级低于冲突，主结论仍应是冲突。
+	outdated := mergeAlert(t, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, 10, 11, map[uint]uint{10: 1, 11: 1}, "旧值")
+
+	alert, _ := MergeEvolutionAlert(conflict, outdated)
+
+	payload := ParseEvolutionPayload(alert.Payload)
+	require.Equal(t, model.EvolutionAlertTypeConflict, payload.Type)
+	require.Equal(t, "合并后的标题", payload.RevisedTitle, "冲突是主结论时修订稿不能丢")
+	require.Equal(t, "合并后的正文", payload.RevisedContent)
+	require.Len(t, payload.Conclusions, 2)
+}
+
+// 主结论换成重复时，冲突的修订稿留在结论集合里（只读），不再作为可采纳的顶层修订稿。
+// 这是 ADR-0006「裁决动作只由主结论决定」的直接后果，不是丢失。
+func TestMergeEvolutionAlertKeepsSecondaryRevisionInConclusions(t *testing.T) {
+	conflict := mergeAlert(t, model.EvolutionAlertTypeConflict, model.EvolutionAlertPending, 10, 11, map[uint]uint{10: 1, 11: 1}, "新值")
+	p := ParseEvolutionPayload(conflict.Payload)
+	p.RevisedTitle = "合并后的标题"
+	p.RevisedContent = "合并后的正文"
+	conflict.Payload = encodeEvolutionPayload(p)
+
+	duplicate := mergeAlert(t, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertPending, 10, 11, map[uint]uint{10: 1, 11: 1}, "同一句")
+
+	alert, _ := MergeEvolutionAlert(conflict, duplicate)
+
+	payload := ParseEvolutionPayload(alert.Payload)
+	require.Equal(t, model.EvolutionAlertTypeDuplicate, payload.Type, "重复优先于冲突")
+	require.Empty(t, payload.RevisedTitle, "重复不提供采纳修订")
+	var found bool
+	for _, conclusion := range payload.Conclusions {
+		if conclusion.Type == model.EvolutionAlertTypeConflict {
+			found = true
+			require.Equal(t, "合并后的正文", conclusion.RevisedContent, "修订稿仍保留在次要结论里")
+		}
+	}
+	require.True(t, found, "冲突结论不能被丢掉")
+}

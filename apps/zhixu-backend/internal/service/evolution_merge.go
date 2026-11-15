@@ -50,6 +50,18 @@ func conclusionsOf(payload EvolutionPayload) []EvolutionConclusion {
 	if len(payload.Conclusions) > 0 {
 		out := make([]EvolutionConclusion, len(payload.Conclusions))
 		copy(out, payload.Conclusions)
+		// 顶层修订稿比结论集合更新时（例如旧版本只写了顶层字段），补回主结论，
+		// 否则合并会把这条修订稿连同「采纳修订」一起弄丢。
+		for i := range out {
+			if out[i].Type != payload.Type {
+				continue
+			}
+			if payload.RevisedContent != "" && out[i].RevisedContent == "" {
+				out[i].RevisedTitle = payload.RevisedTitle
+				out[i].RevisedContent = payload.RevisedContent
+			}
+			return out
+		}
 		return out
 	}
 	if !payload.Type.Valid() {
