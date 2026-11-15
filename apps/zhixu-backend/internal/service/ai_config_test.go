@@ -274,4 +274,50 @@ func TestSaveDefaultsEvolveCandidateGate(t *testing.T) {
 	require.InDelta(t, 0.5, read.Settings.EvolveCandidateMinScore, 1e-9)
 }
 
+func TestSaveDefaultsMarksEvolveThresholdStaleOnlyOnEmbeddingChange(t *testing.T) {
+	ctx := context.Background()
+	s := newAIConfigTestService(t)
+	input := testProviderInput()
+	input.Models = append(input.Models, ModelInput{ModelID: "embed-next", Kind: "embedding", Dimension: 1024})
+	view, err := s.SaveProvider(ctx, 7, 0, input)
+	require.NoError(t, err)
+	chat := view.Providers[0].Models[0].ID
+	embed := view.Providers[0].Models[1].ID
+	embedNext := view.Providers[0].Models[2].ID
+
+	gate := 0.5
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &gate, ExpectedVersion: 1,
+	})
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale)
+
+	// 换模型但不提交门槛：门槛保持原值，标记置位。
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embedNext, ExpectedVersion: 2, ConfirmReindex: true,
+	})
+	require.NoError(t, err)
+	require.True(t, view.Settings.EvolveThresholdStale)
+	require.InDelta(t, 0.5, view.Settings.EvolveCandidateMinScore, 1e-9)
+	read, err := s.Get(ctx, 7)
+	require.NoError(t, err)
+	require.True(t, read.Settings.EvolveThresholdStale)
+
+	// 不换模型、只重新保存门槛：清除标记。
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embedNext, EvolveCandidateMinScore: &gate, ExpectedVersion: 3,
+	})
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale)
+
+	// 同一次保存既换模型又提交门槛：视为用户刚校准过，不置位。
+	gate = 0.7
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &gate, ExpectedVersion: 4, ConfirmReindex: true,
+	})
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale)
+	require.InDelta(t, 0.7, view.Settings.EvolveCandidateMinScore, 1e-9)
+}
+
 func errorsIsConflict(err error) bool { return errors.Is(err, ErrAIConfigConflict) }

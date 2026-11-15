@@ -54,6 +54,7 @@ const fixture = (): AIConfiguration => ({
     rag_top_k: 5,
     rag_min_score: 0.5,
     evolve_candidate_min_score: 0.65,
+    evolve_threshold_stale: false,
     config_version: 5,
     embedding_version: 1,
     needs_reindex: false,
@@ -127,7 +128,6 @@ describe('ModelSettings', () => {
         embedding_model_id: 4,
         rag_top_k: 5,
         rag_min_score: 0.5,
-        evolve_candidate_min_score: 0.65,
         expected_version: 5,
         confirm_reindex: true,
       },
@@ -152,7 +152,6 @@ describe('ModelSettings', () => {
         embedding_model_id: 3,
         rag_top_k: 20,
         rag_min_score: 0.7,
-        evolve_candidate_min_score: 0.65,
         expected_version: 5,
         confirm_reindex: false,
       },
@@ -211,6 +210,63 @@ describe('ModelSettings', () => {
     await flushPromises()
     expect(saveAIDefaults).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('演化候选门槛需在 0.45–1 之间')
+    wrapper.unmount()
+  })
+  it('warns that a new embedding model invalidates the gate and mixes similarity until reindex', async () => {
+    vi.mocked(getAIConfiguration).mockResolvedValue({
+      ...fixture(),
+      settings: { ...fixture().settings, evolve_threshold_stale: true },
+    })
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    const notice = wrapper.get('[data-test="evolve-threshold-stale"]')
+    expect(notice.text()).toContain('相似度分布')
+    expect(notice.text()).toContain('向量重建完成前')
+    expect(notice.text()).toContain('混算')
+    expect(notice.text()).toContain('0.65')
+    wrapper.unmount()
+  })
+  it('keeps the saved gate untouched when only the embedding model changes', async () => {
+    vi.mocked(saveAIDefaults).mockResolvedValue(fixture())
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    await wrapper.get('[aria-label="选择默认 Embedding 模型"]').trigger('click')
+    await wrapper
+      .findAll('[role="menuitemradio"]')
+      .find(b => b.text().includes('embed-next'))!
+      .trigger('click')
+    await wrapper
+      .findAll('button')
+      .find(b => b.text() === '保存默认模型')!
+      .trigger('click')
+    await wrapper
+      .findAll('dialog button')
+      .find(b => b.text() === '确认切换')!
+      .trigger('click')
+    await flushPromises()
+    const payload = vi.mocked(saveAIDefaults).mock.calls[0][0]
+    expect(payload).not.toHaveProperty('evolve_candidate_min_score')
+    expect(payload.confirm_reindex).toBe(true)
+    wrapper.unmount()
+  })
+  it('clears the stale warning when the user resaves the current gate', async () => {
+    vi.mocked(getAIConfiguration).mockResolvedValue({
+      ...fixture(),
+      settings: { ...fixture().settings, evolve_threshold_stale: true },
+    })
+    vi.mocked(saveAIDefaults).mockResolvedValue(fixture())
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find(b => b.text() === '保留当前门槛')!
+      .trigger('click')
+    await flushPromises()
+    expect(saveAIDefaults).toHaveBeenCalledWith(
+      expect.objectContaining({ evolve_candidate_min_score: 0.65, confirm_reindex: false }),
+      expect.any(AbortSignal),
+    )
+    expect(wrapper.find('[data-test="evolve-threshold-stale"]').exists()).toBe(false)
     wrapper.unmount()
   })
   it('retains the editor on save failure and clears it only after success', async () => {

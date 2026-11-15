@@ -29,6 +29,7 @@ export interface AISettings {
   rag_top_k: number
   rag_min_score: number
   evolve_candidate_min_score: number
+  evolve_threshold_stale: boolean
   config_version: number
   embedding_version: number
   needs_reindex: boolean
