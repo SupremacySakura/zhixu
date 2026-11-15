@@ -513,12 +513,13 @@ type pairOutcome struct {
 	Similarity float64 `json:"similarity"`
 	// ThresholdNote 说明相似度是否足以让候选进入模型判定。
 	ThresholdNote string `json:"threshold_note"`
-	Note        string `json:"note"`
+	Note          string `json:"note"`
 }
 
 func mustEvolution(user *model.UserModel, dataDir, outDir, mode string, cfg *config.Config) {
 	pairs := loadPairs(user, dataDir, outDir)
 	similarities := measureSimilarity(user, pairs, cfg)
+	gate := effectiveGate(user.ID)
 	var outcomes []pairOutcome
 	switch mode {
 	case "pairwise":
@@ -531,7 +532,7 @@ func mustEvolution(user *model.UserModel, dataDir, outDir, mode string, cfg *con
 	// 把相似度与阈值判断附在结果上：端到端漏检时，能直接看出是模型判错还是根本没进判定。
 	for i := range outcomes {
 		outcomes[i].Similarity = similarities[outcomes[i].SID]
-		outcomes[i].ThresholdNote = thresholdNote(outcomes[i].Expected, outcomes[i].Similarity)
+		outcomes[i].ThresholdNote = thresholdNote(outcomes[i].Expected, outcomes[i].Similarity, gate)
 	}
 
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
@@ -540,9 +541,26 @@ func mustEvolution(user *model.UserModel, dataDir, outDir, mode string, cfg *con
 	// 两种模式分开落盘：pairwise 衡量模型判定，collect 衡量端到端，
 	// 覆盖同一份文件会让后跑的一次把前一次的结论冲掉。
 	writeJSON(filepath.Join(outDir, "evolution-"+mode+"-outcomes.json"), outcomes)
-	table := evolutionTable(outcomes)
+	// pairwise 的相似度固定传 0.95 只为绕过门槛，表里标上门槛反而会误导读者。
+	var tableGate *float64
+	if mode == "collect" {
+		tableGate = &gate
+	}
+	table := evolutionTable(outcomes, tableGate)
 	writeText(filepath.Join(outDir, "evolution-"+mode+"-summary.md"), table)
 	fmt.Println(table)
+}
+
+// effectiveGate 读取用户实际配置的演化候选门槛，与生产链路使用同一个回落规则。
+// 评测结果里的 threshold_note 必须对应线上真正生效的门槛，否则重算数字会与用户看到的行为脱节。
+func effectiveGate(userID uint) float64 {
+	state, err := (&repository.AIConfigRepository{DB: database.DB}).Read(context.Background(), userID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "读取演化候选门槛失败，按默认值 %.2f 计算: %v\n",
+			service.EvolveCandidateMinScoreDefault, err)
+		return service.EvolveCandidateMinScoreDefault
+	}
+	return service.EffectiveEvolveCandidateGate(state.Settings.EvolveCandidateMinScore)
 }
 
 // measureSimilarity 复刻生产演化检查的打分方式，而不是简单算两条知识的余弦：
@@ -601,16 +619,15 @@ func similarityText(item *model.KnowledgeItem) string {
 }
 
 // thresholdNote 说明这条样本在真实流水线里能否进入模型判定。
-func thresholdNote(expected string, similarity float64) string {
-	// 生产只有一道候选门槛：低于默认门槛（用户可配置）的近邻不会进入模型判定
-	// （见 evolve_task.go 的 candidates），进入后的结论类型完全由模型决定。
-	if similarity < service.EvolveCandidateMinScoreDefault {
-		return fmt.Sprintf("相似度低于候选门槛 %.2f，未进入模型判定", service.EvolveCandidateMinScoreDefault)
+// 门槛取用户实际配置的生效值，进入判定后的结论类型完全由模型决定。
+func thresholdNote(expected string, similarity, gate float64) string {
+	if similarity < gate {
+		return fmt.Sprintf("相似度低于候选门槛 %.2f，未进入模型判定", gate)
 	}
 	if expected == "none" {
-		return "对照样本进入模型判定，存在误报风险"
+		return fmt.Sprintf("达到候选门槛 %.2f，进入模型判定，存在误报风险", gate)
 	}
-	return "已进入模型判定，结论类型由模型判断"
+	return fmt.Sprintf("达到候选门槛 %.2f，已进入模型判定，结论类型由模型判断", gate)
 }
 
 // loadPairs 优先读取 seed 阶段写下的映射；缺失时按标题重新解析，便于单独重跑评测。
@@ -759,7 +776,9 @@ func evidenceLocated(trigger, candidate string, evidence []service.EvolutionEvid
 	return true
 }
 
-func evolutionTable(outcomes []pairOutcome) string {
+// evolutionTable 汇总分类指标。gate 非空时在总体准确率后标注门槛取值，
+// 因为 collect 的准确率只在某个具体门槛下成立，脱离门槛的数字不可比较。
+func evolutionTable(outcomes []pairOutcome, gate *float64) string {
 	classes := []string{"duplicate", "outdated", "conflict", "none"}
 	type stat struct{ tp, fp, fn int }
 	stats := map[string]*stat{}
@@ -799,14 +818,28 @@ func evolutionTable(outcomes []pairOutcome) string {
 		}
 		fmt.Fprintf(&b, "| %s | %.3f | %.3f | %.3f | %d |\n", class, precision, recall, f1, s.tp+s.fn)
 	}
-	fmt.Fprintf(&b, "\n总体准确率 %.3f（%d/%d），产生提醒的样本 %d/%d。\n",
-		ratio(correct, len(outcomes)), correct, len(outcomes), judged, len(outcomes))
+	if gate != nil {
+		fmt.Fprintf(&b, "\n总体准确率 %.3f（%d/%d，候选门槛 %.2f），产生提醒的样本 %d/%d。\n",
+			ratio(correct, len(outcomes)), correct, len(outcomes), *gate, judged, len(outcomes))
+	} else {
+		fmt.Fprintf(&b, "\n总体准确率 %.3f（%d/%d），产生提醒的样本 %d/%d。\n",
+			ratio(correct, len(outcomes)), correct, len(outcomes), judged, len(outcomes))
+	}
 	return b.String()
 }
 
-// mustSweep 做阈值敏感性分析：保持模型判定不变，只看相似度阈值怎么影响
-// 「能进入判定」的比例。端到端漏检里有多少是阈值造成的，这张表能直接回答。
+// mustSweep 做门槛敏感性分析：保持模型判定不变，只看候选门槛怎么影响
+// 「能进入判定」的比例与估计准确率。端到端漏检里有多少是门槛造成的，这张表能直接回答。
 func mustSweep(outDir string) {
+	outcomes := loadCollectOutcomes(outDir)
+	report := sweepReport(outcomes)
+	writeText(filepath.Join(outDir, "evolution-threshold-sweep.md"), report)
+	fmt.Println(report)
+}
+
+// loadCollectOutcomes 读取 collect 明细。sweep 与 grid 共用这一入口，
+// 保证两者读的是同一份数据、报错口径也一致。
+func loadCollectOutcomes(outDir string) []pairOutcome {
 	path := filepath.Join(outDir, "evolution-collect-outcomes.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -816,49 +849,57 @@ func mustSweep(outDir string) {
 	if err := json.Unmarshal(data, &outcomes); err != nil {
 		fatal(err)
 	}
+	return outcomes
+}
 
-	// 相似度只决定候选能否进入判定，敏感性分析因此只有一个维度：候选门槛。
+// sweepReport 生成门槛敏感性表。相似度只决定候选能否进入判定，
+// 因此分析只有一个维度：候选门槛。表里同时给出可判定计数与估计准确率，
+// 让读者能把「样本进没进判定」和「端到端能到多少」对上。
+func sweepReport(outcomes []pairOutcome) string {
 	gates := []float64{0.60, 0.65, 0.70, 0.75, 0.80}
 
 	var b strings.Builder
-	b.WriteString("| 候选门槛 | 重复可判定 | 冲突可判定 | 过时可判定 | 对照误入 |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	b.WriteString("| 候选门槛 | 重复可判定 | 冲突可判定 | 过时可判定 | 对照误入 | 估计准确率 |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, gate := range gates {
 		counts := map[string][2]int{} // 类型 -> [可判定, 总数]
 		for _, outcome := range outcomes {
 			pair := counts[outcome.PairType]
 			pair[1]++
-			if passThreshold(outcome.PairType, outcome.Similarity, gate) {
+			if passesGate(outcome.Similarity, gate) {
 				pair[0]++
 			}
 			counts[outcome.PairType] = pair
 		}
-		fmt.Fprintf(&b, "| %.2f | %s | %s | %s | %s |\n", gate,
+		fmt.Fprintf(&b, "| %.2f | %s | %s | %s | %s | %.3f |\n", gate,
 			fraction(counts["duplicate"]), fraction(counts["conflict"]),
-			fraction(counts["outdated"]), fraction(counts["negative"]))
+			fraction(counts["outdated"]), fraction(counts["negative"]),
+			ratio(estimatedCorrect(outcomes, gate), len(outcomes)))
 	}
-	writeText(filepath.Join(outDir, "evolution-threshold-sweep.md"), b.String())
-	fmt.Println(b.String())
-}
-
-// passThreshold 判断样本是否达到候选门槛；达到后类型交给模型，不再按分数分派。
-func passThreshold(_ string, similarity, gate float64) bool {
-	return similarity >= gate
+	b.WriteString("\n" + recomputeNote)
+	return b.String()
 }
 
 // mustGrid 穷举单一候选门槛，回答「只调门槛，估计准确率最多能到多少」。
-// 估计口径假设进入判定的候选模型都能判对，模型本身的效果由 pairwise 实测。
 func mustGrid(outDir string) {
-	path := filepath.Join(outDir, "evolution-collect-outcomes.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		fatal(fmt.Errorf("读取 %s 失败，请先跑 evolution --mode collect: %w", path, err))
-	}
-	var outcomes []pairOutcome
-	if err := json.Unmarshal(data, &outcomes); err != nil {
-		fatal(err)
-	}
+	outcomes := loadCollectOutcomes(outDir)
+	report := gridReport(outcomes)
+	writeText(filepath.Join(outDir, "evolution-threshold-grid.md"), report)
+	fmt.Println(report)
+}
 
+// legacyDefaultGate 是改造前的候选准入门槛（当时与过时阈值共用）。
+// 报告要并列呈现新旧默认门槛，这个数字是历史事实，不能跟着生产默认值走。
+const legacyDefaultGate = 0.80
+
+// recomputeNote 是每张重算表都要带的来源说明：数字从既有相似度推得，
+// 模型判定没有重跑。缺了这句，读者会把估计值当成实测值。
+const recomputeNote = "数字来自既有采集明细按新规则重算，模型判定未重跑；" +
+	"「估计准确率」假设进入判定的候选都能被模型判对，是上界而非实测。"
+
+// gridReport 穷举单一候选门槛，给出估计准确率的上限与分布重叠检查。
+// 估计口径假设进入判定的候选模型都能判对，模型本身的效果由 pairwise 实测。
+func gridReport(outcomes []pairOutcome) string {
 	type result struct {
 		gate    float64
 		correct int
@@ -866,12 +907,7 @@ func mustGrid(outDir string) {
 	var best []result
 	bestCorrect := -1
 	for gate := 0.50; gate <= 0.95+1e-9; gate += 0.01 {
-		correct := 0
-		for _, outcome := range outcomes {
-			if allowsType(outcome.Similarity, gate, outcome.Expected) {
-				correct++
-			}
-		}
+		correct := estimatedCorrect(outcomes, gate)
 		if correct > bestCorrect {
 			bestCorrect = correct
 			best = []result{{gate, correct}}
@@ -895,23 +931,23 @@ func mustGrid(outDir string) {
 			ratio(item.correct, len(outcomes)))
 	}
 
-	// 与生产当前门槛对比，量化「不调门槛会损失多少」。
-	current := 0
-	for _, outcome := range outcomes {
-		if allowsType(outcome.Similarity, service.EvolveCandidateMinScoreDefault, outcome.Expected) {
-			current++
-		}
-	}
-	fmt.Fprintf(&b, "\n当前生产门槛 %.2f 的估计准确率 %.3f（%d/%d），与最优相差 %.3f。\n",
+	// 新旧默认门槛并列：读者能直接看出调参收益，而不是只看到一个孤立的新数字。
+	current := estimatedCorrect(outcomes, service.EvolveCandidateMinScoreDefault)
+	legacy := estimatedCorrect(outcomes, legacyDefaultGate)
+	fmt.Fprintf(&b, "\n当前默认门槛 %.2f 的估计准确率 %.3f（%d/%d），与最优相差 %.3f。\n",
 		service.EvolveCandidateMinScoreDefault,
 		ratio(current, len(outcomes)), current, len(outcomes),
 		ratio(bestCorrect-current, len(outcomes)))
+	fmt.Fprintf(&b, "旧默认门槛 %.2f 的估计准确率 %.3f（%d/%d），与最优相差 %.3f。\n",
+		legacyDefaultGate,
+		ratio(legacy, len(outcomes)), legacy, len(outcomes),
+		ratio(bestCorrect-legacy, len(outcomes)))
 
 	b.WriteString("\n## 分布重叠检查\n\n")
 	b.WriteString(distributionOverlap(outcomes))
 
-	writeText(filepath.Join(outDir, "evolution-threshold-grid.md"), b.String())
-	fmt.Println(b.String())
+	b.WriteString("\n" + recomputeNote)
+	return b.String()
 }
 
 // distributionOverlap 检查三类样本的相似度区间是否可分。
@@ -953,24 +989,33 @@ func distributionOverlap(outcomes []pairOutcome) string {
 		if conflict[0] < dup[0] && conflict[1] > dup[1] {
 			fmt.Fprintf(&b, "\n重复区间 [%.3f, %.3f] 被冲突区间 [%.3f, %.3f] 完整包含，"+
 				"两者在相似度维度上不可分。任何按相似度分派类型的规则只要低到能覆盖全部重复样本，"+
-				"就会把落在其上方的冲突样本误判成重复，反之亦然。\n",
+				"就会把落在其上方的冲突样本误判成重复，反之亦然。"+
+				"因此类型由模型判定，相似度只负责筛选候选。\n",
 				dup[0], dup[1], conflict[0], conflict[1])
 		} else {
-			b.WriteString("\n重复与冲突区间存在可分间隙，但类型仍由模型判定。\n")
+			b.WriteString("\n重复与冲突区间存在可分间隙，但类型由模型判定，相似度只负责筛选候选。\n")
 		}
 	}
 	return b.String()
 }
 
-// allowsType 判断在给定候选门槛下，这条样本的期望结论是否有机会被判出。
-// 门槛只决定是否送模型；进入后类型不再受相似度限制，因此正样本过了门槛就算「判得出」。
-// 对照样本本身不产生提醒，过门槛即说明存在误报风险。
-func allowsType(similarity, gate float64, expected string) bool {
-	passed := similarity >= gate
-	if expected == "none" {
-		return !passed
+// passesGate 判断样本是否达到候选门槛。门槛是闭区间：相似度等于门槛也会进入判定。
+func passesGate(similarity, gate float64) bool {
+	return similarity >= gate
+}
+
+// estimatedCorrect 估算某个门槛下的端到端正确数。
+// 门槛只决定是否送模型；进入后类型不再受相似度限制，因此正样本过了门槛就算判得出。
+// 对照样本本身不产生提醒，过门槛即说明存在误报风险，没过才算判对。
+// 这个口径假设模型对进入判定的候选都能判对，是上界估算，不是实测。
+func estimatedCorrect(outcomes []pairOutcome, gate float64) int {
+	correct := 0
+	for _, outcome := range outcomes {
+		if passesGate(outcome.Similarity, gate) == (outcome.Expected != "none") {
+			correct++
+		}
 	}
-	return passed
+	return correct
 }
 
 func fraction(pair [2]int) string {
@@ -1070,4 +1115,3 @@ func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "错误:", err)
 	os.Exit(1)
 }
-
