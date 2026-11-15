@@ -276,11 +276,7 @@ func (p *EvolveProcessor) candidateGate(ctx context.Context, userID uint) (float
 	if err != nil {
 		return 0, err
 	}
-	gate := state.Settings.EvolveCandidateMinScore
-	if gate < EvolveCandidateMinScoreFloor || gate > 1 {
-		gate = EvolveCandidateMinScoreDefault
-	}
-	return gate, nil
+	return EffectiveEvolveCandidateGate(state.Settings.EvolveCandidateMinScore), nil
 }
 
 // clientCandidates 把内部候选转成 /evolve 请求体。

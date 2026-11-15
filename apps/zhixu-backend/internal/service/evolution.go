@@ -49,6 +49,16 @@ const (
 	EvolveAlertMaxPerTask = 5
 )
 
+// EffectiveEvolveCandidateGate 返回实际生效的演化候选门槛。
+// 存量零值与越界值回落到默认门槛，避免把「还没配置」当成「门槛为 0」而把无关知识送进模型。
+// 评测工具与生产链路共用这一个口径，否则重算出的准确率对应的门槛会和线上不一致。
+func EffectiveEvolveCandidateGate(gate float64) float64 {
+	if gate < EvolveCandidateMinScoreFloor || gate > 1 {
+		return EvolveCandidateMinScoreDefault
+	}
+	return gate
+}
+
 // EvolutionEvidence 是一条证据：某条知识正文里的原话。
 // 引文必须能在正文中定位，定位不到就不该作为证据展示给用户。
 type EvolutionEvidence struct {
