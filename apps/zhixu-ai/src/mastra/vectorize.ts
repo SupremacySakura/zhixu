@@ -1,5 +1,6 @@
 import { registerApiRoute } from "@mastra/core/server";
 import { allowedProviderURL } from "../lib/chat";
+import { withEgressPolicy } from "../lib/egress-guard";
 import { authorized } from "../lib/internal-auth";
 import { vectorizeAgent, vectorizeSchema } from "../lib/vectorize";
 
@@ -24,7 +25,10 @@ export const vectorizeRoute = registerApiRoute("/vectorize", {
     if (c.req.raw.signal.aborted) abort();
     const timer = setTimeout(abort, 100_000);
     try {
-      const embeddings = await vectorizeAgent.execute(input, controller.signal);
+      const embeddings = await withEgressPolicy(
+        input.model.allow_private_networks,
+        () => vectorizeAgent.execute(input, controller.signal),
+      );
       c.header("Cache-Control", "no-store");
       return c.json({ embeddings });
     } catch (error) {

@@ -134,6 +134,7 @@ type evolveFixture struct {
 	searcher  *evolveSearcherFake
 	relations *evolveRelationFake
 	client    *evolveClientFake
+	settings  *embeddingConfigFake
 	task      *model.AiTask
 }
 
@@ -155,16 +156,25 @@ func newEvolveFixture() *evolveFixture {
 		searcher:  &evolveSearcherFake{},
 		relations: &evolveRelationFake{},
 		client:    &evolveClientFake{},
+		settings: &embeddingConfigFake{state: &repository.AIConfigState{
+			Settings: model.UserAISettings{EvolveCandidateMinScore: EvolveCandidateMinScoreDefault},
+		}},
 	}
 	f.processor = &EvolveProcessor{
 		Knowledge: knowledge, Alerts: f.alerts, Chat: f.resolver, Embedding: f.resolver,
 		Embedder: f.embedder, Vectors: f.searcher, Relations: f.relations, Client: f.client,
+		Settings: f.settings,
 	}
 	f.task = &model.AiTask{
 		ID: 3, UserID: 2, TaskType: model.AiTaskTypeEvolve, TargetID: 10,
 		Status: model.AiTaskRunning, Payload: string(payload),
 	}
 	return f
+}
+
+// setGate 把用户保存的演化候选门槛写进设置 fake。
+func (f *evolveFixture) setGate(gate float64) {
+	f.settings.state.Settings.EvolveCandidateMinScore = gate
 }
 
 // addCandidate 在 fake 里追加一条未归档知识，并让它以给定相似度被向量召回。
@@ -182,7 +192,7 @@ func (f *evolveFixture) duplicateJudgement(targetID uint, quote string) EvolveJu
 		Type:     model.EvolutionAlertTypeDuplicate,
 		Reason:   "两条知识说的是同一件事，只是措辞不同。",
 		Evidence: []EvolutionEvidence{
-			{KnowledgeID: 10, Quote: quote},
+			{KnowledgeID: 10, Quote: "同一段正文"},
 			{KnowledgeID: targetID, Quote: quote},
 		},
 		Severity: model.EvolutionSeverityStrong,
@@ -247,7 +257,7 @@ func TestEvolveProcessorRecordsSemanticDuplicate(t *testing.T) {
 	require.Contains(t, string(payload), "\"alert_count\":1")
 }
 
-// 冲突结论接入同一条管线：0.75~0.90 的中等相似落一条冲突提醒，并带上模型给出的修订稿。
+// 冲突结论接入同一条管线：中等相似度（示例 0.82）也能落一条冲突提醒，并带上模型给出的修订稿。
 func TestEvolveProcessorRecordsConflictWithRevision(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "另一种说法", "HNSW 用分层图做近似最近邻检索。", 0.82)
@@ -307,8 +317,8 @@ func TestEvolveProcessorDropsRevisionWithoutFullEvidence(t *testing.T) {
 	require.Equal(t, model.EvolutionActionCreateRelation, parsed.SuggestedAction, "没有修订稿时只能建矛盾关系")
 }
 
-// 相似度分派：0.75~0.90 只接受冲突结论，因此重复结论被丢弃。
-func TestEvolveProcessorDropsConclusionOutsideBand(t *testing.T) {
+// 相似度只筛候选，不决定类型：同一分数下模型判重复就落重复，不再被相似度改写。
+func TestEvolveProcessorKeepsDuplicateBelowOldBand(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "中等相似", "HNSW 与 IVF 的取舍。", 0.82)
 	f.client.judgements = []EvolveJudgement{f.duplicateJudgement(21, "HNSW")}
@@ -316,11 +326,35 @@ func TestEvolveProcessorDropsConclusionOutsideBand(t *testing.T) {
 	payload, err := f.processor.Process(context.Background(), f.task)
 
 	require.NoError(t, err)
-	require.Empty(t, f.alerts.upserted)
-	require.Contains(t, string(payload), "\"alert_count\":0")
+	require.Len(t, f.alerts.upserted, 1)
+	require.Equal(t, model.EvolutionAlertTypeDuplicate, f.alerts.upserted[0].AlertType)
+	require.Contains(t, string(payload), "\"alert_count\":1")
 }
 
-// 低于冲突阈值：不接受任何结论，候选也不会进模型批次。
+// 高分候选也不被预先判成重复：模型给出冲突结论时照常落冲突提醒。
+func TestEvolveProcessorKeepsConflictAtHighSimilarity(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "高度相似", "HNSW 用分层图做近似最近邻检索。", 0.95)
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeConflict,
+		Reason:   "两条知识对召回率给出互斥结论。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 21, Quote: "近似最近邻检索"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+
+	payload, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	require.Equal(t, model.EvolutionAlertTypeConflict, f.alerts.upserted[0].AlertType)
+	require.Contains(t, string(payload), "\"alert_count\":1")
+}
+
+// 低于候选门槛：不进入模型判定，任务成功但零提醒且不发起付费调用。
 func TestEvolveProcessorIgnoresWeakCandidates(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "弱相关", "HNSW", 0.62)
@@ -330,6 +364,71 @@ func TestEvolveProcessorIgnoresWeakCandidates(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, f.client.calls, "没有候选就不该发起付费调用")
 	require.Empty(t, f.alerts.upserted)
+}
+
+// 门槛之上的候选全部送模型，门槛本身取闭区间。
+func TestEvolveProcessorSendsAllCandidatesAboveGate(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "刚好过门槛", "HNSW", EvolveCandidateMinScoreDefault)
+	f.addCandidate(22, "明显高于门槛", "HNSW 与 IVF", 0.72)
+	f.client.judgements = []EvolveJudgement{
+		f.duplicateJudgement(21, "HNSW"),
+		f.duplicateJudgement(22, "HNSW"),
+	}
+
+	payload, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, f.client.calls)
+	require.Len(t, f.client.candidates, 2)
+	require.Len(t, f.alerts.upserted, 2)
+	require.Contains(t, string(payload), "\"alert_count\":2")
+}
+
+// 门槛取自用户设置：调高后原本能进入判定的近邻被挡在外面。
+func TestEvolveProcessorUsesConfiguredCandidateGate(t *testing.T) {
+	f := newEvolveFixture()
+	f.setGate(0.9)
+	f.addCandidate(21, "低于自定义门槛", "HNSW", 0.85)
+	f.addCandidate(22, "达到自定义门槛", "HNSW 与 IVF", 0.9)
+	f.client.judgements = []EvolveJudgement{f.duplicateJudgement(22, "HNSW")}
+
+	payload, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.client.candidates, 1)
+	require.Equal(t, uint(22), f.client.candidates[0].KnowledgeID)
+	require.Contains(t, string(payload), "\"alert_count\":1")
+}
+
+// 设置行还没有这个字段（零值）时回落到默认门槛，而不是把 0 当门槛全放进来。
+func TestEvolveProcessorFallsBackToDefaultGate(t *testing.T) {
+	f := newEvolveFixture()
+	f.setGate(0)
+	f.addCandidate(21, "默认门槛之下", "HNSW", 0.62)
+	f.addCandidate(22, "默认门槛之上", "HNSW 与 IVF", 0.66)
+	f.client.judgements = []EvolveJudgement{f.duplicateJudgement(22, "HNSW")}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.client.candidates, 1)
+	require.Equal(t, uint(22), f.client.candidates[0].KnowledgeID)
+}
+
+// 越界值同样回落默认，不把无效配置当门槛使用。
+func TestEvolveProcessorFallsBackWhenGateOutOfRange(t *testing.T) {
+	for _, gate := range []float64{0.1, 1.5} {
+		f := newEvolveFixture()
+		f.setGate(gate)
+		f.addCandidate(21, "默认门槛之下", "HNSW", 0.62)
+
+		_, err := f.processor.Process(context.Background(), f.task)
+
+		require.NoError(t, err)
+		require.Empty(t, f.client.candidates, "门槛 %v 越界时应回落默认 0.65", gate)
+		require.Equal(t, 0, f.client.calls)
+	}
 }
 
 // updates 关系指向的目标是强候选：它只接受过时结论，重复结论一律丢弃。
@@ -384,6 +483,43 @@ func TestEvolveProcessorRecordsOutdatedFromUpdateRelation(t *testing.T) {
 	payload := ParseEvolutionPayload(alert.Payload)
 	require.Equal(t, model.EvolutionActionMarkOutdated, payload.SuggestedAction)
 	require.Len(t, payload.Evidence, 2)
+}
+
+// 强候选不受候选门槛约束：updates 是用户确认过的显式信号，即使向量相似度为 0
+// 也必须送进模型，否则「本条更新了对方」这条事实会被相似度噪声挡掉。
+// 它只接受过时结论，模型给出重复或冲突一律丢弃。
+func TestEvolveProcessorKeepsUpdateRelationBelowGateAndDropsOtherTypes(t *testing.T) {
+	for _, score := range []float64{0.0, 0.5} {
+		f := newEvolveFixture()
+		f.addCandidate(21, "被更新的旧文", "旧版本的结论。", score)
+		f.relations.rows = []repository.RelationRecord{{
+			KnowledgeRelation: model.KnowledgeRelation{
+				SourceID: 10, TargetID: 21, RelationType: model.RelationTypeUpdates, Status: model.RelationConfirmed,
+			},
+			CounterpartID: 21,
+		}}
+		f.client.judgements = []EvolveJudgement{
+			f.duplicateJudgement(21, "旧版本的结论"),
+			{
+				TargetID: 21,
+				Type:     model.EvolutionAlertTypeConflict,
+				Reason:   "两条知识给出互斥结论。",
+				Evidence: []EvolutionEvidence{
+					{KnowledgeID: 10, Quote: "同一段正文"},
+					{KnowledgeID: 21, Quote: "旧版本的结论"},
+				},
+				Severity: model.EvolutionSeverityStrong,
+			},
+		}
+
+		_, err := f.processor.Process(context.Background(), f.task)
+
+		require.NoError(t, err)
+		require.Len(t, f.client.candidates, 1, "相似度 %.1f 的强候选仍应送模型", score)
+		require.Equal(t, EvolveOriginUpdateRelation, f.client.candidates[0].Origin)
+		require.Equal(t, uint(21), f.client.candidates[0].KnowledgeID)
+		require.Empty(t, f.alerts.upserted, "强候选只接受过时结论，重复与冲突都应丢弃")
+	}
 }
 
 // 弱信号（向量近邻）判过时必须有双方原文对照：只有一侧引文就不落库。
@@ -462,8 +598,16 @@ func TestEvolveProcessorIgnoresReverseUpdateRelation(t *testing.T) {
 func TestEvolveProcessorDropsAlertWithoutLocatableEvidence(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "另一篇", "HNSW 用分层图做近似最近邻检索。", 0.93)
-	judgement := f.duplicateJudgement(21, "这段引文根本不在任何正文里")
-	f.client.judgements = []EvolveJudgement{judgement}
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeDuplicate,
+		Reason:   "两条知识说的是同一件事，只是措辞不同。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "这段引文根本不在任何正文里"},
+			{KnowledgeID: 21, Quote: "这句同样不在候选正文里"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
 
 	_, err := f.processor.Process(context.Background(), f.task)
 
@@ -566,6 +710,40 @@ func TestEvolveProcessorPrefersDuplicateOverConflict(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, f.alerts.upserted, 1)
 	require.Equal(t, model.EvolutionAlertTypeDuplicate, f.alerts.upserted[0].AlertType)
+}
+
+// 同一对没有重复结论时冲突优先于过时：只留一条，避免两条互相矛盾的处置建议。
+func TestEvolveProcessorPrefersConflictOverOutdated(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一篇", "HNSW 用分层图做近似最近邻检索。", 0.95)
+	f.client.judgements = []EvolveJudgement{
+		{
+			TargetID: 21,
+			Type:     model.EvolutionAlertTypeOutdated,
+			Reason:   "本次知识给出了更晚的结论。",
+			Evidence: []EvolutionEvidence{
+				{KnowledgeID: 10, Quote: "同一段正文"},
+				{KnowledgeID: 21, Quote: "近似最近邻检索"},
+			},
+			Severity: model.EvolutionSeverityStrong,
+		},
+		{
+			TargetID: 21,
+			Type:     model.EvolutionAlertTypeConflict,
+			Reason:   "两条知识对召回率给出互斥结论。",
+			Evidence: []EvolutionEvidence{
+				{KnowledgeID: 10, Quote: "同一段正文"},
+				{KnowledgeID: 21, Quote: "近似最近邻检索"},
+			},
+			Severity: model.EvolutionSeverityStrong,
+		},
+	}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	require.Equal(t, model.EvolutionAlertTypeConflict, f.alerts.upserted[0].AlertType)
 }
 
 // 候选上限：向量召回按相似度降序，只取前八条送模型。

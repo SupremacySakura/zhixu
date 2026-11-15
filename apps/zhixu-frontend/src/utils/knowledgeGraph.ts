@@ -46,8 +46,14 @@ export interface GraphPalette {
   nodeFill: string
   /** 节点文字（深墨：在纸白上 15.33:1） */
   nodeInk: string
-  /** 节点描边（承载来源类型，不承载语义色） */
+  /** 节点外框（墨色，不承载语义色） */
   nodeBorder: string
+  /** 书本节点的图书馆蓝书脊 */
+  nodeSpine: string
+  /** 书脊上的纸白装订线 */
+  nodeStitch: string
+  /** 右侧页块：比封面暗一档，让「封面 + 书页」的层次读得出来 */
+  nodePage: string
   /** 选中环：必须同时在深底（4.78:1）与纸白节点（3.19:1）上达标 */
   selectRing: string
   /** AI 建议的边色 */
@@ -98,18 +104,27 @@ const SUGGESTED_DIM = 0.9
 export const graphEdgeEncoding = (type: RelationType) =>
   EDGE_ENCODING[type] ?? EDGE_ENCODING.related
 
-/** 节点直径：基础 18px，度数每增加 1 加 4px，最多计入 12 度。 */
-export const graphNodeSize = (degree: number) => 18 + Math.min(Math.max(degree, 0), 12) * 4
+/**
+ * 书本节点的尺寸：高度基础 24px，度数每增加 1 加 3px，最多计入 12 度。
+ * 宽度按 3:4 封面取整；返回 `[width, height]`，因为 ECharts 的 symbolSize
+ * 只有在数组形态下才能画出纵向的书。
+ */
+export function graphNodeSize(degree: number): [number, number] {
+  const height = 24 + Math.min(Math.max(degree, 0), 12) * 3
+  return [Math.round(height * 0.75), height]
+}
+
+/** 书脊装订：实心 / 短缝线 / 点线。 */
+export type GraphNodeBinding = 'solid' | 'dashed' | 'dotted'
 
 /**
- * 来源类型 → 节点描边样式。
+ * 来源类型 → 书脊装订样式。
  *
- * 为什么用描边而不是填充色：8 种 source_type 只有 4 个可见填充色
- * （manual/web/markdown/docx 曾全部同色），填充色这条路已经用到极限。
- * 描边样式只有三档，所以 8 种来源按**解析形态**归并 —— 这正是节点要表达的信息：
- * 人直接建的、从单份文档解析的、从表格导入的。
+ * 8 种 source_type 按**解析形态**归并成三组：人直接建的、从单份文档解析的、
+ * 从表格导入的。编码从旧的「外框线型」迁到书脊，外框因此可以恒为实线，
+ * 书看起来不再像一张打了孔的优惠券。
  */
-const SOURCE_BORDER_TYPE: Record<string, 'solid' | 'dashed' | 'dotted'> = {
+const SOURCE_BINDING: Record<string, GraphNodeBinding> = {
   manual: 'solid',
   web: 'solid',
   markdown: 'dashed',
@@ -120,7 +135,132 @@ const SOURCE_BORDER_TYPE: Record<string, 'solid' | 'dashed' | 'dotted'> = {
   xlsx: 'dotted',
 }
 
-export const graphNodeBorderType = (sourceType: string) => SOURCE_BORDER_TYPE[sourceType] ?? 'solid'
+export const graphNodeBinding = (sourceType: string): GraphNodeBinding =>
+  SOURCE_BINDING[sourceType] ?? 'solid'
+
+export interface GraphNodeSymbolOptions {
+  width: number
+  height: number
+  sourceType: string
+  /** 局部图谱的中心节点：加一条蓝色书签带。 */
+  center: boolean
+  /** 当前选中节点：在封面内侧画 3px 蓝色选中环。 */
+  selected: boolean
+  palette: GraphPalette
+}
+
+const XML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&apos;',
+}
+
+const escapeXml = (value: string) => value.replace(/[&<>"']/g, char => XML_ESCAPES[char] ?? char)
+
+/**
+ * 书本节点的原始 SVG（75×100 视图盒）。
+ *
+ * 为什么不用单个 `path://`：ECharts 的 path symbol 只有一套填充/描边，
+ * 画不出「纸白封面 + 蓝书脊 + 纸白缝线」三种颜色。SVG 符号可以保留多色，
+ * 代价是选中环也得画进符号里（见 KnowledgeGraphChart 的选中变体逻辑）。
+ *
+ * 所有线宽都按屏幕像素换算回视图盒单位，保证 24px 的小书和 60px 的大书
+ * 外框都是 2px、内部线都是 1px，而不是随尺寸一起放大。
+ */
+export function graphNodeSvg({
+  width,
+  height,
+  sourceType,
+  center,
+  selected,
+  palette,
+}: GraphNodeSymbolOptions): string {
+  const unit = (75 / width + 100 / height) / 2
+  const outer = 2 * unit
+  const hairline = unit
+  const ringStroke = 3 * unit
+  const inset = outer / 2
+  const spineRight = 13.5
+  const coverRight = 67
+  const coverBottom = 92
+  const binding = graphNodeBinding(sourceType)
+  const stitchDash =
+    binding === 'dashed'
+      ? `${3 * unit} ${3 * unit}`
+      : binding === 'dotted'
+        ? `${unit} ${2 * unit}`
+        : undefined
+  const stitch =
+    binding === 'solid'
+      ? ''
+      : `<path d="M6.75 28 V88" fill="none" stroke="${escapeXml(palette.nodeStitch)}" stroke-width="${hairline}" stroke-dasharray="${stitchDash}" stroke-linecap="${binding === 'dotted' ? 'round' : 'butt'}"/>`
+  const pageLine =
+    height >= 42
+      ? `<path d="M70 6 V96 M73 6 V96" fill="none" stroke="${escapeXml(palette.nodeBorder)}" stroke-width="${hairline}" stroke-opacity="0.7"/>`
+      : `<path d="M71.5 6 V96" fill="none" stroke="${escapeXml(palette.nodeBorder)}" stroke-width="${hairline}" stroke-opacity="0.7"/>`
+  const titleLines =
+    height >= 30
+      ? `<path d="M20 28 H44 M20 38 H38" fill="none" stroke="${escapeXml(palette.nodeBorder)}" stroke-width="${hairline}" stroke-opacity="0.45"/>`
+      : ''
+  const bookmark = center
+    ? `<path d="M58 0 H64 V32 L61 28 L58 32 Z" fill="${escapeXml(palette.nodeSpine)}" stroke="${escapeXml(palette.nodeBorder)}" stroke-width="${hairline}"/>`
+    : ''
+  const spineHeadband = `<path d="M0 3 H${spineRight}" fill="none" stroke="${escapeXml(palette.nodeStitch)}" stroke-width="${hairline}"/>`
+  const spineTailband = `<path d="M0 ${coverBottom - 3} H${spineRight}" fill="none" stroke="${escapeXml(palette.nodeStitch)}" stroke-width="${hairline}"/>`
+  const spineLabel = `<rect x="3.5" y="12" width="6.5" height="10" fill="${escapeXml(palette.nodeStitch)}"/>`
+  const ringInset = outer + unit + ringStroke / 2
+  const ring = selected
+    ? `<rect x="${ringInset}" y="${ringInset}" width="${75 - ringInset * 2}" height="${100 - ringInset * 2}" fill="none" stroke="${escapeXml(palette.selectRing)}" stroke-width="${ringStroke}"/>`
+    : ''
+
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 75 100" preserveAspectRatio="none">` +
+    // 页块先画，封面盖住它的左/上部分；右侧与底部留出 5 个单位的书页厚度。
+    `<rect x="0" y="0" width="75" height="100" fill="${escapeXml(palette.nodePage)}"/>` +
+    `<rect x="${hairline / 2}" y="${hairline / 2}" width="${75 - hairline}" height="${100 - hairline}" fill="none" stroke="${escapeXml(palette.nodeBorder)}" stroke-width="${hairline}" stroke-opacity="0.7"/>` +
+    `<rect x="0" y="0" width="${coverRight}" height="${coverBottom}" fill="${escapeXml(palette.nodeFill)}"/>` +
+    `<rect x="0" y="0" width="${spineRight}" height="${coverBottom}" fill="${escapeXml(palette.nodeSpine)}"/>` +
+    `<path d="M${spineRight} 0 V${coverBottom}" fill="none" stroke="${escapeXml(palette.nodeBorder)}" stroke-width="${hairline}" stroke-opacity="0.55"/>` +
+    spineHeadband +
+    spineTailband +
+    spineLabel +
+    stitch +
+    pageLine +
+    titleLines +
+    bookmark +
+    `<rect x="${inset}" y="${inset}" width="${coverRight - outer}" height="${coverBottom - outer}" fill="none" stroke="${escapeXml(palette.nodeBorder)}" stroke-width="${outer}"/>` +
+    ring +
+    `</svg>`
+  )
+}
+
+const symbolCache = new Map<string, string>()
+
+/** 书本节点的 SVG data URI；按尺寸、来源、中心/选中态与调色板缓存。 */
+export function graphNodeSymbol(options: GraphNodeSymbolOptions): string {
+  const key = [
+    options.width,
+    options.height,
+    options.sourceType,
+    options.center ? 1 : 0,
+    options.selected ? 1 : 0,
+    options.palette.nodeFill,
+    options.palette.nodeBorder,
+    options.palette.nodeSpine,
+    options.palette.nodeStitch,
+    options.palette.nodePage,
+    options.palette.selectRing,
+  ].join('|')
+  const cached = symbolCache.get(key)
+  if (cached) return cached
+  if (symbolCache.size > 512) symbolCache.clear()
+  // ECharts 只认 `image://` 前缀；少了它会把符号当默认 rect，节点退化成蓝方块。
+  const symbol = `image://data:image/svg+xml;charset=UTF-8,${encodeURIComponent(graphNodeSvg(options))}`
+  symbolCache.set(key, symbol)
+  return symbol
+}
 
 /** 深色岛令牌 → GraphPalette 字段。顺序即解析顺序。 */
 const PALETTE_TOKENS: Array<[keyof GraphPalette, string]> = [
@@ -131,6 +271,9 @@ const PALETTE_TOKENS: Array<[keyof GraphPalette, string]> = [
   ['nodeFill', '--color-surface'],
   ['nodeInk', '--color-label'],
   ['nodeBorder', '--color-graph-node-border'],
+  ['nodeSpine', '--color-primary'],
+  ['nodeStitch', '--color-surface-tertiary'],
+  ['nodePage', '--color-surface-secondary'],
   ['selectRing', '--color-graph-select-ring'],
   ['edgeAI', '--color-graph-edge-ai'],
   ['edgeManual', '--color-graph-edge-manual'],
@@ -147,9 +290,10 @@ function readToken(root: HTMLElement | null, token: string) {
 /**
  * 从 CSS 变量解析深色岛调色板。
  *
- * 注意它读的是 `--color-graph-*` 与两个纸世界令牌（`--color-surface` / `--color-label`
- * 供节点填充与墨色用），**不再读 `--color-primary` / `--color-info` / `--color-danger`**
- * —— 那三个在深底上分别是 2.04 / 2.04 / 2.65:1，全都低于非文本 3:1 下限。
+ * 注意它读的是 `--color-graph-*` 与三个纸世界令牌：`--color-surface` / `--color-label`
+ * 供节点填充与墨色用，`--color-primary` 只用于**纸白节点上的书脊**（6.39:1）。
+ * `--color-primary` / `--color-info` / `--color-danger` 在深底上分别是
+ * 2.04 / 2.04 / 2.65:1，仍不得直接拿来画岛上的文字或边。
  */
 export function resolveGraphPalette(element?: HTMLElement | null): GraphPalette {
   const root = element ?? (typeof document !== 'undefined' ? document.documentElement : null)

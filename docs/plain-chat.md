@@ -19,7 +19,7 @@ P1 起对话只有一条链路：**检索是常驻工具，由模型自主决定
 
 ## 安全与边界
 
-- 供应商地址只允许 http/https，拒绝内嵌凭据、查询参数与片段；解析模型配置时拒绝私网、回环、链路本地与云元数据地址，除非部署侧 `MODEL_ALLOWED_PRIVATE_ENDPOINTS` 精确列出该地址；公网模型必须使用 HTTPS。
+- 供应商地址只允许 http/https，拒绝内嵌凭据、查询参数与片段；解析模型配置时拒绝私网、回环、链路本地与云元数据地址，除非部署侧 `MODEL_ALLOWED_PRIVATE_ENDPOINTS` 精确列出该地址，或显式开启 `MODEL_ALLOW_PRIVATE_NETWORKS=true`。开关只放开 RFC1918、回环、IPv6 ULA 与 CGNAT/Tailscale；链路本地、云元数据、组播与未指定地址始终拦截，公网模型仍必须使用 HTTPS。
 - DSML 防护：部分网关不解析工具调用标记，若模型把 `<｜｜DSML｜｜ calls>` 当正文输出，Mastra 在首 600 字符内识别并中止，返回可操作的流内错误，不把原始标记转给浏览器。
 - 错误正文不透传第三方响应，避免凭据泄漏；Mastra 只监听本机，入站校验 `INTERNAL_API_SECRET`。
 
@@ -35,4 +35,9 @@ pnpm dev:ai
 
 默认 AI URL 为 http://127.0.0.1:4111，内部 Go 回调为 http://127.0.0.1:9000。修改端口时在 Go 环境设置 CHAT_AI_URL、CHAT_BACKEND_URL；AI 进程也需同样的 CHAT_BACKEND_URL（该脚本不会读取根 .env.development）。Mastra 固定本机监听，不将开发 Studio 暴露公网。
 
-本地无认证模型的例子：部署环境变量 MODEL_ALLOWED_PRIVATE_ENDPOINTS=http://127.0.0.1:11434/v1，并在用户配置中使用完全相同的地址。该变量逗号分隔；不得配置宽泛通配符。仍需先设置 MODEL_CONFIG_ENCRYPTION_KEY 才能使用加密保存的 API Key。
+本地无认证模型的两种接法：
+
+- 整个部署信任内网：设 `MODEL_ALLOW_PRIVATE_NETWORKS=true`，用户在模型设置里填任意私网/本机地址即可。该开关随每次模型请求下发给 Mastra，不需要再维护 `EGRESS_ALLOWED_HOSTS`。
+- 只放行个别地址：设 `MODEL_ALLOWED_PRIVATE_ENDPOINTS=http://127.0.0.1:11434/v1`，并在用户配置中使用完全相同的地址；同时在 `apps/zhixu-ai/.env` 把主机加入 `EGRESS_ALLOWED_HOSTS`。该变量逗号分隔，不得配置宽泛通配符。
+
+仍需先设置 MODEL_CONFIG_ENCRYPTION_KEY 才能使用加密保存的 API Key。

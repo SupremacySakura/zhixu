@@ -41,6 +41,13 @@ Two narrow exceptions exist:
 
 Literal private IPs need both entries: `MODEL_ALLOWED_PRIVATE_ENDPOINTS` on the Go side and `EGRESS_ALLOWED_HOSTS` here.
 
+Deployments that trust their whole private network can instead set
+`MODEL_ALLOW_PRIVATE_NETWORKS=true` on the backend. Each model request then
+carries a request-scoped `allow_private_networks` flag; the AI service permits
+RFC1918, loopback, IPv6 unique-local and CGNAT/Tailscale targets for that request
+only, so `EGRESS_ALLOWED_HOSTS` is not needed on this path. Link-local,
+cloud-metadata, multicast and unspecified addresses stay blocked.
+
 ## Storage
 
 默认使用 `file:./mastra.db` 保存会话记忆；设置 `TURSO_DATABASE_URL` 与 `TURSO_AUTH_TOKEN` 可切换到 Turso。

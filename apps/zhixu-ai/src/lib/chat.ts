@@ -12,6 +12,9 @@ export const chatTurnSchema = z
         model_id: z.string().min(1).max(200),
         base_url: z.string().url(),
         api_key: z.string(),
+        // Set by Go only when the deployment opted into private model networks.
+        // Optional so older backends keep the strict public-only policy.
+        allow_private_networks: z.boolean().optional(),
       })
       .strict(),
     messages: z

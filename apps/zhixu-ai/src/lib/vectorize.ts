@@ -10,6 +10,7 @@ export const vectorizeSchema = z
       model_id: z.string().trim().min(1).max(200),
       base_url: z.string().url(),
       api_key: z.string(),
+      allow_private_networks: z.boolean().optional(),
     }),
     dimension: z.number().int().min(1).max(65536),
     // 4096 覆盖「标题 ≤200 字 + 代表文本 1000 字」的最坏 UTF-16 长度，也覆盖长提问的

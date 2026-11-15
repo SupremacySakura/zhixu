@@ -16,7 +16,10 @@ import { chatMemory, memoryStore } from "../lib/chat-history";
 import { authorized } from "../lib/internal-auth";
 import { persistedAssistantId } from "../lib/conversation-storage";
 import { conversationRuns } from "../lib/conversation-runs";
-import { DEFAULT_CHAT_BACKEND_URL } from "../lib/egress-guard";
+import {
+  DEFAULT_CHAT_BACKEND_URL,
+  enterEgressPolicy,
+} from "../lib/egress-guard";
 
 // One agent serves every turn. Retrieval is a tool, not a pipeline step: the model
 // decides itself when to search the knowledge base. The system prompt is the "skill"
@@ -160,6 +163,10 @@ export const chatRoute = registerApiRoute("/chat", {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       async start(output) {
+        // Streaming outlives this handler call, so enter the per-turn policy here
+        // instead of wrapping the stream: every model call and DNS lookup below
+        // inherits it, and other concurrent turns keep their own.
+        enterEgressPolicy(input.model.allow_private_networks);
         const send = (event: object) => {
           try {
             output.enqueue(encoder.encode(JSON.stringify(event) + "\n"));

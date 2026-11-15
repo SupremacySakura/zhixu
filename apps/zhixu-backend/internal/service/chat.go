@@ -28,11 +28,14 @@ type ChatInput struct {
 	Title          string `json:"title"`
 }
 type ChatCapability struct {
-	Model    model.ProviderModel
-	Provider model.ModelProvider
-	Key      string
-	Context  context.Context
-	RagQuery *RagQuery
+	Model model.ProviderModel
+	// AllowPrivateNetworks mirrors the deployment switch so the AI service can
+	// apply the same request-scoped egress policy without reading backend config.
+	AllowPrivateNetworks bool
+	Provider             model.ModelProvider
+	Key                  string
+	Context              context.Context
+	RagQuery             *RagQuery
 }
 
 func (s *ChatService) ResolveEmbedding(ctx context.Context, user uint) (*ChatCapability, uint64, uint64, error) {
@@ -51,7 +54,7 @@ func (s *ChatService) ResolveEmbedding(ctx context.Context, user uint) (*ChatCap
 			if err := s.validateRuntimeModelURL(p.BaseURL); err != nil {
 				return nil, 0, 0, err
 			}
-			cap := &ChatCapability{Model: m, Provider: p, Context: ctx}
+			cap := &ChatCapability{Model: m, Provider: p, Context: ctx, AllowPrivateNetworks: s.AllowPrivateNetworks}
 			if p.AuthType == "key" {
 				if p.Ciphertext == "" {
 					return nil, 0, 0, configInvalid("供应商未配置 API Key")
@@ -71,6 +74,7 @@ type ChatService struct {
 	Store                   AIConfigStore
 	Credentials             *ModelCredentials
 	AllowedPrivateEndpoints string
+	AllowPrivateNetworks    bool
 	mu                      sync.Mutex
 	capabilities            map[string]*ChatCapability
 }
@@ -170,7 +174,7 @@ func (s *ChatService) resolveModel(ctx context.Context, user uint, modelID uint)
 			if err := s.validateRuntimeModelURL(p.BaseURL); err != nil {
 				return nil, err
 			}
-			cap := &ChatCapability{Model: m, Provider: p, Context: ctx}
+			cap := &ChatCapability{Model: m, Provider: p, Context: ctx, AllowPrivateNetworks: s.AllowPrivateNetworks}
 			if p.AuthType == "key" {
 				if p.Ciphertext == "" {
 					return nil, configInvalid("供应商未配置 API Key，请前往设置")
@@ -230,6 +234,24 @@ func unsafeModelIP(ip net.IP) bool {
 		(&net.IPNet{IP: net.ParseIP("100.64.0.0"), Mask: net.CIDRMask(10, 32)}).Contains(ip)
 }
 
+// forbiddenModelIP is the subset that stays blocked even when the deployment
+// explicitly allows private model networks. Link-local addresses reach cloud
+// metadata services and host agents, and multicast/unspecified targets are never
+// valid model endpoints.
+func forbiddenModelIP(ip net.IP) bool {
+	return ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsUnspecified() || ip.IsMulticast() ||
+		ip.Equal(net.ParseIP("100.100.100.200")) || ip.Equal(net.ParseIP("168.63.129.16"))
+}
+
+// privateModelIP covers the ranges MODEL_ALLOW_PRIVATE_NETWORKS opens: RFC1918,
+// IPv6 unique-local, loopback and Tailscale's CGNAT range. 100.100.100.200 lives
+// inside CGNAT, so forbiddenModelIP must be checked first.
+func privateModelIP(ip net.IP) bool {
+	return ip.IsPrivate() || ip.IsLoopback() ||
+		(&net.IPNet{IP: net.ParseIP("100.64.0.0"), Mask: net.CIDRMask(10, 32)}).Contains(ip)
+}
+
 // privateEndpointAllowed reports whether the deployment explicitly trusts this exact
 // provider base URL (comma-separated, exact match after trimming the trailing slash).
 func (s *ChatService) privateEndpointAllowed(base string) bool {
@@ -261,19 +283,29 @@ func (s *ChatService) validateRuntimeModelURL(raw string) error {
 	allowed := s.privateEndpointAllowed(raw)
 	host := strings.ToLower(u.Hostname())
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
-		if !allowed {
-			return configInvalid("私网模型地址未获部署允许，请配置精确的允许地址")
+		if !allowed && !s.AllowPrivateNetworks {
+			return configInvalid(privateEndpointDenied)
 		}
 		return nil
 	}
 	if ip := net.ParseIP(host); ip != nil {
-		if unsafeModelIP(ip) && !allowed {
-			return configInvalid("私网模型地址未获部署允许，请配置精确的允许地址")
+		if forbiddenModelIP(ip) {
+			return configInvalid("不允许使用链路本地、云元数据或保留地址")
+		}
+		if unsafeModelIP(ip) && !allowed && !(s.AllowPrivateNetworks && privateModelIP(ip)) {
+			return configInvalid(privateEndpointDenied)
 		}
 		return nil
 	}
-	if u.Scheme != "https" && !allowed {
+	// A hostname may resolve to a private address. When the deployment trusts its
+	// private network, plain HTTP is allowed here and the AI service's DNS check
+	// rejects the request if the name resolves to a public address.
+	if u.Scheme != "https" && !allowed && !s.AllowPrivateNetworks {
 		return configInvalid("公网模型服务必须使用 HTTPS")
 	}
 	return nil
 }
+
+// privateEndpointDenied names both supported deployment paths so the message is
+// actionable for whoever operates the instance; users cannot change either.
+const privateEndpointDenied = "私网模型地址未获部署允许：请让部署管理员开启 MODEL_ALLOW_PRIVATE_NETWORKS，或用 MODEL_ALLOWED_PRIVATE_ENDPOINTS 精确列出该地址"

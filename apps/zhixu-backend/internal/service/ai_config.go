@@ -52,14 +52,16 @@ type ProviderInput struct {
 }
 
 type DefaultsInput struct {
-	ChatModelID      uint     `json:"chat_model_id"`
-	EmbeddingModelID uint     `json:"embedding_model_id"`
+	ChatModelID      uint `json:"chat_model_id"`
+	EmbeddingModelID uint `json:"embedding_model_id"`
 	// Nil RagTopK/RagMinScore keeps the stored retrieval settings, so clients
 	// predating them can still save model defaults without resetting retrieval.
-	RagTopK         *int     `json:"rag_top_k"`
-	RagMinScore     *float64 `json:"rag_min_score"`
-	ExpectedVersion uint64   `json:"expected_version"`
-	ConfirmReindex  bool     `json:"confirm_reindex"`
+	RagTopK     *int     `json:"rag_top_k"`
+	RagMinScore *float64 `json:"rag_min_score"`
+	// Nil EvolveCandidateMinScore keeps the stored gate, same as the retrieval fields.
+	EvolveCandidateMinScore *float64 `json:"evolve_candidate_min_score"`
+	ExpectedVersion         uint64   `json:"expected_version"`
+	ConfirmReindex          bool     `json:"confirm_reindex"`
 }
 
 type ProviderView struct {
@@ -258,9 +260,15 @@ func checkDefaults(state *repository.AIConfigState, requireCredentials bool) err
 	return nil
 }
 
-func applyEmbeddingChange(state *repository.AIConfigState, previous string, confirmed bool) error {
+// thresholdResaved 表示用户在这次请求里重新保存了演化候选门槛。
+// 门槛的清除信号是「用户重新保存」，而不是「向量重建完成」：重建由向量化流程负责，
+// 与本设置项无关，两者耦合会让状态互相干扰。
+func applyEmbeddingChange(state *repository.AIConfigState, previous string, confirmed, thresholdResaved bool) error {
 	next := embeddingFingerprint(state)
 	if previous == next {
+		if thresholdResaved {
+			state.Settings.EvolveThresholdStale = false
+		}
 		return nil
 	}
 	if previous != "" && !confirmed {
@@ -269,6 +277,14 @@ func applyEmbeddingChange(state *repository.AIConfigState, previous string, conf
 	state.Settings.EmbeddingVersion++
 	if previous != "" {
 		state.Settings.NeedsReindex = true
+	}
+	switch {
+	case thresholdResaved, next == "":
+		// 同一次保存里刚校准过，或不再配置 Embedding：没有待校准的门槛。
+		state.Settings.EvolveThresholdStale = false
+	case previous != "":
+		// 已有默认 Embedding 被换成另一套配置，旧门槛的相似度前提不再成立。
+		state.Settings.EvolveThresholdStale = true
 	}
 	return nil
 }
@@ -341,7 +357,7 @@ func (s *AIConfigService) SaveProvider(ctx context.Context, user, id uint, input
 		if err := checkDefaults(state, false); err != nil {
 			return err
 		}
-		return applyEmbeddingChange(state, previous, input.ConfirmReindex)
+		return applyEmbeddingChange(state, previous, input.ConfirmReindex, false)
 	})
 	if err != nil {
 		return nil, err
@@ -386,7 +402,11 @@ func (s *AIConfigService) SaveDefaults(ctx context.Context, user uint, input Def
 		return nil, configInvalid(fmt.Sprintf("检索条数需在 1–%d 之间", RagMaxTopK))
 	}
 	if input.RagMinScore != nil && (*input.RagMinScore < RagMinScoreFloor || *input.RagMinScore > 1) {
-		return nil, configInvalid(fmt.Sprintf("相似度阈值需在 %g–1 之间", RagMinScoreFloor))
+		return nil, configInvalid(fmt.Sprintf("召回下限需在 %g–1 之间", RagMinScoreFloor))
+	}
+	if input.EvolveCandidateMinScore != nil &&
+		(*input.EvolveCandidateMinScore < EvolveCandidateMinScoreFloor || *input.EvolveCandidateMinScore > 1) {
+		return nil, configInvalid(fmt.Sprintf("演化候选门槛需在 %g–1 之间", EvolveCandidateMinScoreFloor))
 	}
 	state, err := s.Store.Mutate(ctx, user, func(state *repository.AIConfigState) error {
 		if input.ExpectedVersion != state.Settings.ConfigVersion {
@@ -400,10 +420,13 @@ func (s *AIConfigService) SaveDefaults(ctx context.Context, user uint, input Def
 		if input.RagMinScore != nil {
 			state.Settings.RagMinScore = *input.RagMinScore
 		}
+		if input.EvolveCandidateMinScore != nil {
+			state.Settings.EvolveCandidateMinScore = *input.EvolveCandidateMinScore
+		}
 		if err := checkDefaults(state, true); err != nil {
 			return err
 		}
-		return applyEmbeddingChange(state, previous, input.ConfirmReindex)
+		return applyEmbeddingChange(state, previous, input.ConfirmReindex, input.EvolveCandidateMinScore != nil)
 	})
 	if err != nil {
 		return nil, err

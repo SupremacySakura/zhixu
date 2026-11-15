@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"net/http"
 	"strings"
@@ -62,10 +61,11 @@ type evolveRequest struct {
 }
 
 type evolveModel struct {
-	Protocol string `json:"protocol"`
-	ModelID  string `json:"model_id"`
-	BaseURL  string `json:"base_url"`
-	APIKey   string `json:"api_key"`
+	Protocol             string `json:"protocol"`
+	ModelID              string `json:"model_id"`
+	BaseURL              string `json:"base_url"`
+	APIKey               string `json:"api_key"`
+	AllowPrivateNetworks bool   `json:"allow_private_networks,omitempty"`
 }
 
 type evolveKnowledge struct {
@@ -121,10 +121,11 @@ func (c *EvolveClient) Evolve(ctx context.Context, snapshot *ChatCapability, tas
 	req := evolveRequest{
 		Version: 1,
 		Model: evolveModel{
-			Protocol: snapshot.Provider.Protocol,
-			ModelID:  snapshot.Model.ModelID,
-			BaseURL:  snapshot.Provider.BaseURL,
-			APIKey:   snapshot.Key,
+			Protocol:             snapshot.Provider.Protocol,
+			ModelID:              snapshot.Model.ModelID,
+			BaseURL:              snapshot.Provider.BaseURL,
+			APIKey:               snapshot.Key,
+			AllowPrivateNetworks: snapshot.AllowPrivateNetworks,
 		},
 		TaskID:      taskID,
 		KnowledgeID: knowledgeID,
@@ -272,30 +273,18 @@ func evolveRevisionUsable(title, content string) bool {
 	return utf8.RuneCountInString(content) <= EvolveRevisedContentMaxRunes
 }
 
-// evolutionAllowedTypes 按候选来源与相似度分派允许的结论类型。
+// evolutionAllowedTypes 按候选来源分派允许的结论类型。
 //
 // updates 关系是用户显式声明过的「谁更新谁」，这类候选只接受过时结论——把它判成重复
-// 会给出「归档其一」这种明显错误的选择。向量近邻只能按相似度分派，且重复与冲突两段
-// **互斥**（规格 #8 检测流程第 3 步）：越像越可能重复，只接受重复；落到冲突阈值与重复
-// 阈值之间才是对同一事实的不同说法，只接受冲突；两个都放行会让同一条候选同时具备
-// 「归档其一」与「采纳修订」两种互相矛盾的处置。过时看的是「谁更晚更全」，与相似度
-// 高低无关，因此从过时阈值往上都允许，同一对出现多种结论时由优先级收敛。
-func evolutionAllowedTypes(origin string, score float64) map[model.EvolutionAlertType]bool {
+// 会给出「归档其一」这种明显错误的选择。向量近邻不预先限制类型：相似度只决定候选
+// 能否进入判定，重复、过时与冲突的区分交给模型；同一对出现多种结论时由优先级收敛。
+func evolutionAllowedTypes(origin string) map[model.EvolutionAlertType]bool {
 	if origin == EvolveOriginUpdateRelation {
 		return map[model.EvolutionAlertType]bool{model.EvolutionAlertTypeOutdated: true}
 	}
-	if math.IsNaN(score) {
-		return nil
+	return map[model.EvolutionAlertType]bool{
+		model.EvolutionAlertTypeDuplicate: true,
+		model.EvolutionAlertTypeOutdated:  true,
+		model.EvolutionAlertTypeConflict:  true,
 	}
-	allowed := make(map[model.EvolutionAlertType]bool, 2)
-	switch {
-	case score >= EvolveDuplicateMinScore:
-		allowed[model.EvolutionAlertTypeDuplicate] = true
-	case score >= EvolveConflictMinScore:
-		allowed[model.EvolutionAlertTypeConflict] = true
-	}
-	if score >= EvolveOutdatedMinScore {
-		allowed[model.EvolutionAlertTypeOutdated] = true
-	}
-	return allowed
 }

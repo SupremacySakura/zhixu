@@ -79,6 +79,23 @@ func TestDatabaseDefaultUsesZhixu(t *testing.T) {
 	require.Equal(t, "zhixu", v.GetString("DB_NAME"))
 }
 
+func TestPrivateModelNetworkSwitchBinding(t *testing.T) {
+	v := viper.New()
+	bindEnvVariables(v)
+	t.Setenv("MODEL_ALLOW_PRIVATE_NETWORKS", "true")
+	var cfg Config
+	require.NoError(t, v.Unmarshal(&cfg))
+	require.True(t, cfg.ModelAllowPrivateNetworks)
+
+	// Absent means off: an upgrade must not silently open private networks.
+	require.NoError(t, os.Unsetenv("MODEL_ALLOW_PRIVATE_NETWORKS"))
+	v = viper.New()
+	bindEnvVariables(v)
+	var fallback Config
+	require.NoError(t, v.Unmarshal(&fallback))
+	require.False(t, fallback.ModelAllowPrivateNetworks)
+}
+
 func TestGetDSNFormatsDatabaseAddress(t *testing.T) {
 	for _, scenario := range []struct {
 		host, port, address string

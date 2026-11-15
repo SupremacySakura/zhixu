@@ -35,8 +35,11 @@ func main() {
 		Store: &repository.AIConfigRepository{DB: database.DB}, Credentials: credentials,
 	})
 	chat := &handler.ChatHandler{
-		Service: &service.ChatService{Store: &repository.AIConfigRepository{DB: database.DB}, Credentials: credentials, AllowedPrivateEndpoints: cfg.ModelAllowedPrivateEndpoints},
-		AIURL:   cfg.ChatAIURL, InternalBackendURL: cfg.ChatBackendURL, InternalAPISecret: cfg.InternalAPISecret,
+		Service: &service.ChatService{
+			Store: &repository.AIConfigRepository{DB: database.DB}, Credentials: credentials,
+			AllowedPrivateEndpoints: cfg.ModelAllowedPrivateEndpoints, AllowPrivateNetworks: cfg.ModelAllowPrivateNetworks,
+		},
+		AIURL: cfg.ChatAIURL, InternalBackendURL: cfg.ChatBackendURL, InternalAPISecret: cfg.InternalAPISecret,
 	}
 	chatSourceRepo := repository.NewChatSourceRepository(database.DB)
 	conversations := &service.ConversationService{
@@ -112,6 +115,7 @@ func main() {
 		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 		Vectors:  qdrant,
 		Client:   &service.EvolveClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+		Settings: chat.Service.Store,
 	})
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})

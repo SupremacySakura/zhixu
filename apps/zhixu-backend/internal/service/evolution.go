@@ -28,14 +28,13 @@ var (
 	ErrEvolutionUnsupported = errors.New("该裁决动作尚未启用")
 )
 
-// 演化检测阈值。与关系推荐常量同风格，先进代码不进配置：调参只改这里，不动结构。
+// 演化检测常量。默认值与下限在代码中维护，用户门槛从设置读取，不在常量里调参。
 const (
-	// EvolveDuplicateMinScore 只接受重复结论的相似度下限。
-	EvolveDuplicateMinScore = 0.90
-	// EvolveConflictMinScore 冲突判定的下限，与重复阈值之间留出带宽。
-	EvolveConflictMinScore = 0.75
-	// EvolveOutdatedMinScore 过时判定的弱信号候选门槛。
-	EvolveOutdatedMinScore = 0.80
+	// EvolveCandidateMinScoreDefault 演化候选门槛的默认值：设置行还没有该字段或值越界时使用。
+	// 它只回答「这条候选值不值得送模型」，不决定结论类型；类型由模型判定。
+	EvolveCandidateMinScoreDefault = 0.65
+	// EvolveCandidateMinScoreFloor 门槛下限。对照样本最高相似度为 0.601，再低会让无关知识进入判定。
+	EvolveCandidateMinScoreFloor = 0.45
 	// EvolveVectorTopK 向量召回条数：比关系推荐的 50 小，因为一次要给三类结论分派。
 	EvolveVectorTopK = 30
 	// EvolveCandidateMax 送模型的候选上限。
@@ -49,6 +48,16 @@ const (
 	// EvolveAlertMaxPerTask 一次任务最多落几条提醒。
 	EvolveAlertMaxPerTask = 5
 )
+
+// EffectiveEvolveCandidateGate 返回实际生效的演化候选门槛。
+// 存量零值与越界值回落到默认门槛，避免把「还没配置」当成「门槛为 0」而把无关知识送进模型。
+// 评测工具与生产链路共用这一个口径，否则重算出的准确率对应的门槛会和线上不一致。
+func EffectiveEvolveCandidateGate(gate float64) float64 {
+	if gate < EvolveCandidateMinScoreFloor || gate > 1 {
+		return EvolveCandidateMinScoreDefault
+	}
+	return gate
+}
 
 // EvolutionEvidence 是一条证据：某条知识正文里的原话。
 // 引文必须能在正文中定位，定位不到就不该作为证据展示给用户。

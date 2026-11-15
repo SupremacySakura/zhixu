@@ -22,7 +22,7 @@ applicable_to: "前端视觉规范、设计令牌、文档权威边界、ADR 记
 - `docs/README.md`：新增 `### 视觉与产品规范` 一节（`DESIGN.md` 索引卡盒视觉规范 v2 / `PRODUCT.md` 产品真相），并在「领域术语与决策记录」补上原本漏掉的 ADR-0002 与新增的 ADR-0003。
 - `apps/zhixu-frontend/AGENTS.md`：`## 前端 AI 读取协议` 加第 4 条（涉及 UI / 样式 / 品牌 / 视觉评审先读 `DESIGN.md` 与 `PRODUCT.md`，冲突以产品真相为准），`## 前端核心文档` 加「视觉规范 `../../DESIGN.md`」与「产品真相 `./PRODUCT.md`」两条。
 - `docs/adr/0003-visual-world-replacement.md`：新建 ADR。按同目录 0001/0002 的格式（状态 / 日期 / 相关 → `## 背景` → `## 决策` → `## 理由` → `## 后果` → `## 备选方案`），`## 背景` 内含旧世界与 2026-11 实测的七行对比表，`## 决策` 为八条编号条目；另设 `## 三份权威的边界` 一节给出权威/位置/管什么/谁可改四列表与冲突序。
-- `docs/markdown-knowledge-frontend.md`：首段原本写「按 `design/MarkdownKnowledge.html` 的**浅色品牌绿风格**接入」，改为「按交互结构接入」，并标注仓库根 `design/` 下 40 个 HTML 样张是旧视觉世界的历史样张、只作交互对照，视觉口径以 `DESIGN.md` v2 为准。这是本单走读时额外发现的第二处陈旧口径（不在议题列的六项之内）。
+- `docs/markdown-knowledge-frontend.md`：首段原本写「按 `design/MarkdownKnowledge.html` 的**浅色品牌绿风格**接入」，改为「按交互结构接入」，并标注仓库根 `design/` 下 40 个 HTML 样张是旧视觉世界的历史样张、只作交互对照，视觉口径以 `DESIGN.md` v2 为准。这是本单走读时额外发现的第二处陈旧口径（不在议题列的六项之内）。2026-11-14 后续：旧样张已按 ADR-0004 退役。
 - `docs/tasks/frontend-visual-world-replacement-20261112.md`：本学习日志。
 - 未改动但已确认的产物（属前序任务）：仓库根 `DESIGN.md`（614 行 / 41,345 B / 18 个 `##` 章）、`apps/zhixu-frontend/.impeccable/design.json`（25,610 B，schemaVersion 2）、`apps/zhixu-frontend/PRODUCT.md`（103 行）、`apps/zhixu-frontend/.impeccable/surfaces/src-pages-knowledgelibrary-vue.md`（方向契约六区块，`seed:3e5b4b087e29fc24`）。
 

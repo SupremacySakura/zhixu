@@ -229,6 +229,9 @@ func TestSaveDefaultsRagSettings(t *testing.T) {
 	require.ErrorIs(t, err, ErrAIConfigInvalid)
 	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, RagMinScore: &score, ExpectedVersion: 1})
 	require.ErrorIs(t, err, ErrAIConfigInvalid)
+	// 术语表禁止用裸「相似度阈值」指代召回下限，错误文案也要跟着改。
+	require.Contains(t, err.Error(), "召回下限")
+	require.NotContains(t, err.Error(), "相似度阈值")
 	score = 1.5
 	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, RagMinScore: &score, ExpectedVersion: 1})
 	require.ErrorIs(t, err, ErrAIConfigInvalid)
@@ -244,6 +247,154 @@ func TestSaveDefaultsRagSettings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 20, view.Settings.RagTopK)
 	require.InDelta(t, 0.7, view.Settings.RagMinScore, 1e-9)
+}
+
+func TestSaveDefaultsEvolveCandidateGate(t *testing.T) {
+	ctx := context.Background()
+	s := newAIConfigTestService(t)
+	view, err := s.SaveProvider(ctx, 7, 0, testProviderInput())
+	require.NoError(t, err)
+	chat, embed := view.Providers[0].Models[0].ID, view.Providers[0].Models[1].ID
+
+	below, above := 0.44, 1.01
+	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &below, ExpectedVersion: 1})
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+	require.Contains(t, err.Error(), "0.45")
+	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &above, ExpectedVersion: 1})
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+
+	gate := 0.5
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &gate, ExpectedVersion: 1})
+	require.NoError(t, err)
+	require.InDelta(t, 0.5, view.Settings.EvolveCandidateMinScore, 1e-9)
+
+	// A later save that omits the field keeps the stored gate, and a fresh read returns it.
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, ExpectedVersion: 2})
+	require.NoError(t, err)
+	require.InDelta(t, 0.5, view.Settings.EvolveCandidateMinScore, 1e-9)
+	read, err := s.Get(ctx, 7)
+	require.NoError(t, err)
+	require.InDelta(t, 0.5, read.Settings.EvolveCandidateMinScore, 1e-9)
+}
+
+func TestSaveDefaultsMarksEvolveThresholdStaleOnlyOnEmbeddingChange(t *testing.T) {
+	ctx := context.Background()
+	s := newAIConfigTestService(t)
+	input := testProviderInput()
+	input.Models = append(input.Models, ModelInput{ModelID: "embed-next", Kind: "embedding", Dimension: 1024})
+	view, err := s.SaveProvider(ctx, 7, 0, input)
+	require.NoError(t, err)
+	chat := view.Providers[0].Models[0].ID
+	embed := view.Providers[0].Models[1].ID
+	embedNext := view.Providers[0].Models[2].ID
+
+	gate := 0.5
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &gate, ExpectedVersion: 1,
+	})
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale)
+
+	// 换模型但不提交门槛：门槛保持原值，标记置位。
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embedNext, ExpectedVersion: 2, ConfirmReindex: true,
+	})
+	require.NoError(t, err)
+	require.True(t, view.Settings.EvolveThresholdStale)
+	require.InDelta(t, 0.5, view.Settings.EvolveCandidateMinScore, 1e-9)
+	read, err := s.Get(ctx, 7)
+	require.NoError(t, err)
+	require.True(t, read.Settings.EvolveThresholdStale)
+
+	// 不换模型、只重新保存门槛：清除标记。
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embedNext, EvolveCandidateMinScore: &gate, ExpectedVersion: 3,
+	})
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale)
+
+	// 同一次保存既换模型又提交门槛：视为用户刚校准过，不置位。
+	gate = 0.7
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &gate, ExpectedVersion: 4, ConfirmReindex: true,
+	})
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale)
+	require.InDelta(t, 0.7, view.Settings.EvolveCandidateMinScore, 1e-9)
+}
+
+// SaveProvider 也会改 Embedding 配置（供应商地址或维度），所以它同样要走待校准标记。
+// 门槛值不能跟着重置：用户调过的数字是这次改动的唯一参照点。
+func TestSaveProviderMarksEvolveThresholdStaleOnEmbeddingChange(t *testing.T) {
+	ctx := context.Background()
+	s := newAIConfigTestService(t)
+	input := testProviderInput()
+	view, err := s.SaveProvider(ctx, 7, 0, input)
+	require.NoError(t, err)
+	id := view.Providers[0].ID
+	chat, embed := view.Providers[0].Models[0].ID, view.Providers[0].Models[1].ID
+
+	gate := 0.55
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &gate, ExpectedVersion: 1,
+	})
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale)
+
+	// 不碰 Embedding 的保存（只改显示名称）：标记保持 false，门槛不变。
+	input.ExpectedVersion = 2
+	input.Name = "网关（改名）"
+	view, err = s.SaveProvider(ctx, 7, id, input)
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale)
+	require.InDelta(t, 0.55, view.Settings.EvolveCandidateMinScore, 1e-9)
+
+	// 换 Embedding 维度（同一供应商、同一模型 ID），确认重建：门槛保持，标记置位。
+	input.ExpectedVersion = 3
+	input.Models[1].Dimension = 1536
+	input.ConfirmReindex = true
+	view, err = s.SaveProvider(ctx, 7, id, input)
+	require.NoError(t, err)
+	require.True(t, view.Settings.EvolveThresholdStale)
+	require.InDelta(t, 0.55, view.Settings.EvolveCandidateMinScore, 1e-9)
+	read, err := s.Get(ctx, 7)
+	require.NoError(t, err)
+	require.True(t, read.Settings.EvolveThresholdStale)
+	require.InDelta(t, 0.55, read.Settings.EvolveCandidateMinScore, 1e-9)
+}
+
+// 清空默认 Embedding 时没有「待校准的门槛」可言：相似度不再参与任何判定。
+// 这是除了「重新保存门槛」之外的第二个清除条件。
+func TestSaveDefaultsClearsEvolveThresholdStaleWhenEmbeddingCleared(t *testing.T) {
+	ctx := context.Background()
+	s := newAIConfigTestService(t)
+	input := testProviderInput()
+	input.Models = append(input.Models, ModelInput{ModelID: "embed-next", Kind: "embedding", Dimension: 1024})
+	view, err := s.SaveProvider(ctx, 7, 0, input)
+	require.NoError(t, err)
+	chat := view.Providers[0].Models[0].ID
+	embed := view.Providers[0].Models[1].ID
+	embedNext := view.Providers[0].Models[2].ID
+
+	gate := 0.6
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &gate, ExpectedVersion: 1,
+	})
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale)
+
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: embedNext, ExpectedVersion: 2, ConfirmReindex: true,
+	})
+	require.NoError(t, err)
+	require.True(t, view.Settings.EvolveThresholdStale)
+
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{
+		ChatModelID: chat, EmbeddingModelID: 0, ExpectedVersion: 3, ConfirmReindex: true,
+	})
+	require.NoError(t, err)
+	require.False(t, view.Settings.EvolveThresholdStale, "清空 Embedding 后不应再提示校准门槛")
+	require.InDelta(t, 0.6, view.Settings.EvolveCandidateMinScore, 1e-9)
 }
 
 func errorsIsConflict(err error) bool { return errors.Is(err, ErrAIConfigConflict) }

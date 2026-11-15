@@ -196,6 +196,11 @@ defineExpose({ acceptVersion })
           <p class="mt-2 text-note text-label-secondary">
             不含 /chat/completions 或 /embeddings。其他端点请添加自定义 API。
           </p>
+          <p class="mt-1 text-note text-label-secondary">
+            内网或本机地址（如 Ollama、vLLM）需由部署管理员开启
+            <code class="font-mono">MODEL_ALLOW_PRIVATE_NETWORKS</code>；只放行个别地址时改用
+            <code class="font-mono">MODEL_ALLOWED_PRIVATE_ENDPOINTS</code> 并在 AI 服务侧同步放行。
+          </p>
         </div>
         <div>
           <p class="mb-2 text-body font-semibold">对话 API 协议</p>

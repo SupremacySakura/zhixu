@@ -31,9 +31,13 @@ type Config struct {
 	ChatAIURL                    string `mapstructure:"CHAT_AI_URL"`
 	ChatBackendURL               string `mapstructure:"CHAT_BACKEND_URL"`
 	ModelAllowedPrivateEndpoints string `mapstructure:"MODEL_ALLOWED_PRIVATE_ENDPOINTS"`
-	InternalAPISecret            string `mapstructure:"INTERNAL_API_SECRET"`
-	QdrantURL                    string `mapstructure:"QDRANT_URL"`
-	QdrantAPIKey                 string `mapstructure:"QDRANT_API_KEY"`
+	// ModelAllowPrivateNetworks opens model endpoints on private/loopback networks
+	// for the whole deployment. It is off by default so a fresh installation cannot
+	// be steered at internal services without an explicit operator decision.
+	ModelAllowPrivateNetworks bool   `mapstructure:"MODEL_ALLOW_PRIVATE_NETWORKS"`
+	InternalAPISecret         string `mapstructure:"INTERNAL_API_SECRET"`
+	QdrantURL                 string `mapstructure:"QDRANT_URL"`
+	QdrantAPIKey              string `mapstructure:"QDRANT_API_KEY"`
 
 	// CORS 配置
 	CORSAllowedOrigins string `mapstructure:"CORS_ALLOWED_ORIGINS"`
@@ -147,7 +151,8 @@ func bindEnvVariables(v *viper.Viper) {
 		"DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT", "DB_NAME",
 		"JWT_SECRET",
 		"MODEL_CONFIG_ENCRYPTION_KEY",
-		"CHAT_AI_URL", "CHAT_BACKEND_URL", "MODEL_ALLOWED_PRIVATE_ENDPOINTS", "INTERNAL_API_SECRET",
+		"CHAT_AI_URL", "CHAT_BACKEND_URL", "MODEL_ALLOWED_PRIVATE_ENDPOINTS",
+		"MODEL_ALLOW_PRIVATE_NETWORKS", "INTERNAL_API_SECRET",
 		"QDRANT_URL", "QDRANT_API_KEY",
 		"CORS_ALLOWED_ORIGINS", "TRUSTED_PROXIES",
 		"CHUNK_STORAGE_PATH", "FILE_STORAGE_PATH",

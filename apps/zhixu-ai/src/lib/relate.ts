@@ -12,6 +12,7 @@ export const relateSchema = z
         model_id: z.string().min(1).max(200),
         base_url: z.string().url(),
         api_key: z.string(),
+        allow_private_networks: z.boolean().optional(),
       })
       .strict(),
     taskId: z.number().int().positive(),

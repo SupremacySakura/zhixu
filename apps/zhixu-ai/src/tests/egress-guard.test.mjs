@@ -9,10 +9,16 @@ process.env.EGRESS_ALLOWED_HOSTS = "";
 const {
   GuardedAgent,
   assertSafeOrigin,
+  currentPolicy,
+  enterEgressPolicy,
+  filterLookupAnswers,
   guardedLookup,
   installEgressGuard,
+  isForbiddenIP,
   isUnsafeIP,
+  isPrivateNetworkIP,
   resolveAllowedTargets,
+  withEgressPolicy,
 } = await import("../lib/egress-guard.ts");
 
 test("isUnsafeIP rejects private and reserved IPv4 space", () => {
@@ -83,6 +89,64 @@ test("isUnsafeIP treats unparseable input as unsafe", () => {
   }
 });
 
+test("isPrivateNetworkIP covers the ranges the deployment switch opens", () => {
+  for (const address of [
+    "10.1.2.3",
+    "127.0.0.1",
+    "172.16.0.1",
+    "172.31.255.255",
+    "192.168.1.1",
+    "100.64.0.1",
+    "100.127.255.255",
+    "::1",
+    "0:0:0:0:0:0:0:1",
+    "fd00::1",
+    "fcff::1",
+    "::ffff:192.168.1.5",
+  ]) {
+    assert.equal(isPrivateNetworkIP(address), true, address);
+  }
+  for (const address of [
+    "8.8.8.8",
+    "169.254.169.254",
+    "100.100.100.200",
+    "2606:4700:4700::1111",
+    "fe80::1",
+    "::",
+  ]) {
+    assert.equal(isPrivateNetworkIP(address), false, address);
+  }
+});
+
+test("isForbiddenIP stays blocked even when private networks are allowed", () => {
+  for (const address of [
+    "0.0.0.0",
+    "169.254.169.254",
+    "100.100.100.200",
+    "168.63.129.16",
+    "224.0.0.1",
+    "255.255.255.255",
+    "::",
+    "fe80::1",
+    "ff02::1",
+    "::ffff:169.254.169.254",
+    "not-an-ip",
+  ]) {
+    assert.equal(isForbiddenIP(address), true, address);
+  }
+  for (const address of [
+    "10.1.2.3",
+    "127.0.0.1",
+    "192.168.1.5",
+    "8.8.8.8",
+    "::1",
+    "fd00::1",
+    "2606:4700:4700::1111",
+  ]) {
+    assert.equal(isForbiddenIP(address), false, address);
+  }
+});
+
 test("resolveAllowedTargets limits the backend exemption to one exact origin", () => {
   const policy = resolveAllowedTargets("http://127.0.0.1:9000", "");
   assert.equal(policy.origins.has("http://127.0.0.1:9000"), true);
@@ -140,7 +204,10 @@ test("resolveAllowedTargets trusts operator-listed hosts for HTTP and private an
 test("non-exempt hops must use HTTPS", () => {
   const policy = resolveAllowedTargets("https://backend.example.com", "");
   assert.doesNotThrow(() =>
-    assertSafeOrigin("https://backend.example.com/internal/tools/v1/search", policy),
+    assertSafeOrigin(
+      "https://backend.example.com/internal/tools/v1/search",
+      policy,
+    ),
   );
   assert.doesNotThrow(() =>
     assertSafeOrigin("https://api.openai.com/v1/chat/completions", policy),
@@ -154,6 +221,116 @@ test("non-exempt hops must use HTTPS", () => {
     () => assertSafeOrigin("http://8.8.8.8/", policy),
     /仅允许 HTTPS/,
   );
+});
+
+test("private model networks are only reachable inside an opted-in request scope", () => {
+  const strict = resolveAllowedTargets("http://backend.internal:9000", "");
+  assert.equal(strict.allowPrivateNetworks, false);
+  assert.throws(
+    () => assertSafeOrigin("http://192.168.1.20:8000/v1", strict),
+    /出站目的地被拒绝/,
+  );
+  assert.throws(
+    () => assertSafeOrigin("http://127.0.0.1:11434/v1", strict),
+    /出站目的地被拒绝/,
+  );
+
+  const relaxed = resolveAllowedTargets(
+    "http://backend.internal:9000",
+    "",
+    true,
+  );
+  assert.equal(relaxed.allowPrivateNetworks, true);
+  for (const origin of [
+    "http://127.0.0.1:11434/v1",
+    "http://localhost:11434/v1",
+    "http://192.168.1.20:8000/v1",
+    "http://10.0.0.5:8080/v1",
+    "http://[::1]:11434/v1",
+    "http://[fd7a:115c:a1e0::1]:11434/v1",
+  ]) {
+    assert.doesNotThrow(() => assertSafeOrigin(origin, relaxed), origin);
+  }
+  for (const origin of [
+    "http://169.254.169.254/latest/meta-data",
+    "http://100.100.100.200/v1",
+    "http://224.0.0.1/v1",
+  ]) {
+    assert.throws(
+      () => assertSafeOrigin(origin, relaxed),
+      /出站目的地被拒绝/,
+      origin,
+    );
+  }
+  // A plain-HTTP hostname passes origin validation; the lookup hook then requires
+  // it to resolve to a private address, so a public provider cannot be downgraded.
+  assert.doesNotThrow(() =>
+    assertSafeOrigin("http://api.example.com/v1", relaxed),
+  );
+});
+
+test("plain HTTP hostnames must resolve to private addresses in a relaxed scope", async () => {
+  const privateAnswers = filterLookupAnswers(
+    "ollama.internal",
+    [
+      { address: "192.168.1.20", family: 4 },
+      { address: "127.0.0.1", family: 4 },
+    ],
+    {
+      allowed: new Set(),
+      allowPrivateNetworks: true,
+      requirePrivateAnswer: true,
+    },
+  );
+  assert.deepEqual(privateAnswers, [
+    { address: "192.168.1.20", family: 4 },
+    { address: "127.0.0.1", family: 4 },
+  ]);
+
+  const publicAnswers = filterLookupAnswers(
+    "api.example.com",
+    [{ address: "93.184.216.34", family: 4 }],
+    {
+      allowed: new Set(),
+      allowPrivateNetworks: true,
+      requirePrivateAnswer: true,
+    },
+  );
+  assert.deepEqual(publicAnswers, []);
+});
+
+test("withEgressPolicy scopes the switch to one request and leaves no residue", async () => {
+  const inner = await withEgressPolicy(true, async () => {
+    const policy = resolveAllowedTargets(
+      "http://backend.internal:9000",
+      "",
+      true,
+    );
+    return policy.allowPrivateNetworks;
+  });
+  assert.equal(inner, true);
+  const outside = resolveAllowedTargets("http://backend.internal:9000", "");
+  assert.equal(outside.allowPrivateNetworks, false);
+});
+
+test("enterEgressPolicy scopes a streaming request without leaking to the next turn", async () => {
+  enterEgressPolicy(true);
+  assert.equal(currentPolicy().allowPrivateNetworks, true);
+
+  enterEgressPolicy(undefined);
+  assert.equal(currentPolicy().allowPrivateNetworks, false);
+});
+
+test("enterEgressPolicy is visible from an async ReadableStream start callback", async () => {
+  let seen;
+  const stream = new ReadableStream({
+    start() {
+      enterEgressPolicy(true);
+      seen = currentPolicy().allowPrivateNetworks;
+    },
+  });
+  assert.equal(seen, true);
+  await stream.cancel();
 });
 
 test("assertSafeOrigin rejects non-standard IPv4 spellings", () => {
@@ -177,7 +354,9 @@ test("assertSafeOrigin rejects non-standard IPv4 spellings", () => {
 
 test("assertSafeOrigin allows the exempt origin and public addresses", () => {
   const policy = resolveAllowedTargets("https://api.openai.com", "");
-  assert.doesNotThrow(() => assertSafeOrigin("https://api.openai.com/v1", policy));
+  assert.doesNotThrow(() =>
+    assertSafeOrigin("https://api.openai.com/v1", policy),
+  );
   assert.doesNotThrow(() => assertSafeOrigin("https://8.8.8.8/", policy));
   assert.throws(
     () => assertSafeOrigin("ftp://example.com/", policy),
@@ -229,6 +408,34 @@ test("guardedLookup honours the all option for exempt hosts", async () => {
     assert.equal(typeof entry.address, "string");
     assert.ok(entry.family === 4 || entry.family === 6);
   }
+});
+
+test("guardedLookup resolves private answers only for opted-in requests", async () => {
+  const blocked = await new Promise((resolve) => {
+    guardedLookup(
+      "localhost",
+      {},
+      (error, address) => resolve({ error, address }),
+      new Set(),
+      false,
+    );
+  });
+  assert.equal(blocked.error?.code, "EACCES");
+
+  const allowed = await new Promise((resolve) => {
+    guardedLookup(
+      "localhost",
+      {},
+      (error, address) => resolve({ error, address }),
+      new Set(),
+      true,
+    );
+  });
+  assert.equal(allowed.error, null);
+  assert.ok(
+    allowed.address === "127.0.0.1" || allowed.address === "::1",
+    String(allowed.address),
+  );
 });
 
 test("GuardedAgent rejects unsafe literal origins before dispatch", () => {
@@ -319,7 +526,10 @@ test("redirects to other loopback ports are blocked", async (t) => {
       () => null,
       (error) => error,
     );
-    assert.ok(direct, "direct access to another loopback port must be rejected");
+    assert.ok(
+      direct,
+      "direct access to another loopback port must be rejected",
+    );
   } catch (error) {
     if (error?.code === "EPERM") {
       t.skip("sandbox forbids listening on loopback");

@@ -90,6 +90,9 @@ export function useKnowledgeGraph() {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
   }
 
+  /** URL 里的中心知识 ID；没有中心时为 null，供图谱组件画书签带。 */
+  const centerId = computed(() => parseCenter(route.query.center) ?? null)
+
   async function loadGraph(centerId: number | undefined) {
     const current = new AbortController()
     controller?.abort()
@@ -242,6 +245,7 @@ export function useKnowledgeGraph() {
     loading,
     error,
     selectedId,
+    centerId,
     searchTerm,
     searchResults,
     searchOpen,
