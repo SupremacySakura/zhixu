@@ -57,11 +57,15 @@ func (e *MastraEmbedder) Embed(ctx context.Context, snapshot *ChatCapability, te
 	if strings.TrimSpace(e.Secret) == "" {
 		return nil, errors.New("INTERNAL_API_SECRET 未配置，无法调用 AI 服务")
 	}
+	model := map[string]any{
+		"protocol": snapshot.Provider.Protocol, "model_id": snapshot.Model.ModelID,
+		"base_url": snapshot.Provider.BaseURL, "api_key": snapshot.Key,
+	}
+	if snapshot.AllowPrivateNetworks {
+		model["allow_private_networks"] = true
+	}
 	payload, _ := json.Marshal(map[string]any{
-		"model": map[string]any{
-			"protocol": snapshot.Provider.Protocol, "model_id": snapshot.Model.ModelID,
-			"base_url": snapshot.Provider.BaseURL, "api_key": snapshot.Key,
-		},
+		"model":     model,
 		"dimension": snapshot.Model.Dimension,
 		"texts":     texts,
 	})

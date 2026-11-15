@@ -91,6 +91,61 @@ func TestChatRuntimeEndpointPolicy(t *testing.T) {
 	require.NoError(t, chat.validateRuntimeModelURL("http://localhost:11434/v1"))
 }
 
+func TestChatRuntimePrivateNetworkSwitch(t *testing.T) {
+	chat := &ChatService{}
+	for _, target := range []string{
+		"http://127.0.0.1:11434/v1",
+		"http://localhost:11434/v1",
+		"http://192.168.1.20:8000/v1",
+		"http://10.0.0.5:8080/v1",
+		"http://[::1]:11434/v1",
+		"http://[fd7a:115c:a1e0::1]:11434/v1",
+	} {
+		require.Error(t, chat.validateRuntimeModelURL(target), target)
+	}
+
+	chat.AllowPrivateNetworks = true
+	for _, target := range []string{
+		"http://127.0.0.1:11434/v1",
+		"http://localhost:11434/v1",
+		"http://192.168.1.20:8000/v1",
+		"http://10.0.0.5:8080/v1",
+		"http://[::1]:11434/v1",
+		"http://[fd7a:115c:a1e0::1]:11434/v1",
+		"http://ollama.internal:11434/v1",
+	} {
+		require.NoError(t, chat.validateRuntimeModelURL(target), target)
+	}
+	// Link-local, cloud metadata and multicast stay blocked even with the switch on.
+	for _, target := range []string{
+		"http://169.254.169.254/latest/meta-data",
+		"http://100.100.100.200/v1",
+		"http://168.63.129.16/v1",
+		"http://224.0.0.1/v1",
+	} {
+		require.Error(t, chat.validateRuntimeModelURL(target), target)
+	}
+	// Go cannot resolve hostnames here; plain HTTP is accepted and the AI service's
+	// lookup hook rejects it unless the name resolves to a private address.
+	require.NoError(t, chat.validateRuntimeModelURL("http://example.com/v1"))
+}
+
+func TestChatCapabilityCarriesPrivateNetworkPolicy(t *testing.T) {
+	store := &memoryAIConfig{states: map[uint]*repository.AIConfigState{7: {
+		Providers: []model.ModelProvider{{ID: 3, ProviderID: "local", BaseURL: "http://127.0.0.1:11434/v1", Protocol: "chat", AuthType: "none"}},
+		Models:    []model.ProviderModel{{ID: 11, ProviderID: 3, ModelID: "chat-model", Kind: "chat"}},
+		Settings:  model.UserAISettings{ChatModelID: 11},
+	}}}
+	chat := &ChatService{Store: store, AllowPrivateNetworks: true}
+	cap, err := chat.ResolveChatModel(context.Background(), 7)
+	require.NoError(t, err)
+	require.True(t, cap.AllowPrivateNetworks)
+
+	chat.AllowPrivateNetworks = false
+	_, err = chat.ResolveChatModel(context.Background(), 7)
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+}
+
 // 对话与嵌入是不同能力：ResolveChatModel 只认 Kind=="chat"，ResolveEmbedding 只认 Kind=="embedding"，
 // 即使两个模型属于同一供应商、model_id 不同也不能串用。
 func TestChatResolvesEachModelKind(t *testing.T) {

@@ -143,12 +143,16 @@ func (h *ChatHandler) Send(c *gin.Context) {
 	// The AI service calls the provider directly; Go only issues the tool capability
 	// and the per-turn model configuration, so provider keys never leave this process
 	// unencrypted at rest.
+	modelPayload := gin.H{
+		"protocol": chatCap.Provider.Protocol, "model_id": chatCap.Model.ModelID,
+		"base_url": chatCap.Provider.BaseURL, "api_key": chatCap.Key,
+	}
+	if chatCap.AllowPrivateNetworks {
+		modelPayload["allow_private_networks"] = true
+	}
 	payload, _ := json.Marshal(gin.H{
-		"version": 1,
-		"model": gin.H{
-			"protocol": chatCap.Provider.Protocol, "model_id": chatCap.Model.ModelID,
-			"base_url": chatCap.Provider.BaseURL, "api_key": chatCap.Key,
-		},
+		"version":  1,
+		"model":    modelPayload,
 		"messages": input.Messages, "conversation": conversation,
 		"tools": gin.H{
 			"search_url": strings.TrimRight(h.InternalBackendURL, "/") + "/internal/tools/v1/search",

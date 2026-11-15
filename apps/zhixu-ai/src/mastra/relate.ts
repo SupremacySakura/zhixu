@@ -1,5 +1,6 @@
 import { registerApiRoute } from "@mastra/core/server";
 import { allowedProviderURL } from "../lib/chat";
+import { withEgressPolicy } from "../lib/egress-guard";
 import { authorized } from "../lib/internal-auth";
 import {
   RelateInvalidOutputError,
@@ -24,7 +25,10 @@ export const relateRoute = registerApiRoute("/relate", {
     if (c.req.raw.signal.aborted) abort();
     const timer = setTimeout(abort, 90_000);
     try {
-      const relations = await relateAgent.execute(input, controller.signal);
+      const relations = await withEgressPolicy(
+        input.model.allow_private_networks,
+        () => relateAgent.execute(input, controller.signal),
+      );
       c.header("Cache-Control", "no-store");
       return c.json({ relations });
     } catch (error) {

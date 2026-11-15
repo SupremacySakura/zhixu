@@ -43,10 +43,11 @@ func TestChatSendCarriesToolCapability(t *testing.T) {
 	var payload struct {
 		Version int `json:"version"`
 		Model   struct {
-			Protocol string `json:"protocol"`
-			ModelID  string `json:"model_id"`
-			BaseURL  string `json:"base_url"`
-			APIKey   string `json:"api_key"`
+			Protocol             string `json:"protocol"`
+			ModelID              string `json:"model_id"`
+			BaseURL              string `json:"base_url"`
+			APIKey               string `json:"api_key"`
+			AllowPrivateNetworks bool   `json:"allow_private_networks"`
 		} `json:"model"`
 		Tools struct {
 			Capability string `json:"capability"`
@@ -61,7 +62,7 @@ func TestChatSendCarriesToolCapability(t *testing.T) {
 		_, _ = w.Write([]byte("{\"type\":\"done\"}\n"))
 	}))
 	defer ai.Close()
-	s := &service.ChatService{Store: ragChatStore{}, AllowedPrivateEndpoints: "http://127.0.0.1:11434/v1"}
+	s := &service.ChatService{Store: ragChatStore{}, AllowedPrivateEndpoints: "http://127.0.0.1:11434/v1", AllowPrivateNetworks: true}
 	h := &ChatHandler{Service: s, AIURL: ai.URL, InternalAPISecret: "internal-secret", InternalBackendURL: "http://127.0.0.1:9000", Rag: &service.RagSearcher{}}
 	r := gin.New()
 	r.POST("/chat", func(c *gin.Context) { c.Set("user_id", uint(7)); h.Send(c) })
@@ -74,6 +75,7 @@ func TestChatSendCarriesToolCapability(t *testing.T) {
 	require.Equal(t, "chat", payload.Model.Protocol)
 	require.Equal(t, "chat-model", payload.Model.ModelID)
 	require.Equal(t, "http://127.0.0.1:11434/v1", payload.Model.BaseURL)
+	require.True(t, payload.Model.AllowPrivateNetworks)
 	require.Len(t, payload.Tools.Capability, 64)
 	require.Equal(t, "http://127.0.0.1:9000/internal/tools/v1/search", payload.Tools.SearchURL)
 	require.Nil(t, s.Capability(payload.Tools.Capability))

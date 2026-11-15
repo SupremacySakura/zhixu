@@ -190,6 +190,23 @@ describe('ModelSettings', () => {
   })
 })
 describe('ProviderEditor', () => {
+  it('tells users that private endpoints need a deployment switch', () => {
+    const config = fixture()
+    const wrapper = mount(ProviderEditor, {
+      global: { stubs: { teleport: true } },
+      props: {
+        provider: config.providers[0]!,
+        preset: null,
+        configuration: config,
+        busy: false,
+        error: '',
+        conflict: false,
+      },
+    })
+    expect(wrapper.text()).toContain('MODEL_ALLOW_PRIVATE_NETWORKS')
+    expect(wrapper.text()).toContain('内网或本机地址')
+    wrapper.unmount()
+  })
   it('omits unchanged credentials, supports clearing, and validates duplicate model IDs', async () => {
     const config = fixture()
     const wrapper = mount(ProviderEditor, {

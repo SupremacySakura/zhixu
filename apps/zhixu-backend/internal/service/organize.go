@@ -102,12 +102,16 @@ func (c *OrganizeClient) Organize(ctx context.Context, snapshot *ChatCapability,
 			break
 		}
 	}
+	model := map[string]any{
+		"protocol": snapshot.Provider.Protocol, "model_id": snapshot.Model.ModelID,
+		"base_url": snapshot.Provider.BaseURL, "api_key": snapshot.Key,
+	}
+	if snapshot.AllowPrivateNetworks {
+		model["allow_private_networks"] = true
+	}
 	payload, err := json.Marshal(map[string]any{
-		"version": 1,
-		"model": map[string]any{
-			"protocol": snapshot.Provider.Protocol, "model_id": snapshot.Model.ModelID,
-			"base_url": snapshot.Provider.BaseURL, "api_key": snapshot.Key,
-		},
+		"version":      1,
+		"model":        model,
 		"taskId":       taskID,
 		"knowledgeId":  knowledgeID,
 		"title":        truncateRunes(strings.TrimSpace(title), 200),

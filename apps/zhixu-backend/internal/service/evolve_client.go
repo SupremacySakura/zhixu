@@ -62,10 +62,11 @@ type evolveRequest struct {
 }
 
 type evolveModel struct {
-	Protocol string `json:"protocol"`
-	ModelID  string `json:"model_id"`
-	BaseURL  string `json:"base_url"`
-	APIKey   string `json:"api_key"`
+	Protocol             string `json:"protocol"`
+	ModelID              string `json:"model_id"`
+	BaseURL              string `json:"base_url"`
+	APIKey               string `json:"api_key"`
+	AllowPrivateNetworks bool   `json:"allow_private_networks,omitempty"`
 }
 
 type evolveKnowledge struct {
@@ -121,10 +122,11 @@ func (c *EvolveClient) Evolve(ctx context.Context, snapshot *ChatCapability, tas
 	req := evolveRequest{
 		Version: 1,
 		Model: evolveModel{
-			Protocol: snapshot.Provider.Protocol,
-			ModelID:  snapshot.Model.ModelID,
-			BaseURL:  snapshot.Provider.BaseURL,
-			APIKey:   snapshot.Key,
+			Protocol:             snapshot.Provider.Protocol,
+			ModelID:              snapshot.Model.ModelID,
+			BaseURL:              snapshot.Provider.BaseURL,
+			APIKey:               snapshot.Key,
+			AllowPrivateNetworks: snapshot.AllowPrivateNetworks,
 		},
 		TaskID:      taskID,
 		KnowledgeID: knowledgeID,
