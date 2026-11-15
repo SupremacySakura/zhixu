@@ -90,6 +90,69 @@ func TestDistributionOverlapReportsContainment(t *testing.T) {
 	}
 }
 
+// 区间只有部分重叠时同样不可分：只要两类区间有交集，按分数切一刀就会切掉某一类的样本。
+// 旧实现只认严格包含，部分重叠会误报「存在可分间隙」。
+func TestDistributionOverlapReportsPartialOverlapAndReverseContainment(t *testing.T) {
+	cases := []struct {
+		name       string
+		duplicate  [2]float64
+		conflict   [2]float64
+		wantSubstr string
+	}{
+		{"部分重叠", [2]float64{0.60, 0.80}, [2]float64{0.70, 0.90}, "区间重叠"},
+		{"反向包含", [2]float64{0.50, 0.90}, [2]float64{0.60, 0.80}, "被重复区间 [0.500, 0.900] 完整包含"},
+	}
+	for _, c := range cases {
+		outcomes := []pairOutcome{
+			{SID: "D1", PairType: "duplicate", Expected: "duplicate", Similarity: c.duplicate[0]},
+			{SID: "D2", PairType: "duplicate", Expected: "duplicate", Similarity: c.duplicate[1]},
+			{SID: "C1", PairType: "conflict", Expected: "conflict", Similarity: c.conflict[0]},
+			{SID: "C2", PairType: "conflict", Expected: "conflict", Similarity: c.conflict[1]},
+		}
+		report := distributionOverlap(outcomes)
+		if strings.Contains(report, "存在可分间隙") {
+			t.Errorf("%s: 区间有交集却报「存在可分间隙」:\n%s", c.name, report)
+		}
+		if !strings.Contains(report, c.wantSubstr) {
+			t.Errorf("%s: 缺少「%s」说明:\n%s", c.name, c.wantSubstr, report)
+		}
+		if !strings.Contains(report, "类型由模型判定") {
+			t.Errorf("%s: 缺少「类型由模型判定」结论:\n%s", c.name, report)
+		}
+	}
+}
+
+// 真正分开的区间仍要报「可分间隙」：不能为了修部分重叠把所有情况都说成不可分。
+func TestDistributionOverlapReportsGapWhenIntervalsAreSeparated(t *testing.T) {
+	outcomes := []pairOutcome{
+		{SID: "D1", PairType: "duplicate", Expected: "duplicate", Similarity: 0.70},
+		{SID: "D2", PairType: "duplicate", Expected: "duplicate", Similarity: 0.80},
+		{SID: "C1", PairType: "conflict", Expected: "conflict", Similarity: 0.30},
+		{SID: "C2", PairType: "conflict", Expected: "conflict", Similarity: 0.40},
+	}
+	report := distributionOverlap(outcomes)
+	if !strings.Contains(report, "存在可分间隙") {
+		t.Errorf("区间分离却未报可分:\n%s", report)
+	}
+}
+
+// 网格搜索必须覆盖配置允许的整个区间（0.45–1），否则最优值落在边界外会被漏掉。
+func TestGridReportSearchesWholeConfiguredGateRange(t *testing.T) {
+	outcomes := []pairOutcome{
+		{SID: "D1", PairType: "duplicate", Expected: "duplicate", Similarity: 0.47},
+		{SID: "N1", PairType: "negative", Expected: "none", Similarity: 0.30},
+	}
+	report := gridReport(outcomes)
+
+	if !strings.Contains(report, "0.45–1.00") {
+		t.Errorf("网格搜索范围未覆盖 0.45–1:\n%s", report)
+	}
+	// 只有门槛 ≤0.47 才能让正样本进入判定，最优门槛 0.45–0.47 落在旧范围 0.50 之外。
+	if !strings.Contains(report, "| 0.47 |") {
+		t.Errorf("最优门槛 0.47 未被搜索到:\n%s", report)
+	}
+}
+
 func TestThresholdNoteCarriesEffectiveGate(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -106,6 +169,30 @@ func TestThresholdNoteCarriesEffectiveGate(t *testing.T) {
 		if got := thresholdNote(c.expected, c.similarity, c.gate); !strings.Contains(got, c.want) {
 			t.Errorf("%s: thresholdNote = %q, 期望包含 %q", c.name, got, c.want)
 		}
+	}
+}
+
+// pairwise 把相似度固定成 0.95 送进模型，真实的 0.583 并不会挡住判定。
+// 如果照抄 collect 的门槛注记，报告会写成「未进入模型判定」，与事实相反。
+func TestAnnotateThresholdsDoesNotClaimPairwiseWasGatedOut(t *testing.T) {
+	outcomes := []pairOutcome{{SID: "E07", Expected: "duplicate", Similarity: 0}}
+	annotateThresholds(outcomes, map[string]float64{"E07": 0.583}, "pairwise", 0.65)
+
+	note := outcomes[0].ThresholdNote
+	if strings.Contains(note, "未进入模型判定") {
+		t.Errorf("pairwise 注记误称样本未进入判定: %q", note)
+	}
+	if !strings.Contains(note, "0.95") {
+		t.Errorf("pairwise 注记未说明固定送入的相似度: %q", note)
+	}
+	if outcomes[0].Similarity != 0.583 {
+		t.Errorf("pairwise 仍应记录实测相似度，得到 %v", outcomes[0].Similarity)
+	}
+
+	collect := []pairOutcome{{SID: "E07", Expected: "duplicate"}}
+	annotateThresholds(collect, map[string]float64{"E07": 0.583}, "collect", 0.65)
+	if !strings.Contains(collect[0].ThresholdNote, "未进入模型判定") {
+		t.Errorf("collect 注记应保留门槛判断: %q", collect[0].ThresholdNote)
 	}
 }
 
