@@ -88,3 +88,26 @@ func TestEvolutionAllowedTypesDispatchesByOrigin(t *testing.T) {
 		})
 	}
 }
+
+// 清洗阶段不按提醒上限截断：一条任务可能对多个候选各给出结论，候选上限是 8，
+// 提前按 5 截断会让排在第 6 位的结论连同它的目标一起消失，而截断应发生在收敛之后。
+func TestSanitizeEvolveJudgementsDoesNotTruncateBeforeConvergence(t *testing.T) {
+	candidates := make([]EvolveCandidate, 0, 6)
+	raw := make([]rawEvolveJudgement, 0, 6)
+	for id := uint(21); id <= 26; id++ {
+		candidates = append(candidates, EvolveCandidate{KnowledgeID: id, Score: 0.9})
+		raw = append(raw, rawEvolveJudgement{
+			TargetID: id, Type: string(model.EvolutionAlertTypeDuplicate),
+			Reason: "两条知识说的是同一件事。",
+			Evidence: []struct {
+				KnowledgeID uint   `json:"knowledge_id"`
+				Quote       string `json:"quote"`
+			}{{KnowledgeID: 10, Quote: "同一段正文"}},
+			Severity: string(model.EvolutionSeverityStrong),
+		})
+	}
+
+	out := sanitizeEvolveJudgements(10, candidates, raw)
+
+	require.Len(t, out, 6, "清洗阶段不截断，上限留给收敛之后")
+}

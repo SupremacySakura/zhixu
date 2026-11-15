@@ -183,7 +183,7 @@ test("evolve item schema rejects malformed judgements", () => {
   }
 });
 
-test("sanitizeJudgements drops invalid entries and caps the batch", () => {
+test("sanitizeJudgements drops invalid entries without capping the batch", () => {
   const good = {
     target_id: 21,
     type: "duplicate",
@@ -202,11 +202,12 @@ test("sanitizeJudgements drops invalid entries and caps the batch", () => {
       { ...good, target_id: 26 },
     ],
   });
-  assert.equal(parsed.length, 5);
-  // 单条非法不会让整次判定失败，也不占用五条名额。
+  // 单条非法不会让整次判定失败。清洗阶段不按提醒上限截断：Go 侧要先按主结论
+  // 优先级收敛再截断，这里提前砍掉会让排在后位的高优先级结论直接消失。
+  assert.equal(parsed.length, 6);
   assert.deepEqual(
     parsed.map((item) => item.target_id),
-    [21, 22, 23, 24, 25],
+    [21, 22, 23, 24, 25, 26],
   );
 });
 

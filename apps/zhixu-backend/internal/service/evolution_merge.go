@@ -36,6 +36,9 @@ type EvolutionConclusion struct {
 	Severity        model.EvolutionAlertSeverity `json:"severity"`
 	RevisedTitle    string                       `json:"revised_title,omitempty"`
 	RevisedContent  string                       `json:"revised_content,omitempty"`
+	// Origin 记录这条结论来自哪类候选：更新关系是用户显式声明的「谁更新谁」，
+	// 向量近邻只是相似。主结论的选择要用它——用户声明的过时不该被模型的重复猜测顶掉。
+	Origin string `json:"origin,omitempty"`
 }
 
 // mergeKey 是结论的去重键：同一方向、同一类型、同一组证据视为同一条结论。
@@ -78,12 +81,24 @@ func conclusionsOf(payload EvolutionPayload) []EvolutionConclusion {
 	}}
 }
 
-// primaryConclusion 按重复 → 冲突 → 过时 选出主结论；同级时保留先出现的一条。
+// conclusionRank 给结论排序：更新关系给出的过时结论排在最前，其余按重复 → 冲突 → 过时。
+//
+// 为什么把「更新关系的过时」提到最高：那是用户自己声明过的新旧关系，属于已确认的事实；
+// 同一对知识上模型再猜出重复，处置会是「归档其一」，可能把较新的那条归档掉。
+// 让用户声明的事实定调，模型的不同意见降级为次要结论展示，才既保留信息又不误导操作。
+func conclusionRank(conclusion EvolutionConclusion) int {
+	if conclusion.Origin == EvolveOriginUpdateRelation && conclusion.Type == model.EvolutionAlertTypeOutdated {
+		return -1
+	}
+	return conclusion.Type.Priority()
+}
+
+// primaryConclusion 选出主结论；同级时保留先出现的一条。
 // 排序稳定，保证同一组结论每次算出的主结论一致。
 func primaryConclusion(conclusions []EvolutionConclusion) EvolutionConclusion {
 	best := conclusions[0]
 	for _, candidate := range conclusions[1:] {
-		if candidate.Type.Priority() < best.Type.Priority() {
+		if conclusionRank(candidate) < conclusionRank(best) {
 			best = candidate
 		}
 	}

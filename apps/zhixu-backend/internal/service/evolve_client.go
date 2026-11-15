@@ -256,9 +256,6 @@ func sanitizeEvolveJudgements(triggerID uint, candidates []EvolveCandidate, raw 
 			RevisedTitle:   title,
 			RevisedContent: content,
 		})
-		if len(out) == EvolveAlertMaxPerTask {
-			break
-		}
 	}
 	return out
 }

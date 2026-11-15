@@ -453,7 +453,10 @@ func TestEvolveProcessorFallsBackWhenGateOutOfRange(t *testing.T) {
 	}
 }
 
-// updates 关系指向的目标是强候选：它只接受过时结论，重复结论一律丢弃。
+// updates 关系指向的目标是强候选：它只接受过时结论。
+//
+// 模型对强候选单独判出重复时不落提醒——那会让「归档其一」成为主结论，而归档选的是
+// ID 较大的一侧，可能归档较新的那条。用户已声明「谁更新谁」，这类重复判定更像模型误读。
 func TestEvolveProcessorTreatsUpdateRelationAsOutdatedOnly(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "被更新的旧文", "旧版本的结论。", 0.95)
@@ -470,7 +473,41 @@ func TestEvolveProcessorTreatsUpdateRelationAsOutdatedOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, f.client.candidates, 1)
 	require.Equal(t, EvolveOriginUpdateRelation, f.client.candidates[0].Origin)
-	require.Empty(t, f.alerts.upserted, "强候选只接受过时结论")
+	require.Empty(t, f.alerts.upserted, "强候选单独判出重复时不落提醒")
+}
+
+// 强候选同时给出过时与重复时，过时是主结论，重复降为次要结论留给用户参考。
+func TestEvolveProcessorKeepsUpdateRelationDuplicateAsSecondary(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "被更新的旧文", "旧版本的结论。", 0.95)
+	f.relations.rows = []repository.RelationRecord{{
+		KnowledgeRelation: model.KnowledgeRelation{
+			SourceID: 10, TargetID: 21, RelationType: model.RelationTypeUpdates, Status: model.RelationConfirmed,
+		},
+		CounterpartID: 21,
+	}}
+	f.client.judgements = []EvolveJudgement{
+		{
+			TargetID: 21,
+			Type:     model.EvolutionAlertTypeOutdated,
+			Reason:   "本次知识给出了更晚的结论。",
+			Evidence: []EvolutionEvidence{
+				{KnowledgeID: 10, Quote: "同一段正文"},
+				{KnowledgeID: 21, Quote: "旧版本的结论"},
+			},
+			Severity: model.EvolutionSeverityStrong,
+		},
+		f.duplicateJudgement(21, "旧版本的结论"),
+	}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1, "同一对知识仍只落一条提醒")
+	alert := f.alerts.upserted[0]
+	require.Equal(t, model.EvolutionAlertTypeOutdated, alert.AlertType, "过时是主结论")
+	payload := ParseEvolutionPayload(alert.Payload)
+	require.Len(t, payload.Conclusions, 2, "两条结论都要留下，供详情页展示另一侧判定")
 }
 
 // 强候选给出过时结论时落一条过时提醒，建议动作是「标记过时」。
@@ -781,6 +818,56 @@ func TestEvolveProcessorCapsCandidates(t *testing.T) {
 	require.Len(t, f.client.candidates, EvolveCandidateMax)
 	require.Equal(t, uint(30), f.client.candidates[0].KnowledgeID, "相似度最高的排最前")
 	require.Equal(t, EvolveVectorTopK, f.searcher.topK)
+}
+
+// 结论数超过提醒上限时，按主结论排名截断，而不是按模型输出的先后。
+//
+// 这里让 5 个向量近邻各给一条冲突结论、1 个更新关系给过时结论，并把它排在最后。
+// 更新关系的过时排名最高，即使排在模型输出末尾也必须留下。
+func TestEvolveProcessorTruncatesAlertsByPrimaryPriority(t *testing.T) {
+	f := newEvolveFixture()
+	judgements := make([]EvolveJudgement, 0, 6)
+	for i := uint(0); i < 5; i++ {
+		id := 30 + i
+		f.addCandidate(id, "候选", "HNSW 内容", 0.90-float64(i)*0.005)
+		judgements = append(judgements, EvolveJudgement{
+			TargetID: id,
+			Type:     model.EvolutionAlertTypeConflict,
+			Reason:   "两条知识对召回率给出互斥结论。",
+			Evidence: []EvolutionEvidence{
+				{KnowledgeID: 10, Quote: "同一段正文"},
+				{KnowledgeID: id, Quote: "HNSW 内容"},
+			},
+			Severity: model.EvolutionSeverityStrong,
+		})
+	}
+	// 更新关系的强候选排在最后：它是用户声明过的新旧关系，排名应高于向量近邻的冲突。
+	f.addCandidate(40, "被更新的旧文", "HNSW 内容", 0.70)
+	f.relations.rows = []repository.RelationRecord{{
+		KnowledgeRelation: model.KnowledgeRelation{
+			SourceID: 10, TargetID: 40, RelationType: model.RelationTypeUpdates, Status: model.RelationConfirmed,
+		},
+		CounterpartID: 40,
+	}}
+	judgements = append(judgements, EvolveJudgement{
+		TargetID: 40,
+		Type:     model.EvolutionAlertTypeOutdated,
+		Reason:   "本次知识给出了更晚的结论。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 40, Quote: "HNSW 内容"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	})
+	f.client.judgements = judgements
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, EvolveAlertMaxPerTask)
+	require.Equal(t, model.EvolutionAlertTypeOutdated, f.alerts.upserted[0].AlertType,
+		"用户声明的过时排名最高，即使它在模型输出里排最后也必须保留")
+	require.Equal(t, uint(40), f.alerts.upserted[0].SubjectIDList()[1])
 }
 
 // 候选全是归档知识时等同于没有候选：不发起付费调用。

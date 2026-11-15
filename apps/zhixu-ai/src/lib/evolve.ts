@@ -214,7 +214,6 @@ export function sanitizeJudgements(raw: unknown): EvolveJudgement[] | null {
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(parsed.data);
-    if (out.length === 5) break;
   }
   // A well-formed empty list is a legitimate "nothing to review"; a non-empty list with
   // no single usable entry is a schema failure worth one internal retry.
