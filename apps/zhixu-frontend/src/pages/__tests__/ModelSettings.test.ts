@@ -169,7 +169,16 @@ describe('ModelSettings', () => {
       .trigger('click')
     await flushPromises()
     expect(saveAIDefaults).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('相似度阈值需在 0.05–1 之间')
+    expect(wrapper.text()).toContain('召回下限需在 0.05–1 之间')
+    wrapper.unmount()
+  })
+  it('labels the retrieval floor as 召回下限 and never as a bare 相似度阈值', async () => {
+    const wrapper = mount(Harness, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    // 术语表禁止用「相似度阈值」单独指代三个门槛之一，标签必须带上前缀。
+    expect(wrapper.get('label[for="rag-min-score"]').text()).toBe('召回下限')
+    expect(wrapper.text()).not.toContain('相似度阈值')
+    expect(wrapper.text()).toContain('相似度低于召回下限')
     wrapper.unmount()
   })
   it('submits the evolution candidate gate alongside the other defaults', async () => {
