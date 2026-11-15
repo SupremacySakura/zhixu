@@ -196,6 +196,18 @@ func Migrate() error {
 		return err
 	}
 
+	// 演化提醒按知识对收敛：先回填 pair_key 并把同一对的多行并成一条，再建唯一索引。
+	// 顺序不能反——唯一索引先建会在历史数据上直接失败。
+	if err := backfillEvolutionPairs(DB); err != nil {
+		return err
+	}
+	if err := dropLegacyEvolutionDedupeIndex(DB); err != nil {
+		return err
+	}
+	if err := ensureIndexes(DB, evolutionPairMigrationDDL); err != nil {
+		return err
+	}
+
 	var tasks []model.UploadTask
 	if err := DB.Order("id ASC").Find(&tasks).Error; err != nil {
 		return err
