@@ -299,6 +299,38 @@ func TestEvolutionListDecoratesSubjects(t *testing.T) {
 	require.Equal(t, "正文完全一致", views[0].Payload.Reason)
 }
 
+// 列表视图要带出结论集合：详情页靠它展示两侧判定，缺了就只能看到主结论。
+func TestEvolutionListViewCarriesConclusions(t *testing.T) {
+	f := newEvolutionFixture()
+	alert := f.addAlert(1, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{10, 11})
+	alert.Payload = marshalEvolutionPayload(EvolutionConclusion{
+		Type: model.EvolutionAlertTypeOutdated, TriggerID: 10, Reason: "本次知识更新",
+		Evidence:        []EvolutionEvidence{{KnowledgeID: 11, Quote: "同一段正文"}},
+		SuggestedAction: model.EvolutionActionMarkOutdated, Severity: model.EvolutionSeverityStrong,
+		Origin: EvolveOriginUpdateRelation,
+	}, []EvolutionConclusion{
+		{
+			Type: model.EvolutionAlertTypeOutdated, TriggerID: 10, Reason: "本次知识更新",
+			Evidence:        []EvolutionEvidence{{KnowledgeID: 11, Quote: "同一段正文"}},
+			SuggestedAction: model.EvolutionActionMarkOutdated, Severity: model.EvolutionSeverityStrong,
+			Origin: EvolveOriginUpdateRelation,
+		},
+		{
+			Type: model.EvolutionAlertTypeDuplicate, TriggerID: 11, Reason: "另一侧认为信息重合",
+			Evidence:        []EvolutionEvidence{{KnowledgeID: 10, Quote: "同一段正文"}},
+			SuggestedAction: model.EvolutionActionArchiveOne, Severity: model.EvolutionSeverityReview,
+		},
+	})
+
+	views, _, err := f.service.List(context.Background(), 2, 1, 20, "", nil, true)
+
+	require.NoError(t, err)
+	require.Len(t, views, 1)
+	require.Len(t, views[0].Payload.Conclusions, 2)
+	require.Equal(t, model.EvolutionAlertTypeOutdated, views[0].Payload.Conclusions[0].Type, "主结论在最前")
+	require.Equal(t, uint(11), views[0].Payload.Conclusions[1].TriggerID, "次要结论保留自己的方向")
+}
+
 func TestEvolutionListRejectsInvalidFilter(t *testing.T) {
 	f := newEvolutionFixture()
 	for _, tc := range []struct {

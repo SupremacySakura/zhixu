@@ -295,48 +295,149 @@ func (p *EvolveProcessor) clientCandidates(candidates []evolveCandidateItem) []E
 	return out
 }
 
-// buildAlerts 把模型结论翻译成待落库的提醒：分派类型、校验证据、按上限截断。
+// buildAlerts 把模型结论翻译成待落库的提醒：按目标归并结论、校验证据、按上限截断。
+//
+// 同一目标的多条判定不再互相顶掉，而是折进同一条提醒的结论集合：用户要回答的是
+// 「这两条知识怎么处理」这一个问题，多一种判定就该多一条参考，而不是多一条互相矛盾的待办。
 func (p *EvolveProcessor) buildAlerts(trigger *model.KnowledgeItem, candidates []evolveCandidateItem, judgements []EvolveJudgement) []model.EvolutionAlert {
 	byID := make(map[uint]evolveCandidateItem, len(candidates))
 	for _, candidate := range candidates {
 		byID[candidate.item.ID] = candidate
 	}
-	// 同一对知识只留一条结论，重复优先：它的处置（归档其一）比冲突更明确。
+	// 先按结论优先级排序，保证每个目标的结论集合里顺序稳定、主结论可复现。
 	ordered := make([]EvolveJudgement, len(judgements))
 	copy(ordered, judgements)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		return evolveTypePriority(ordered[i].Type) < evolveTypePriority(ordered[j].Type)
 	})
-	seen := make(map[uint]bool, len(ordered))
-	alerts := make([]model.EvolutionAlert, 0, EvolveAlertMaxPerTask)
+	// 同一目标可能有多条判定，先分组再逐组组装。
+	grouped := make(map[uint][]EvolveJudgement, len(ordered))
+	order := make([]uint, 0, len(ordered))
 	for _, judgement := range ordered {
-		if len(alerts) == EvolveAlertMaxPerTask {
-			break
-		}
-		candidate, ok := byID[judgement.TargetID]
-		if !ok || seen[judgement.TargetID] {
+		if _, ok := byID[judgement.TargetID]; !ok {
 			continue
 		}
-		// 类型交给模型；这里只按来源做最后一道守卫（强候选只接受过时）。
-		if !evolutionAllowedTypes(candidate.origin)[judgement.Type] {
-			continue
+		if _, seen := grouped[judgement.TargetID]; !seen {
+			order = append(order, judgement.TargetID)
 		}
-		alert, ok := p.buildAlert(trigger, candidate, judgement)
+		grouped[judgement.TargetID] = append(grouped[judgement.TargetID], judgement)
+	}
+	// 先全部组装，再按主结论优先级截断：上限若在组装途中生效，排在第 6 位的目标
+	// 会连同它的结论一起消失，而它可能正是优先级最高的那一类（例如用户声明的过时）。
+	built := make([]model.EvolutionAlert, 0, len(order))
+	for _, targetID := range order {
+		candidate := byID[targetID]
+		alert, ok := p.buildAlert(trigger, candidate, grouped[targetID])
 		if !ok {
 			continue
 		}
-		seen[judgement.TargetID] = true
-		alerts = append(alerts, alert)
+		built = append(built, alert)
 	}
-	// 证据充分的排在前面：循环已按上限截断，这里只调整落库顺序。
-	sort.SliceStable(alerts, func(i, j int) bool {
-		return evolveSeverityRank(alerts[i].Severity) < evolveSeverityRank(alerts[j].Severity)
+	// 截断口径：主结论优先级在前，证据充分其次，最后按知识 ID 稳定排序。
+	// 这里必须用结论自己的排名（含「更新关系的过时最高」），不能用原始类型优先级：
+	// 否则用户声明的过时会被模型猜出的重复挤出上限，恰好丢掉最该留下的那条。
+	sort.SliceStable(built, func(i, j int) bool {
+		left, right := built[i], built[j]
+		leftRank, rightRank := alertPrimaryRank(left), alertPrimaryRank(right)
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		if evolveSeverityRank(left.Severity) != evolveSeverityRank(right.Severity) {
+			return evolveSeverityRank(left.Severity) < evolveSeverityRank(right.Severity)
+		}
+		return subjectSecondID(left) < subjectSecondID(right)
 	})
-	return alerts
+	if len(built) > EvolveAlertMaxPerTask {
+		built = built[:EvolveAlertMaxPerTask]
+	}
+	return built
 }
 
-// buildAlert 组装一条提醒；证据全被剔除时返回 false（整条不落库）。
-func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evolveCandidateItem, judgement EvolveJudgement) (model.EvolutionAlert, bool) {
+// alertPrimaryRank 取提醒主结论的排名；载荷损坏时退回按类型优先级，保证排序始终有定义。
+func alertPrimaryRank(alert model.EvolutionAlert) int {
+	conclusions := conclusionsOf(ParseEvolutionPayload(alert.Payload))
+	if len(conclusions) == 0 {
+		return alert.AlertType.Priority()
+	}
+	return conclusionRank(primaryConclusion(conclusions))
+}
+
+// subjectSecondID 取提醒里被比对的那条知识 ID，只用于稳定排序。
+func subjectSecondID(alert model.EvolutionAlert) uint {
+	ids := alert.SubjectIDList()
+	if len(ids) < 2 {
+		return 0
+	}
+	return ids[1]
+}
+
+// buildAlert 组装一条提醒；该目标没有任何可用结论时返回 false（整条不落库）。
+//
+// judgements 是同一目标的多条判定。每条的证据单独校验，通过一条就留下一条结论；
+// 主结论按结论优先级选出（更新关系的过时最高），其余作为次要结论只读展示。
+func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evolveCandidateItem, judgements []EvolveJudgement) (model.EvolutionAlert, bool) {
+	conclusions := make([]EvolutionConclusion, 0, len(judgements))
+	for _, judgement := range judgements {
+		conclusion, ok := buildEvolutionConclusion(trigger, candidate, judgement)
+		if !ok {
+			continue
+		}
+		conclusions = append(conclusions, conclusion)
+	}
+	if len(conclusions) == 0 {
+		return model.EvolutionAlert{}, false
+	}
+	// 强候选（用户声明的更新关系）以过时结论为准：没有过时就不落提醒，
+	// 免得「归档其一」成为主结论、把较新的那条归档掉。有了过时，其它判定作为次要结论保留。
+	if candidate.origin == EvolveOriginUpdateRelation {
+		hasOutdated := false
+		for _, conclusion := range conclusions {
+			if conclusion.Type == model.EvolutionAlertTypeOutdated {
+				hasOutdated = true
+				break
+			}
+		}
+		if !hasOutdated {
+			return model.EvolutionAlert{}, false
+		}
+	}
+	primary := primaryConclusion(conclusions)
+	severity := mergeSeverity(conclusions)
+	payload := EvolutionPayload{
+		Type:            primary.Type,
+		Reason:          primary.Reason,
+		Evidence:        primary.Evidence,
+		SuggestedAction: primary.SuggestedAction,
+		RevisedTitle:    primary.RevisedTitle,
+		RevisedContent:  primary.RevisedContent,
+		Conclusions:     conclusions,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return model.EvolutionAlert{}, false
+	}
+	alert := model.EvolutionAlert{
+		UserID:    trigger.UserID,
+		AlertType: primary.Type,
+		Status:    model.EvolutionAlertPending,
+		Severity:  severity,
+		Payload:   string(body),
+		// 提醒身份是知识对：无论从哪一侧发起检查都落在同一行。
+		PairKey: EvolutionPairKey(trigger.ID, candidate.item.ID),
+		// 证据指纹只区分「同一证据刷新」与「新证据」，不再决定身份。
+		DedupeKey: EvolutionDedupeKey(primary.Type, []uint{trigger.ID, candidate.item.ID}, primary.Evidence),
+	}
+	if err := alert.SetSubjectIDs([]uint{trigger.ID, candidate.item.ID}); err != nil {
+		return model.EvolutionAlert{}, false
+	}
+	if err := alert.SetPairVersions(map[uint]uint{trigger.ID: trigger.Version, candidate.item.ID: candidate.item.Version}); err != nil {
+		return model.EvolutionAlert{}, false
+	}
+	return alert, true
+}
+
+// buildEvolutionConclusion 把一条模型判定转成结论；证据全被剔除时返回 false。
+func buildEvolutionConclusion(trigger *model.KnowledgeItem, candidate evolveCandidateItem, judgement EvolveJudgement) (EvolutionConclusion, bool) {
 	// 引文必须能在对应正文里定位：模型偶尔会改写或拼接引文，那样的证据给用户看没有价值。
 	triggerEvidence := make([]EvolutionEvidence, 0, len(judgement.Evidence))
 	candidateEvidence := make([]EvolutionEvidence, 0, len(judgement.Evidence))
@@ -352,13 +453,13 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 	triggerValid := validEvidence(trigger.Content, triggerEvidence)
 	candidateValid := validEvidence(candidate.item.Content, candidateEvidence)
 	if len(triggerValid)+len(candidateValid) == 0 {
-		return model.EvolutionAlert{}, false
+		return EvolutionConclusion{}, false
 	}
 	// 过时只有「本条更新了对方」是用户显式声明过的强信号，可以直接判定；
 	// 向量近邻只是相似，要说「候选已被取代」必须有双方原文对照，单侧证据不足以下这个结论。
 	if judgement.Type == model.EvolutionAlertTypeOutdated && candidate.origin != EvolveOriginUpdateRelation &&
 		(len(triggerValid) == 0 || len(candidateValid) == 0) {
-		return model.EvolutionAlert{}, false
+		return EvolutionConclusion{}, false
 	}
 	evidence := make([]EvolutionEvidence, 0, len(triggerValid)+len(candidateValid))
 	evidence = append(evidence, triggerValid...)
@@ -367,69 +468,47 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 	if !severity.Valid() {
 		severity = model.EvolutionSeverityReview
 	}
-	payload := EvolutionPayload{
-		Type:     judgement.Type,
-		Reason:   judgement.Reason,
-		Evidence: evidence,
-	}
+	revisedTitle, revisedContent := "", ""
 	// 修订稿只在证据全部校验通过时保留：缺一条引文说明模型对这条知识的判断没有原文支撑，
 	// 拿它去覆盖正文风险太大，降级为「仅提示、无修订稿」，前端会把采纳修订置灰。
 	// 长度门槛在这里再守一道：客户端清洗已经挡过模型输出，但处理器可能被别的调用方直接喂判定。
 	if len(evidence) == len(judgement.Evidence) && judgement.Type == model.EvolutionAlertTypeConflict &&
 		evolveRevisionUsable(judgement.RevisedTitle, judgement.RevisedContent) {
-		payload.RevisedTitle = judgement.RevisedTitle
-		payload.RevisedContent = judgement.RevisedContent
+		revisedTitle, revisedContent = judgement.RevisedTitle, judgement.RevisedContent
 	} else if len(evidence) < len(judgement.Evidence) || judgement.RevisedContent != "" {
 		// 有修订稿却被丢弃时同样降级：让用户知道这条提醒只剩「仅提示」的分量。
 		severity = model.EvolutionSeverityReview
 	}
 	// 建议动作跟着「修订稿是否留下」走：修订稿被丢弃后还推荐采纳修订，用户点下去只会拿到 400。
-	payload.SuggestedAction = evolveSuggestedAction(payload)
-	// 结论集合里先只放本次判定的一条；另一侧的判定会在反向检查命中同一知识对时并进来。
-	payload.Conclusions = []EvolutionConclusion{{
+	return EvolutionConclusion{
 		Type:            judgement.Type,
 		TriggerID:       trigger.ID,
 		Reason:          judgement.Reason,
 		Evidence:        evidence,
-		SuggestedAction: payload.SuggestedAction,
+		SuggestedAction: evolveSuggestedActionFor(judgement.Type, revisedContent),
 		Severity:        severity,
-		RevisedTitle:    payload.RevisedTitle,
-		RevisedContent:  payload.RevisedContent,
-	}}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return model.EvolutionAlert{}, false
-	}
-	alert := model.EvolutionAlert{
-		UserID:    trigger.UserID,
-		AlertType: judgement.Type,
-		Status:    model.EvolutionAlertPending,
-		Severity:  severity,
-		Payload:   string(body),
-		// 提醒身份是知识对：无论从哪一侧发起检查都落在同一行。
-		PairKey: EvolutionPairKey(trigger.ID, candidate.item.ID),
-		// 证据指纹只区分「同一证据刷新」与「新证据」，不再决定身份。
-		DedupeKey: EvolutionDedupeKey(judgement.Type, []uint{trigger.ID, candidate.item.ID}, evidence),
-	}
-	if err := alert.SetSubjectIDs([]uint{trigger.ID, candidate.item.ID}); err != nil {
-		return model.EvolutionAlert{}, false
-	}
-	if err := alert.SetPairVersions(map[uint]uint{trigger.ID: trigger.Version, candidate.item.ID: candidate.item.Version}); err != nil {
-		return model.EvolutionAlert{}, false
-	}
-	return alert, true
+		RevisedTitle:    revisedTitle,
+		RevisedContent:  revisedContent,
+		Origin:          candidate.origin,
+	}, true
 }
 
 // evolveSuggestedAction 给出一条默认建议动作，供前端预选按钮。
 func evolveSuggestedAction(payload EvolutionPayload) model.EvolutionAction {
-	switch payload.Type {
+	return evolveSuggestedActionFor(payload.Type, payload.RevisedContent)
+}
+
+// evolveSuggestedActionFor 按结论类型与「是否有可用修订稿」给出建议动作。
+// 抽成独立函数是因为结论集合里的每条结论都要各自算一遍，不能共用主结论的那份。
+func evolveSuggestedActionFor(alertType model.EvolutionAlertType, revisedContent string) model.EvolutionAction {
+	switch alertType {
 	case model.EvolutionAlertTypeDuplicate:
 		return model.EvolutionActionArchiveOne
 	case model.EvolutionAlertTypeOutdated:
 		return model.EvolutionActionMarkOutdated
 	case model.EvolutionAlertTypeConflict:
 		// 有修订稿时「采纳修订」是最省事的一步，没有就只能建矛盾关系。
-		if payload.RevisedContent != "" {
+		if revisedContent != "" {
 			return model.EvolutionActionAcceptRevision
 		}
 		return model.EvolutionActionCreateRelation
