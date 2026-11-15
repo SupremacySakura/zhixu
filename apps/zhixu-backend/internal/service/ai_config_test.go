@@ -246,4 +246,32 @@ func TestSaveDefaultsRagSettings(t *testing.T) {
 	require.InDelta(t, 0.7, view.Settings.RagMinScore, 1e-9)
 }
 
+func TestSaveDefaultsEvolveCandidateGate(t *testing.T) {
+	ctx := context.Background()
+	s := newAIConfigTestService(t)
+	view, err := s.SaveProvider(ctx, 7, 0, testProviderInput())
+	require.NoError(t, err)
+	chat, embed := view.Providers[0].Models[0].ID, view.Providers[0].Models[1].ID
+
+	below, above := 0.44, 1.01
+	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &below, ExpectedVersion: 1})
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+	require.Contains(t, err.Error(), "0.45")
+	_, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &above, ExpectedVersion: 1})
+	require.ErrorIs(t, err, ErrAIConfigInvalid)
+
+	gate := 0.5
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, EvolveCandidateMinScore: &gate, ExpectedVersion: 1})
+	require.NoError(t, err)
+	require.InDelta(t, 0.5, view.Settings.EvolveCandidateMinScore, 1e-9)
+
+	// A later save that omits the field keeps the stored gate, and a fresh read returns it.
+	view, err = s.SaveDefaults(ctx, 7, DefaultsInput{ChatModelID: chat, EmbeddingModelID: embed, ExpectedVersion: 2})
+	require.NoError(t, err)
+	require.InDelta(t, 0.5, view.Settings.EvolveCandidateMinScore, 1e-9)
+	read, err := s.Get(ctx, 7)
+	require.NoError(t, err)
+	require.InDelta(t, 0.5, read.Settings.EvolveCandidateMinScore, 1e-9)
+}
+
 func errorsIsConflict(err error) bool { return errors.Is(err, ErrAIConfigConflict) }

@@ -30,9 +30,11 @@ var (
 
 // 演化检测常量。与关系推荐常量同风格，先进代码不进配置：调参只改这里，不动结构。
 const (
-	// EvolveCandidateMinScore 演化候选进入模型判定的最低向量相似度。
+	// EvolveCandidateMinScoreDefault 演化候选门槛的默认值：设置行还没有该字段或值越界时使用。
 	// 它只回答「这条候选值不值得送模型」，不决定结论类型；类型由模型判定。
-	EvolveCandidateMinScore = 0.65
+	EvolveCandidateMinScoreDefault = 0.65
+	// EvolveCandidateMinScoreFloor 门槛下限。对照样本最高相似度为 0.601，再低会让无关知识进入判定。
+	EvolveCandidateMinScoreFloor = 0.45
 	// EvolveVectorTopK 向量召回条数：比关系推荐的 50 小，因为一次要给三类结论分派。
 	EvolveVectorTopK = 30
 	// EvolveCandidateMax 送模型的候选上限。

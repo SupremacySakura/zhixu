@@ -602,10 +602,10 @@ func similarityText(item *model.KnowledgeItem) string {
 
 // thresholdNote 说明这条样本在真实流水线里能否进入模型判定。
 func thresholdNote(expected string, similarity float64) string {
-	// 生产只有一道候选门槛：低于 EvolveCandidateMinScore 的近邻不会进入模型判定
+	// 生产只有一道候选门槛：低于默认门槛（用户可配置）的近邻不会进入模型判定
 	// （见 evolve_task.go 的 candidates），进入后的结论类型完全由模型决定。
-	if similarity < service.EvolveCandidateMinScore {
-		return fmt.Sprintf("相似度低于候选门槛 %.2f，未进入模型判定", service.EvolveCandidateMinScore)
+	if similarity < service.EvolveCandidateMinScoreDefault {
+		return fmt.Sprintf("相似度低于候选门槛 %.2f，未进入模型判定", service.EvolveCandidateMinScoreDefault)
 	}
 	if expected == "none" {
 		return "对照样本进入模型判定，存在误报风险"
@@ -898,12 +898,12 @@ func mustGrid(outDir string) {
 	// 与生产当前门槛对比，量化「不调门槛会损失多少」。
 	current := 0
 	for _, outcome := range outcomes {
-		if allowsType(outcome.Similarity, service.EvolveCandidateMinScore, outcome.Expected) {
+		if allowsType(outcome.Similarity, service.EvolveCandidateMinScoreDefault, outcome.Expected) {
 			current++
 		}
 	}
 	fmt.Fprintf(&b, "\n当前生产门槛 %.2f 的估计准确率 %.3f（%d/%d），与最优相差 %.3f。\n",
-		service.EvolveCandidateMinScore,
+		service.EvolveCandidateMinScoreDefault,
 		ratio(current, len(outcomes)), current, len(outcomes),
 		ratio(bestCorrect-current, len(outcomes)))
 

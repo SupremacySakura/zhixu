@@ -32,6 +32,27 @@ func TestAIConfigRepositoryReadScoped(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+// 设置行的更新列清单必须包含演化候选门槛，否则保存成功但读回仍是旧值。
+func TestAIConfigRepositoryPersistsEvolveCandidateGate(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT `id` FROM `user_models` WHERE id = .*LIMIT .*FOR UPDATE").
+		WithArgs(uint(7), 1).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
+	expectAIConfigRead(mock, 7)
+	mock.ExpectExec("INSERT INTO `user_ai_settings`.*ON DUPLICATE KEY UPDATE.*evolve_candidate_min_score").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	_, err := (&AIConfigRepository{DB: db}).Mutate(context.Background(), 7, func(state *AIConfigState) error {
+		state.Settings.EvolveCandidateMinScore = 0.7
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestAIConfigRepositoryAtomicCreation(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(map[bool]string{false: "success", true: "rollback"}[fail], func(t *testing.T) {

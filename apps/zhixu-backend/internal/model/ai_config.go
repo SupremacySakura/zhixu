@@ -33,6 +33,8 @@ type UserAISettings struct {
 	EmbeddingModelID uint      `gorm:"not null" json:"embedding_model_id"`
 	RagTopK          int       `gorm:"not null;default:5" json:"rag_top_k"`
 	RagMinScore      float64   `gorm:"not null;default:0.5" json:"rag_min_score"`
+	// EvolveCandidateMinScore 演化候选进入模型判定的最低向量相似度，由用户按嵌入模型校准。
+	EvolveCandidateMinScore float64 `gorm:"not null;default:0.65" json:"evolve_candidate_min_score"`
 	ConfigVersion    uint64    `gorm:"not null" json:"config_version"`
 	EmbeddingVersion uint64    `gorm:"not null" json:"embedding_version"`
 	NeedsReindex     bool      `gorm:"not null" json:"needs_reindex"`

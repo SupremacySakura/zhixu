@@ -44,6 +44,11 @@ type evolveSuggester interface {
 	Evolve(context.Context, *ChatCapability, uint, uint, string, string, []EvolveCandidate) ([]EvolveJudgement, error)
 }
 
+// evolveSettingsReader 读取用户设置（*repository.AIConfigRepository、*ChatService 的 Store 满足）。
+type evolveSettingsReader interface {
+	Read(context.Context, uint) (*repository.AIConfigState, error)
+}
+
 // evolveAlertStore 写入提醒（*repository.EvolutionAlertRepository 满足）。
 type evolveAlertStore interface {
 	Upsert(context.Context, *model.EvolutionAlert) (repository.EvolutionUpsertOutcome, error)
@@ -71,13 +76,14 @@ type EvolveProcessor struct {
 	Vectors   evolveVectorSearcher
 	Relations evolveRelationStore
 	Client    evolveSuggester
+	Settings  evolveSettingsReader
 }
 
 func (p *EvolveProcessor) TaskType() string { return model.AiTaskTypeEvolve }
 
 func (p *EvolveProcessor) Process(ctx context.Context, task *model.AiTask) (json.RawMessage, error) {
 	if p == nil || p.Knowledge == nil || p.Alerts == nil || p.Chat == nil || p.Embedding == nil ||
-		p.Embedder == nil || p.Vectors == nil || p.Relations == nil || p.Client == nil {
+		p.Embedder == nil || p.Vectors == nil || p.Relations == nil || p.Client == nil || p.Settings == nil {
 		return nil, TerminalTaskError("演化检查未配置")
 	}
 	var payload EvolveEnqueuePayload
@@ -163,6 +169,10 @@ func (p *EvolveProcessor) Process(ctx context.Context, task *model.AiTask) (json
 // candidates 合并两路候选：updates 关系指向的目标是用户显式声明过的强信号，排在最前；
 // 向量近邻按相似度降序补齐。同一对知识只出现一次，强信号优先。
 func (p *EvolveProcessor) candidates(ctx context.Context, userID uint, item *model.KnowledgeItem) ([]evolveCandidateItem, error) {
+	gate, err := p.candidateGate(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 	relations, err := p.Relations.ListByKnowledge(ctx, userID, item.ID)
 	if err != nil {
 		return nil, err
@@ -207,7 +217,7 @@ func (p *EvolveProcessor) candidates(ctx context.Context, userID uint, item *mod
 	// 一个知识有多个分块命中时只保留最高分，避免同一候选重复占用名额。
 	best := make(map[uint]float64, len(matches))
 	for _, match := range matches {
-		if match.KnowledgeID == 0 || match.KnowledgeID == item.ID || match.Score < EvolveCandidateMinScore {
+		if match.KnowledgeID == 0 || match.KnowledgeID == item.ID || match.Score < gate {
 			continue
 		}
 		if score, ok := best[match.KnowledgeID]; !ok || match.Score > score {
@@ -257,6 +267,20 @@ func (p *EvolveProcessor) candidates(ctx context.Context, userID uint, item *mod
 		appendCandidate(id, best[id], EvolveOriginVectorNeighbor)
 	}
 	return out, nil
+}
+
+// candidateGate 读取用户保存的演化候选门槛；存量零值与越界值回落到默认门槛，
+// 与检索设置的处理一致，避免把「还没配置」当成「门槛为 0」而把无关知识送进模型。
+func (p *EvolveProcessor) candidateGate(ctx context.Context, userID uint) (float64, error) {
+	state, err := p.Settings.Read(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	gate := state.Settings.EvolveCandidateMinScore
+	if gate < EvolveCandidateMinScoreFloor || gate > 1 {
+		gate = EvolveCandidateMinScoreDefault
+	}
+	return gate, nil
 }
 
 // clientCandidates 把内部候选转成 /evolve 请求体。

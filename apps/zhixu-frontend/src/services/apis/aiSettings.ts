@@ -28,6 +28,7 @@ export interface AISettings {
   embedding_model_id: number
   rag_top_k: number
   rag_min_score: number
+  evolve_candidate_min_score: number
   config_version: number
   embedding_version: number
   needs_reindex: boolean
@@ -49,6 +50,7 @@ export interface DefaultsPayload {
   embedding_model_id: number
   rag_top_k?: number
   rag_min_score?: number
+  evolve_candidate_min_score?: number
   expected_version: number
   confirm_reindex: boolean
 }

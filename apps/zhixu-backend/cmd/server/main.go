@@ -115,6 +115,7 @@ func main() {
 		Embedder: &service.MastraEmbedder{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
 		Vectors:  qdrant,
 		Client:   &service.EvolveClient{AIURL: cfg.ChatAIURL, Secret: cfg.InternalAPISecret},
+		Settings: chat.Service.Store,
 	})
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})
