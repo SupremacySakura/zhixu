@@ -53,6 +53,7 @@ const embedding = ref('0')
 const ragTopK = ref(5)
 const ragMinScore = ref(0.5)
 const evolveCandidateMinScore = ref(0.65)
+const keepGateIntent = ref(false)
 const confirmDefaults = ref(false)
 watch(configuration, value => {
   if (!value) return
@@ -113,8 +114,18 @@ async function submitProvider(payload: ProviderPayload) {
 async function reloadEditor() {
   if (await load()) editorRef.value?.acceptVersion()
 }
-function requestDefaults() {
+function evolveGateDiffers() {
+  return (
+    !!configuration.value &&
+    Math.round(evolveCandidateMinScore.value * 100) / 100 !==
+      (configuration.value.settings.evolve_candidate_min_score || 0.65)
+  )
+}
+// 只有门槛真的变了、或用户主动确认「保留当前门槛」时才提交该字段。
+// 后端把「提交了门槛」当作重新校准的信号，换模型时顺手回传旧值会把待校准标记清掉。
+function requestDefaults(keepGate = false) {
   clearError()
+  keepGateIntent.value = keepGate
   if (
     configuration.value?.settings.embedding_model_id &&
     Number(embedding.value) !== configuration.value.settings.embedding_model_id
@@ -127,6 +138,7 @@ async function submitDefaults(confirmed: boolean) {
   const topK = Math.round(ragTopK.value)
   const score = Math.round(ragMinScore.value * 100) / 100
   const gate = Math.round(evolveCandidateMinScore.value * 100) / 100
+  const includeGate = keepGateIntent.value || evolveGateDiffers()
   if (!Number.isFinite(topK) || topK < 1 || topK > 50) {
     displayToast('参考条数需为 1–50 的整数', 'error')
     return
@@ -139,17 +151,17 @@ async function submitDefaults(confirmed: boolean) {
     displayToast('演化候选门槛需在 0.45–1 之间', 'error')
     return
   }
-  if (
-    await saveDefaults({
-      chat_model_id: Number(chat.value),
-      embedding_model_id: Number(embedding.value),
-      rag_top_k: topK,
-      rag_min_score: score,
-      evolve_candidate_min_score: gate,
-      expected_version: configuration.value.settings.config_version,
-      confirm_reindex: confirmed,
-    })
-  ) {
+  const saved = await saveDefaults({
+    chat_model_id: Number(chat.value),
+    embedding_model_id: Number(embedding.value),
+    rag_top_k: topK,
+    rag_min_score: score,
+    ...(includeGate ? { evolve_candidate_min_score: gate } : {}),
+    expected_version: configuration.value.settings.config_version,
+    confirm_reindex: confirmed,
+  })
+  keepGateIntent.value = false
+  if (saved) {
     confirmDefaults.value = false
     displayToast('默认模型已保存', 'success')
   }
@@ -168,6 +180,7 @@ function closeConfirmation() {
   if (!busy.value) {
     deleteTarget.value = null
     confirmDefaults.value = false
+    keepGateIntent.value = false
     clearError()
   }
 }
@@ -335,6 +348,28 @@ function reloadConfirmation() {
                         <p class="mt-2 text-note text-label-secondary">
                           低于该值的近邻不会进入判定；它只决定送不送，不决定判定结论的类型。
                         </p>
+                        <div
+                          v-if="configuration.settings.evolve_threshold_stale"
+                          data-test="evolve-threshold-stale"
+                          role="status"
+                          class="mt-3 bg-warning-tint p-4 text-note leading-6 text-warning-strong"
+                        >
+                          <p>
+                            换过 Embedding 模型后，相似度分布会整体变化，当前门槛
+                            {{ Math.round(evolveCandidateMinScore * 100) / 100 }}
+                            未必仍是最佳。
+                          </p>
+                          <p class="mt-2">
+                            向量重建完成前，库里仍是旧模型产出的向量，新旧相似度是混算的；此时无论门槛取多少，都得不到可靠的校准结果。
+                          </p>
+                          <AppButton
+                            size="sm"
+                            class="mt-3"
+                            :disabled="busy || loading"
+                            @click="requestDefaults(true)"
+                            >保留当前门槛</AppButton
+                          >
+                        </div>
                       </div>
                     </div>
                     <p class="mt-3 text-note text-label-secondary">
@@ -349,7 +384,7 @@ function reloadConfirmation() {
                   <p class="text-note text-label-secondary">
                     更换 Embedding 模型需要重建向量，不会自动执行。
                   </p>
-                  <AppButton :disabled="!dirty" @click="requestDefaults">保存默认模型</AppButton>
+                  <AppButton :disabled="!dirty" @click="requestDefaults()">保存默认模型</AppButton>
                 </footer>
               </AppPanel>
               <p
