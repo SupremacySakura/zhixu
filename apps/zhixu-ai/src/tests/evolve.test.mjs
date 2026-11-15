@@ -296,6 +296,13 @@ test("evolve instructions tell duplicate and conflict apart without similarity",
   assert.match(EVOLVE_INSTRUCTIONS, /没有需要处理的候选时输出空数组/);
 });
 
+test("evolve instructions anchor the revision to the newer side", () => {
+  // The draft is written back onto the newer knowledge item, so the model must
+  // merge onto that side instead of guessing freshness from wording.
+  assert.match(EVOLVE_INSTRUCTIONS, /较新的一侧/);
+  assert.match(EVOLVE_INSTRUCTIONS, /修订稿/);
+});
+
 test("evolve route rejects callers without the internal bearer", async () => {
   const previous = process.env.INTERNAL_API_SECRET;
   try {
