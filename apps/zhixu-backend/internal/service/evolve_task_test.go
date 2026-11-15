@@ -182,7 +182,7 @@ func (f *evolveFixture) duplicateJudgement(targetID uint, quote string) EvolveJu
 		Type:     model.EvolutionAlertTypeDuplicate,
 		Reason:   "两条知识说的是同一件事，只是措辞不同。",
 		Evidence: []EvolutionEvidence{
-			{KnowledgeID: 10, Quote: quote},
+			{KnowledgeID: 10, Quote: "同一段正文"},
 			{KnowledgeID: targetID, Quote: quote},
 		},
 		Severity: model.EvolutionSeverityStrong,
@@ -307,8 +307,8 @@ func TestEvolveProcessorDropsRevisionWithoutFullEvidence(t *testing.T) {
 	require.Equal(t, model.EvolutionActionCreateRelation, parsed.SuggestedAction, "没有修订稿时只能建矛盾关系")
 }
 
-// 相似度分派：0.75~0.90 只接受冲突结论，因此重复结论被丢弃。
-func TestEvolveProcessorDropsConclusionOutsideBand(t *testing.T) {
+// 相似度只筛候选，不决定类型：同一分数下模型判重复就落重复，不再被相似度改写。
+func TestEvolveProcessorKeepsDuplicateBelowOldBand(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "中等相似", "HNSW 与 IVF 的取舍。", 0.82)
 	f.client.judgements = []EvolveJudgement{f.duplicateJudgement(21, "HNSW")}
@@ -316,11 +316,35 @@ func TestEvolveProcessorDropsConclusionOutsideBand(t *testing.T) {
 	payload, err := f.processor.Process(context.Background(), f.task)
 
 	require.NoError(t, err)
-	require.Empty(t, f.alerts.upserted)
-	require.Contains(t, string(payload), "\"alert_count\":0")
+	require.Len(t, f.alerts.upserted, 1)
+	require.Equal(t, model.EvolutionAlertTypeDuplicate, f.alerts.upserted[0].AlertType)
+	require.Contains(t, string(payload), "\"alert_count\":1")
 }
 
-// 低于冲突阈值：不接受任何结论，候选也不会进模型批次。
+// 高分候选也不被预先判成重复：模型给出冲突结论时照常落冲突提醒。
+func TestEvolveProcessorKeepsConflictAtHighSimilarity(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "高度相似", "HNSW 用分层图做近似最近邻检索。", 0.95)
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeConflict,
+		Reason:   "两条知识对召回率给出互斥结论。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "同一段正文"},
+			{KnowledgeID: 21, Quote: "近似最近邻检索"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+
+	payload, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	require.Equal(t, model.EvolutionAlertTypeConflict, f.alerts.upserted[0].AlertType)
+	require.Contains(t, string(payload), "\"alert_count\":1")
+}
+
+// 低于候选门槛：不进入模型判定，任务成功但零提醒且不发起付费调用。
 func TestEvolveProcessorIgnoresWeakCandidates(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "弱相关", "HNSW", 0.62)
@@ -330,6 +354,25 @@ func TestEvolveProcessorIgnoresWeakCandidates(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, f.client.calls, "没有候选就不该发起付费调用")
 	require.Empty(t, f.alerts.upserted)
+}
+
+// 门槛之上的候选全部送模型，门槛本身取闭区间。
+func TestEvolveProcessorSendsAllCandidatesAboveGate(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "刚好过门槛", "HNSW", EvolveCandidateMinScore)
+	f.addCandidate(22, "明显高于门槛", "HNSW 与 IVF", 0.72)
+	f.client.judgements = []EvolveJudgement{
+		f.duplicateJudgement(21, "HNSW"),
+		f.duplicateJudgement(22, "HNSW"),
+	}
+
+	payload, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, f.client.calls)
+	require.Len(t, f.client.candidates, 2)
+	require.Len(t, f.alerts.upserted, 2)
+	require.Contains(t, string(payload), "\"alert_count\":2")
 }
 
 // updates 关系指向的目标是强候选：它只接受过时结论，重复结论一律丢弃。
@@ -462,8 +505,16 @@ func TestEvolveProcessorIgnoresReverseUpdateRelation(t *testing.T) {
 func TestEvolveProcessorDropsAlertWithoutLocatableEvidence(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "另一篇", "HNSW 用分层图做近似最近邻检索。", 0.93)
-	judgement := f.duplicateJudgement(21, "这段引文根本不在任何正文里")
-	f.client.judgements = []EvolveJudgement{judgement}
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 21,
+		Type:     model.EvolutionAlertTypeDuplicate,
+		Reason:   "两条知识说的是同一件事，只是措辞不同。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "这段引文根本不在任何正文里"},
+			{KnowledgeID: 21, Quote: "这句同样不在候选正文里"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
 
 	_, err := f.processor.Process(context.Background(), f.task)
 
@@ -566,6 +617,40 @@ func TestEvolveProcessorPrefersDuplicateOverConflict(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, f.alerts.upserted, 1)
 	require.Equal(t, model.EvolutionAlertTypeDuplicate, f.alerts.upserted[0].AlertType)
+}
+
+// 同一对没有重复结论时冲突优先于过时：只留一条，避免两条互相矛盾的处置建议。
+func TestEvolveProcessorPrefersConflictOverOutdated(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一篇", "HNSW 用分层图做近似最近邻检索。", 0.95)
+	f.client.judgements = []EvolveJudgement{
+		{
+			TargetID: 21,
+			Type:     model.EvolutionAlertTypeOutdated,
+			Reason:   "本次知识给出了更晚的结论。",
+			Evidence: []EvolutionEvidence{
+				{KnowledgeID: 10, Quote: "同一段正文"},
+				{KnowledgeID: 21, Quote: "近似最近邻检索"},
+			},
+			Severity: model.EvolutionSeverityStrong,
+		},
+		{
+			TargetID: 21,
+			Type:     model.EvolutionAlertTypeConflict,
+			Reason:   "两条知识对召回率给出互斥结论。",
+			Evidence: []EvolutionEvidence{
+				{KnowledgeID: 10, Quote: "同一段正文"},
+				{KnowledgeID: 21, Quote: "近似最近邻检索"},
+			},
+			Severity: model.EvolutionSeverityStrong,
+		},
+	}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+	require.Equal(t, model.EvolutionAlertTypeConflict, f.alerts.upserted[0].AlertType)
 }
 
 // 候选上限：向量召回按相似度降序，只取前八条送模型。

@@ -49,8 +49,8 @@ type evolveAlertStore interface {
 	Upsert(context.Context, *model.EvolutionAlert) (repository.EvolutionUpsertOutcome, error)
 }
 
-// evolveCandidateItem 是一条候选的完整上下文：判定要用来源与相似度分派允许类型，
-// 证据校验要用正文定位引文，因此不能只留 ID。
+// evolveCandidateItem 是一条候选的完整上下文：判定要用来源分派允许类型，
+// 相似度作为参考信息随候选送模型，证据校验要用正文定位引文，因此不能只留 ID。
 type evolveCandidateItem struct {
 	item   model.KnowledgeItem
 	score  float64
@@ -207,7 +207,7 @@ func (p *EvolveProcessor) candidates(ctx context.Context, userID uint, item *mod
 	// 一个知识有多个分块命中时只保留最高分，避免同一候选重复占用名额。
 	best := make(map[uint]float64, len(matches))
 	for _, match := range matches {
-		if match.KnowledgeID == 0 || match.KnowledgeID == item.ID || match.Score < EvolveOutdatedMinScore {
+		if match.KnowledgeID == 0 || match.KnowledgeID == item.ID || match.Score < EvolveCandidateMinScore {
 			continue
 		}
 		if score, ok := best[match.KnowledgeID]; !ok || match.Score > score {
@@ -296,8 +296,8 @@ func (p *EvolveProcessor) buildAlerts(trigger *model.KnowledgeItem, candidates [
 		if !ok || seen[judgement.TargetID] {
 			continue
 		}
-		// 相似度分派：候选越像越可能重复，中等相似才可能是同一事实的不同说法。
-		if !evolutionAllowedTypes(candidate.origin, candidate.score)[judgement.Type] {
+		// 类型交给模型；这里只按来源做最后一道守卫（强候选只接受过时）。
+		if !evolutionAllowedTypes(candidate.origin)[judgement.Type] {
 			continue
 		}
 		alert, ok := p.buildAlert(trigger, candidate, judgement)
