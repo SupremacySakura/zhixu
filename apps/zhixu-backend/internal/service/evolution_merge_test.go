@@ -12,6 +12,22 @@ import (
 
 // mergeAlert 造一条形状完整的提醒：载荷里带一条结论，版本与两侧 ID 可控。
 // 结论与载荷顶层字段保持一致，模拟 buildAlert 产出的形状。
+// mustMarshalPayload 是测试里的便捷封装：载荷序列化失败说明用例本身构造错了。
+func mustMarshalPayload(t *testing.T, primary EvolutionConclusion, conclusions []EvolutionConclusion) string {
+	t.Helper()
+	body, err := marshalEvolutionPayload(primary, conclusions)
+	require.NoError(t, err)
+	return body
+}
+
+// mustEncodePayload 同上，用于直接构造一份载荷。
+func mustEncodePayload(t *testing.T, payload EvolutionPayload) string {
+	t.Helper()
+	body, err := encodeEvolutionPayload(payload)
+	require.NoError(t, err)
+	return body
+}
+
 func mergeAlert(t *testing.T, alertType model.EvolutionAlertType, status model.EvolutionAlertStatus,
 	triggerID, otherID uint, versions map[uint]uint, quote string) *model.EvolutionAlert {
 	t.Helper()
@@ -87,6 +103,36 @@ func TestMergeEvolutionAlertKeepsBothDirectionsAndPicksPrimary(t *testing.T) {
 	require.Equal(t, model.EvolutionAlertTypeConflict, payload.Type, "载荷顶层类型要跟着主结论走")
 }
 
+// 结论集合的第 0 条必须就是主结论：前端按 index === 0 标注「当前结论」，
+// 评测也按顺序取数，两者不一致会让用户和指标都读到错的那条。
+//
+// 这组输入会暴露分歧：用户声明的更新关系过时（conclusionRank = -1）与模型猜出的
+// 重复（类型优先级更高）同时存在，主结论应是过时，但按类型排序会把重复排到最前。
+func TestMergeEvolutionAlertKeepsPrimaryConclusionFirst(t *testing.T) {
+	existing := mergeAlert(t, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, 10, 11, map[uint]uint{10: 2, 11: 5}, "旧值")
+	existing.ID = 7
+	existing.Payload = mustMarshalPayload(t, EvolutionConclusion{
+		Type: model.EvolutionAlertTypeOutdated, TriggerID: 10, Reason: "用户声明的更新关系",
+		Evidence: []EvolutionEvidence{{KnowledgeID: 11, Quote: "旧值"}},
+		Severity: model.EvolutionSeverityStrong, Origin: EvolveOriginUpdateRelation,
+	}, []EvolutionConclusion{{
+		Type: model.EvolutionAlertTypeOutdated, TriggerID: 10, Reason: "用户声明的更新关系",
+		Evidence: []EvolutionEvidence{{KnowledgeID: 11, Quote: "旧值"}},
+		Severity: model.EvolutionSeverityStrong, Origin: EvolveOriginUpdateRelation,
+	}})
+
+	incoming := mergeAlert(t, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertPending, 11, 10, map[uint]uint{10: 2, 11: 5}, "新值")
+
+	alert, _ := MergeEvolutionAlert(existing, incoming)
+	payload := ParseEvolutionPayload(alert.Payload)
+
+	require.Equal(t, model.EvolutionAlertTypeOutdated, alert.AlertType,
+		"用户声明的更新关系过时优先于模型猜出的重复")
+	require.NotEmpty(t, payload.Conclusions)
+	require.Equal(t, alert.AlertType, payload.Conclusions[0].Type,
+		"conclusions[0] 必须与主结论一致，前端按它标注「当前结论」")
+}
+
 // 已裁决且正文未变：保持抑制，不重新弹提醒。
 func TestMergeEvolutionAlertSuppressesResolvedWithSameVersions(t *testing.T) {
 	existing := mergeAlert(t, model.EvolutionAlertTypeConflict, model.EvolutionAlertResolved, 10, 11, map[uint]uint{10: 2, 11: 5}, "同一句")
@@ -136,7 +182,7 @@ func TestMergeEvolutionAlertKeepsRevisionWhenConflictIsPrimary(t *testing.T) {
 	p := ParseEvolutionPayload(conflict.Payload)
 	p.RevisedTitle = "合并后的标题"
 	p.RevisedContent = "合并后的正文"
-	conflict.Payload = encodeEvolutionPayload(p)
+	conflict.Payload = mustEncodePayload(t, p)
 
 	// 新来一条过时结论：优先级低于冲突，主结论仍应是冲突。
 	outdated := mergeAlert(t, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, 10, 11, map[uint]uint{10: 1, 11: 1}, "旧值")
@@ -157,7 +203,7 @@ func TestMergeEvolutionAlertKeepsSecondaryRevisionInConclusions(t *testing.T) {
 	p := ParseEvolutionPayload(conflict.Payload)
 	p.RevisedTitle = "合并后的标题"
 	p.RevisedContent = "合并后的正文"
-	conflict.Payload = encodeEvolutionPayload(p)
+	conflict.Payload = mustEncodePayload(t, p)
 
 	duplicate := mergeAlert(t, model.EvolutionAlertTypeDuplicate, model.EvolutionAlertPending, 10, 11, map[uint]uint{10: 1, 11: 1}, "同一句")
 

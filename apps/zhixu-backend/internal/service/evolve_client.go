@@ -18,8 +18,9 @@ import (
 
 // 候选来源：updates 关系是用户显式声明过的强信号，向量近邻只是相似度提示。
 const (
-	EvolveOriginUpdateRelation = "update_relation"
-	EvolveOriginVectorNeighbor = "vector_neighbor"
+	// 别名指向 model 层：收敛规则与来源常量必须同处一地，否则主结论的选择会跨层读常量。
+	EvolveOriginUpdateRelation = model.EvolutionOriginUpdateRelation
+	EvolveOriginVectorNeighbor = model.EvolutionOriginVectorNeighbor
 )
 
 var (
@@ -270,18 +271,3 @@ func evolveRevisionUsable(title, content string) bool {
 	return utf8.RuneCountInString(content) <= EvolveRevisedContentMaxRunes
 }
 
-// evolutionAllowedTypes 按候选来源分派允许的结论类型。
-//
-// updates 关系是用户显式声明过的「谁更新谁」，这类候选只接受过时结论——把它判成重复
-// 会给出「归档其一」这种明显错误的选择。向量近邻不预先限制类型：相似度只决定候选
-// 能否进入判定，重复、过时与冲突的区分交给模型；同一对出现多种结论时由优先级收敛。
-func evolutionAllowedTypes(origin string) map[model.EvolutionAlertType]bool {
-	if origin == EvolveOriginUpdateRelation {
-		return map[model.EvolutionAlertType]bool{model.EvolutionAlertTypeOutdated: true}
-	}
-	return map[model.EvolutionAlertType]bool{
-		model.EvolutionAlertTypeDuplicate: true,
-		model.EvolutionAlertTypeOutdated:  true,
-		model.EvolutionAlertTypeConflict:  true,
-	}
-}

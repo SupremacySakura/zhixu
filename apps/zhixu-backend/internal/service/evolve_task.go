@@ -308,7 +308,7 @@ func (p *EvolveProcessor) buildAlerts(trigger *model.KnowledgeItem, candidates [
 	ordered := make([]EvolveJudgement, len(judgements))
 	copy(ordered, judgements)
 	sort.SliceStable(ordered, func(i, j int) bool {
-		return evolveTypePriority(ordered[i].Type) < evolveTypePriority(ordered[j].Type)
+		return ordered[i].Type.Priority() < ordered[j].Type.Priority()
 	})
 	// 同一目标可能有多条判定，先分组再逐组组装。
 	grouped := make(map[uint][]EvolveJudgement, len(ordered))
@@ -387,32 +387,22 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 	if len(conclusions) == 0 {
 		return model.EvolutionAlert{}, false
 	}
-	// 强候选（用户声明的更新关系）以过时结论为准：没有过时就不落提醒，
-	// 免得「归档其一」成为主结论、把较新的那条归档掉。有了过时，其它判定作为次要结论保留。
-	if candidate.origin == EvolveOriginUpdateRelation {
-		hasOutdated := false
-		for _, conclusion := range conclusions {
-			if conclusion.Type == model.EvolutionAlertTypeOutdated {
-				hasOutdated = true
-				break
+	// 强候选（用户声明的更新关系）单独判出重复或冲突时，结论要留下但不给破坏性建议。
+	//
+	// 丢弃整条会让一条真实判定静默消失（任务单 #56 明确要求保留）；照常给「归档其一」
+	// 又可能归档掉较新的那条——归档选的是 ID 较大的一侧，而强候选里较新的那条通常 ID 更大。
+	// 折中是保留结论、把建议动作降级为「保留两者」：信息不丢，也不诱导用户做危险操作。
+	// 若同时有过时结论，过时按 conclusionRank 排在最前，主结论仍是过时，不受这里影响。
+	if candidate.origin == EvolveOriginUpdateRelation && !hasOutdatedConclusion(conclusions) {
+		for i := range conclusions {
+			if conclusions[i].Type == model.EvolutionAlertTypeDuplicate {
+				conclusions[i].SuggestedAction = model.EvolutionActionKeepBoth
 			}
-		}
-		if !hasOutdated {
-			return model.EvolutionAlert{}, false
 		}
 	}
 	primary := primaryConclusion(conclusions)
 	severity := mergeSeverity(conclusions)
-	payload := EvolutionPayload{
-		Type:            primary.Type,
-		Reason:          primary.Reason,
-		Evidence:        primary.Evidence,
-		SuggestedAction: primary.SuggestedAction,
-		RevisedTitle:    primary.RevisedTitle,
-		RevisedContent:  primary.RevisedContent,
-		Conclusions:     conclusions,
-	}
-	body, err := json.Marshal(payload)
+	body, err := marshalEvolutionPayload(primary, conclusions)
 	if err != nil {
 		return model.EvolutionAlert{}, false
 	}
@@ -421,7 +411,7 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 		AlertType: primary.Type,
 		Status:    model.EvolutionAlertPending,
 		Severity:  severity,
-		Payload:   string(body),
+		Payload:   body,
 		// 提醒身份是知识对：无论从哪一侧发起检查都落在同一行。
 		PairKey: EvolutionPairKey(trigger.ID, candidate.item.ID),
 		// 证据指纹只区分「同一证据刷新」与「新证据」，不再决定身份。
@@ -434,6 +424,17 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 		return model.EvolutionAlert{}, false
 	}
 	return alert, true
+}
+
+// hasOutdatedConclusion 报告这批结论里是否已有过时判定。
+// 强候选的过时优先级最高，有过时就不需要给重复结论降级——它本来也当不上主结论。
+func hasOutdatedConclusion(conclusions []EvolutionConclusion) bool {
+	for _, conclusion := range conclusions {
+		if conclusion.Type == model.EvolutionAlertTypeOutdated {
+			return true
+		}
+	}
+	return false
 }
 
 // buildEvolutionConclusion 把一条模型判定转成结论；证据全被剔除时返回 false。
@@ -514,20 +515,6 @@ func evolveSuggestedActionFor(alertType model.EvolutionAlertType, revisedContent
 		return model.EvolutionActionCreateRelation
 	default:
 		return model.EvolutionActionMarkVerified
-	}
-}
-
-// evolveTypePriority 用于「同一对只留一条」的排序：重复优先于冲突，冲突优先于过时。
-func evolveTypePriority(alertType model.EvolutionAlertType) int {
-	switch alertType {
-	case model.EvolutionAlertTypeDuplicate:
-		return 0
-	case model.EvolutionAlertTypeConflict:
-		return 1
-	case model.EvolutionAlertTypeOutdated:
-		return 2
-	default:
-		return 3
 	}
 }
 

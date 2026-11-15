@@ -303,7 +303,7 @@ func TestEvolutionListDecoratesSubjects(t *testing.T) {
 func TestEvolutionListViewCarriesConclusions(t *testing.T) {
 	f := newEvolutionFixture()
 	alert := f.addAlert(1, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{10, 11})
-	alert.Payload = marshalEvolutionPayload(EvolutionConclusion{
+	alert.Payload = mustMarshalPayload(t, EvolutionConclusion{
 		Type: model.EvolutionAlertTypeOutdated, TriggerID: 10, Reason: "本次知识更新",
 		Evidence:        []EvolutionEvidence{{KnowledgeID: 11, Quote: "同一段正文"}},
 		SuggestedAction: model.EvolutionActionMarkOutdated, Severity: model.EvolutionSeverityStrong,
@@ -630,6 +630,34 @@ func TestEvolutionResolveMarkOutdatedMarksComparedKnowledge(t *testing.T) {
 	require.NotNil(t, f.outdated.calls[0].at)
 	require.NotEmpty(t, f.outdated.calls[0].reason)
 	require.Len(t, f.logs.entries, 1, "裁决写一条操作日志")
+}
+
+// 按知识对收敛后，SubjectIDs 跟随最近一次检查的方向，不一定与主结论的方向一致。
+// 过时目标必须取自「主结论的对立面」，否则反向检查之后会把较新的那条标记为过时。
+func TestEvolutionResolveMarkOutdatedFollowsPrimaryConclusion(t *testing.T) {
+	f := newEvolutionFixture()
+	// 主结论是 10 更新了 11（11 被取代），但最近一次检查是 11 检查 10，
+	// 于是 SubjectIDs[1] 恰好是较新的 10。
+	alert := f.addAlert(1, model.EvolutionAlertTypeOutdated, model.EvolutionAlertPending, []uint{11, 10})
+	payload, err := json.Marshal(EvolutionPayload{
+		Type: model.EvolutionAlertTypeOutdated, Reason: "10 给出了更新后的值",
+		SuggestedAction: model.EvolutionActionMarkOutdated,
+		Evidence:        []EvolutionEvidence{{KnowledgeID: 11, Quote: "旧值"}},
+		Conclusions: []EvolutionConclusion{{
+			Type: model.EvolutionAlertTypeOutdated, TriggerID: 10, Reason: "10 给出了更新后的值",
+			Evidence: []EvolutionEvidence{{KnowledgeID: 11, Quote: "旧值"}},
+			Severity: model.EvolutionSeverityStrong, Origin: EvolveOriginUpdateRelation,
+		}},
+	})
+	require.NoError(t, err)
+	alert.Payload = string(payload)
+
+	_, _, err = f.service.Resolve(context.Background(), 2, 1, EvolutionResolveInput{Action: model.EvolutionActionMarkOutdated})
+
+	require.NoError(t, err)
+	require.Len(t, f.outdated.calls, 1)
+	require.Equal(t, uint(11), f.outdated.calls[0].id,
+		"被取代的是主结论触发侧的对立面（11），不是 SubjectIDs[1]（较新的 10）")
 }
 
 // 标记已核实清除过时标记；重复提醒的核实不碰过时标记，避免顺手抹掉别的判定。

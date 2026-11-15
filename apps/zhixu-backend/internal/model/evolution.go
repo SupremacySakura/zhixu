@@ -162,10 +162,17 @@ type EvolutionAlert struct {
 	Status     EvolutionAlertStatus   `gorm:"type:varchar(16);not null;default:'pending';index:idx_evolution_alert_user_status,priority:2" json:"status"`
 	Severity   EvolutionAlertSeverity `gorm:"type:varchar(16);not null;default:'review'" json:"severity"`
 	SubjectIDs string                 `gorm:"type:json;not null" json:"-"`
-	// PairKey 是知识对身份，唯一索引保证一对知识只有一行提醒。
-	PairKey string `gorm:"type:char(64);not null;default:'';uniqueIndex:uniq_evolution_alert_pair" json:"-"`
+	// PairKey 是知识对身份，一对知识只有一行提醒。
+	//
+	// 唯一索引刻意不写在这里：AutoMigrate 先于历史回填执行，而库里已有的提醒行 pair_key
+	// 全是空串，tag 上的唯一索引会当场建在重复值上失败，整个迁移返回错误、服务起不来。
+	// 索引由迁移末尾的显式 DDL 创建，那时回填已经收敛完毕。
+	PairKey string `gorm:"type:char(64);not null;default:'';index:idx_evolution_alert_pair" json:"-"`
 	// PairVersions 是生成结论时两侧知识的正文版本，JSON 对象 {"10":2,"11":5}。
-	PairVersions string `gorm:"type:json;not null" json:"-"`
+	//
+	// 刻意用 varchar 而不是 JSON 列：给已有表追加 NOT NULL 的 JSON 列时 MySQL 会用空串
+	// 回填历史行并报 ERROR 3140，迁移直接失败。取值仍按 JSON 解析，列类型只是存储形态。
+	PairVersions string `gorm:"type:varchar(512);not null;default:''" json:"-"`
 	// Payload 是结构化判定结果（理由、证据、建议动作、冲突时的修订稿），解析见服务层。
 	Payload        string          `gorm:"type:json;not null" json:"-"`
 	DedupeKey      string          `gorm:"type:char(64);not null;index:idx_evolution_alert_dedupe" json:"-"`

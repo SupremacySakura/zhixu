@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"zhixu-backend/internal/model"
-	"zhixu-backend/internal/service"
 
 	"gorm.io/gorm"
 )
@@ -83,7 +82,7 @@ func backfillEvolutionPairs(db *gorm.DB) error {
 				if len(ids) != 2 {
 					continue
 				}
-				key = service.EvolutionPairKey(ids[0], ids[1])
+				key = model.EvolutionPairKey(ids[0], ids[1])
 				// 回填到行上：后面按 pair_key 分组与建唯一索引都依赖它。
 				if err := db.Model(&model.EvolutionAlert{}).Where("id = ?", row.ID).
 					UpdateColumn("pair_key", key).Error; err != nil {
@@ -118,7 +117,7 @@ func convergePairRows(tx *gorm.DB, pairKey string, rows []model.EvolutionAlert) 
 	// 先把所有行按「保留行优先」的顺序并进保留行，保证主结论与结论集合稳定。
 	ordered := append([]model.EvolutionAlert{keep}, others(rows, keep.ID)...)
 	for i := 1; i < len(ordered); i++ {
-		result, _ := service.MergeEvolutionAlert(&merged, &ordered[i])
+		result, _ := model.MergeEvolutionAlert(&merged, &ordered[i])
 		if result != nil {
 			merged = *result
 		}

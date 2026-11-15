@@ -57,38 +57,6 @@ func TestSanitizeEvolveJudgementsKeepsCompleteRevisionOnly(t *testing.T) {
 	})
 }
 
-// 类型分派只由候选来源决定：相似度只负责筛选候选，不再参与允许类型的判断。
-// 向量近邻对三类结论都不设限；更新关系是用户显式声明的强信号，只接受过时。
-func TestEvolutionAllowedTypesDispatchesByOrigin(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		origin string
-		want   []model.EvolutionAlertType
-	}{
-		{"vector neighbor allows duplicate", EvolveOriginVectorNeighbor,
-			[]model.EvolutionAlertType{model.EvolutionAlertTypeDuplicate, model.EvolutionAlertTypeConflict, model.EvolutionAlertTypeOutdated}},
-		{"vector neighbor allows conflict", EvolveOriginVectorNeighbor,
-			[]model.EvolutionAlertType{model.EvolutionAlertTypeDuplicate, model.EvolutionAlertTypeConflict, model.EvolutionAlertTypeOutdated}},
-		{"vector neighbor allows outdated", EvolveOriginVectorNeighbor,
-			[]model.EvolutionAlertType{model.EvolutionAlertTypeDuplicate, model.EvolutionAlertTypeConflict, model.EvolutionAlertTypeOutdated}},
-		{"update relation allows outdated only", EvolveOriginUpdateRelation,
-			[]model.EvolutionAlertType{model.EvolutionAlertTypeOutdated}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			allowed := evolutionAllowedTypes(tc.origin)
-			var got []model.EvolutionAlertType
-			for _, alertType := range []model.EvolutionAlertType{
-				model.EvolutionAlertTypeDuplicate, model.EvolutionAlertTypeConflict, model.EvolutionAlertTypeOutdated,
-			} {
-				if allowed[alertType] {
-					got = append(got, alertType)
-				}
-			}
-			require.Equal(t, tc.want, got)
-		})
-	}
-}
-
 // 清洗阶段不按提醒上限截断：一条任务可能对多个候选各给出结论，候选上限是 8，
 // 提前按 5 截断会让排在第 6 位的结论连同它的目标一起消失，而截断应发生在收敛之后。
 func TestSanitizeEvolveJudgementsDoesNotTruncateBeforeConvergence(t *testing.T) {

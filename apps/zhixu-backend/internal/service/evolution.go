@@ -2,12 +2,8 @@ package service
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -57,83 +53,6 @@ func EffectiveEvolveCandidateGate(gate float64) float64 {
 		return EvolveCandidateMinScoreDefault
 	}
 	return gate
-}
-
-// EvolutionEvidence 是一条证据：某条知识正文里的原话。
-// 引文必须能在正文中定位，定位不到就不该作为证据展示给用户。
-type EvolutionEvidence struct {
-	KnowledgeID uint   `json:"knowledge_id"`
-	Quote       string `json:"quote"`
-}
-
-// EvolutionPayload 是提醒的结构化判定结果，整体存在提醒行的 payload 列里。
-// 冲突场景额外带修订稿；修订稿缺失时前端把「采纳修订」置灰。
-type EvolutionPayload struct {
-	Type            model.EvolutionAlertType `json:"type"`
-	Reason          string                   `json:"reason"`
-	Evidence        []EvolutionEvidence      `json:"evidence"`
-	SuggestedAction model.EvolutionAction    `json:"suggested_action"`
-	RevisedTitle    string                   `json:"revised_title,omitempty"`
-	RevisedContent  string                   `json:"revised_content,omitempty"`
-	// Conclusions 是这条提醒承载的全部结论。顶层字段始终跟随主结论（按重复 → 冲突 → 过时
-	// 收敛），因此只读顶层字段的旧前端与旧评测仍能拿到一条完整结论；结论集合供详情页展示
-	// 另一侧的判定。
-	Conclusions []EvolutionConclusion `json:"conclusions,omitempty"`
-}
-
-// encodeEvolutionPayload 把载荷序列化；失败时返回空对象，调用方据此丢弃整条提醒。
-func encodeEvolutionPayload(payload EvolutionPayload) string {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return "{}"
-	}
-	return string(body)
-}
-
-// ParseEvolutionPayload 解析载荷；脏数据返回空载荷，不让列表整体失败。
-func ParseEvolutionPayload(raw string) EvolutionPayload {
-	var payload EvolutionPayload
-	if raw == "" {
-		return payload
-	}
-	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
-		return EvolutionPayload{}
-	}
-	return payload
-}
-
-// evolutionEvidenceFingerprint 把证据数组压成一个稳定字符串：
-// 先按知识 ID、再按引文排序，避免同一组证据因顺序不同算出两个指纹。
-func evolutionEvidenceFingerprint(evidence []EvolutionEvidence) string {
-	items := make([]EvolutionEvidence, len(evidence))
-	copy(items, evidence)
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].KnowledgeID != items[j].KnowledgeID {
-			return items[i].KnowledgeID < items[j].KnowledgeID
-		}
-		return items[i].Quote < items[j].Quote
-	})
-	var builder strings.Builder
-	for _, item := range items {
-		builder.WriteString(fmt.Sprintf("%d:%s\n", item.KnowledgeID, item.Quote))
-	}
-	return builder.String()
-}
-
-// EvolutionDedupeKey 计算提醒指纹：类型 + 排序后的涉及知识 ID + 证据引文指纹。
-// 与 AI 任务的幂等键不同，这个指纹在终态也保留，用来抑制同一证据重复弹提醒；
-// 引文随正文变化时指纹随之改变，于是同一条知识的新问题会被当成新提醒。
-func EvolutionDedupeKey(alertType model.EvolutionAlertType, subjectIDs []uint, evidence []EvolutionEvidence) string {
-	ids := make([]uint, len(subjectIDs))
-	copy(ids, subjectIDs)
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	parts := make([]string, 0, len(ids))
-	for _, id := range ids {
-		parts = append(parts, fmt.Sprintf("%d", id))
-	}
-	raw := fmt.Sprintf("%s|%s|%s", alertType, strings.Join(parts, ","), evolutionEvidenceFingerprint(evidence))
-	sum := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(sum[:])
 }
 
 // validEvidence 过滤掉在正文里定位不到的引文。
@@ -474,13 +393,33 @@ func subjectPair(alert *model.EvolutionAlert) ([]uint, error) {
 	return ids, nil
 }
 
-// outdatedSubject 取过时提醒里被判定过时的那条知识：subject_ids[1] 是被比对的知识，
-// 本次触发的知识（[0]）是新的一方。过时只做跨条目判定，因此这里必须落在 [1] 上。
+// outdatedSubject 取过时提醒里被判定过时的那条知识，也就是「被取代的一侧」。
+//
+// 按知识对收敛后，subject_ids 跟随最近一次检查的方向，不是主结论的方向：主结论可能是
+// 10 更新了 11，而最近一次检查是 11 检查 10。此时 subject_ids[1] 反而是较新的那条，
+// 照它标记过时就会把新知识判成旧的——正是本改造要消除的「以旧覆新」。
+//
+// 因此优先按主结论的方向取对立面：主结论的 TriggerID 是「新的一方」，被取代的是另一侧。
+// 主结论缺方向信息时（历史载荷只有顶层字段）退回 subject_ids[1]，与改造前行为一致。
 func outdatedSubject(alert *model.EvolutionAlert) (uint, error) {
 	ids, err := subjectPair(alert)
 	if err != nil {
 		return 0, err
 	}
+	conclusions := conclusionsOf(ParseEvolutionPayload(alert.Payload))
+	if len(conclusions) == 0 {
+		return ids[1], nil
+	}
+	primary := primaryConclusion(conclusions)
+	if primary.TriggerID == 0 {
+		return ids[1], nil
+	}
+	for _, id := range ids {
+		if id != primary.TriggerID {
+			return id, nil
+		}
+	}
+	// 主结论的触发侧不在这一对里说明载荷与 subject_ids 不同步，退回旧口径。
 	return ids[1], nil
 }
 

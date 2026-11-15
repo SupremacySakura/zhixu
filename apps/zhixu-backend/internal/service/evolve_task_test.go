@@ -453,11 +453,12 @@ func TestEvolveProcessorFallsBackWhenGateOutOfRange(t *testing.T) {
 	}
 }
 
-// updates 关系指向的目标是强候选：它只接受过时结论。
+// 强候选单独判出重复时，结论要留下，但不能建议「归档其一」。
 //
-// 模型对强候选单独判出重复时不落提醒——那会让「归档其一」成为主结论，而归档选的是
-// ID 较大的一侧，可能归档较新的那条。用户已声明「谁更新谁」，这类重复判定更像模型误读。
-func TestEvolveProcessorTreatsUpdateRelationAsOutdatedOnly(t *testing.T) {
+// 用户已声明「谁更新谁」，模型却读成重复，这条判定仍有信息价值（也许两份确实高度重合），
+// 因此不能丢弃。但「归档其一」归档的是 ID 较大的一侧，可能正好是较新的那条，
+// 所以只保留结论、不给破坏性建议。
+func TestEvolveProcessorKeepsUpdateRelationDuplicateWithoutArchiving(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "被更新的旧文", "旧版本的结论。", 0.95)
 	f.relations.rows = []repository.RelationRecord{{
@@ -473,7 +474,13 @@ func TestEvolveProcessorTreatsUpdateRelationAsOutdatedOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, f.client.candidates, 1)
 	require.Equal(t, EvolveOriginUpdateRelation, f.client.candidates[0].Origin)
-	require.Empty(t, f.alerts.upserted, "强候选单独判出重复时不落提醒")
+	require.Len(t, f.alerts.upserted, 1, "结论不能因为来源是强候选就丢掉")
+	alert := f.alerts.upserted[0]
+	payload := ParseEvolutionPayload(alert.Payload)
+	require.NotEmpty(t, payload.Conclusions)
+	require.NotEqual(t, model.EvolutionActionArchiveOne, payload.SuggestedAction,
+		"不能建议归档其一：归档的是 ID 较大的一侧，可能归档掉较新的那条")
+	require.Equal(t, model.EvolutionActionKeepBoth, payload.SuggestedAction)
 }
 
 // 强候选同时给出过时与重复时，过时是主结论，重复降为次要结论留给用户参考。
@@ -546,8 +553,9 @@ func TestEvolveProcessorRecordsOutdatedFromUpdateRelation(t *testing.T) {
 
 // 强候选不受候选门槛约束：updates 是用户确认过的显式信号，即使向量相似度为 0
 // 也必须送进模型，否则「本条更新了对方」这条事实会被相似度噪声挡掉。
-// 它只接受过时结论，模型给出重复或冲突一律丢弃。
-func TestEvolveProcessorKeepsUpdateRelationBelowGateAndDropsOtherTypes(t *testing.T) {
+// 强候选即使相似度低于门槛也仍送模型判定；判出的重复与冲突保留为次要结论，
+// 只是不给「归档其一」这类破坏性建议。
+func TestEvolveProcessorKeepsUpdateRelationBelowGateAndKeepsOtherTypes(t *testing.T) {
 	for _, score := range []float64{0.0, 0.5} {
 		f := newEvolveFixture()
 		f.addCandidate(21, "被更新的旧文", "旧版本的结论。", score)
@@ -577,7 +585,11 @@ func TestEvolveProcessorKeepsUpdateRelationBelowGateAndDropsOtherTypes(t *testin
 		require.Len(t, f.client.candidates, 1, "相似度 %.1f 的强候选仍应送模型", score)
 		require.Equal(t, EvolveOriginUpdateRelation, f.client.candidates[0].Origin)
 		require.Equal(t, uint(21), f.client.candidates[0].KnowledgeID)
-		require.Empty(t, f.alerts.upserted, "强候选只接受过时结论，重复与冲突都应丢弃")
+		require.Len(t, f.alerts.upserted, 1, "重复与冲突作为次要结论保留，不再整条丢弃")
+		payload := ParseEvolutionPayload(f.alerts.upserted[0].Payload)
+		require.Len(t, payload.Conclusions, 2, "两条结论都要留下")
+		require.NotEqual(t, model.EvolutionActionArchiveOne, payload.SuggestedAction,
+			"强候选没有过时结论时不能建议归档其一")
 	}
 }
 
