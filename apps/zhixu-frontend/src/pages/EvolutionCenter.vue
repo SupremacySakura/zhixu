@@ -404,7 +404,11 @@ onMounted(() => {
           </p>
 
           <!-- 两侧判定：主结论决定可执行动作，次要结论只读，让用户看到另一侧的判断而不是替它做决定。 -->
-          <section v-if="conclusionsOf(selectedAlert).length > 1" class="mt-5" data-test="conclusions">
+          <section
+            v-if="conclusionsOf(selectedAlert).length > 1"
+            class="mt-5"
+            data-test="conclusions"
+          >
             <h3 class="text-lead">两侧判定</h3>
             <ul class="mt-3 space-y-3">
               <li
