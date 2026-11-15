@@ -144,7 +144,7 @@ async function submitDefaults(confirmed: boolean) {
     return
   }
   if (!Number.isFinite(score) || score < 0.05 || score > 1) {
-    displayToast('相似度阈值需在 0.05–1 之间', 'error')
+    displayToast('召回下限需在 0.05–1 之间', 'error')
     return
   }
   if (!Number.isFinite(gate) || gate < 0.45 || gate > 1) {
@@ -320,7 +320,7 @@ function reloadConfirmation() {
                       </div>
                       <div>
                         <label for="rag-min-score" class="mb-2 block text-note font-semibold"
-                          >相似度阈值</label
+                          >召回下限</label
                         ><input
                           id="rag-min-score"
                           v-model.number="ragMinScore"
@@ -373,7 +373,7 @@ function reloadConfirmation() {
                       </div>
                     </div>
                     <p class="mt-3 text-note text-label-secondary">
-                      相似度低于阈值的片段不会作为参考；与知识库无关的问题将视为未找到相关内容。条数越大上下文越长（每片约
+                      相似度低于召回下限的片段不会作为参考；与知识库无关的问题将视为未找到相关内容。条数越大上下文越长（每片约
                       1024 字符），按需调高。
                     </p>
                   </div>

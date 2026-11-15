@@ -402,7 +402,7 @@ func (s *AIConfigService) SaveDefaults(ctx context.Context, user uint, input Def
 		return nil, configInvalid(fmt.Sprintf("检索条数需在 1–%d 之间", RagMaxTopK))
 	}
 	if input.RagMinScore != nil && (*input.RagMinScore < RagMinScoreFloor || *input.RagMinScore > 1) {
-		return nil, configInvalid(fmt.Sprintf("相似度阈值需在 %g–1 之间", RagMinScoreFloor))
+		return nil, configInvalid(fmt.Sprintf("召回下限需在 %g–1 之间", RagMinScoreFloor))
 	}
 	if input.EvolveCandidateMinScore != nil &&
 		(*input.EvolveCandidateMinScore < EvolveCandidateMinScoreFloor || *input.EvolveCandidateMinScore > 1) {

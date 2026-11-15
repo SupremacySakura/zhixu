@@ -257,7 +257,7 @@ func TestEvolveProcessorRecordsSemanticDuplicate(t *testing.T) {
 	require.Contains(t, string(payload), "\"alert_count\":1")
 }
 
-// 冲突结论接入同一条管线：0.75~0.90 的中等相似落一条冲突提醒，并带上模型给出的修订稿。
+// 冲突结论接入同一条管线：中等相似度（示例 0.82）也能落一条冲突提醒，并带上模型给出的修订稿。
 func TestEvolveProcessorRecordsConflictWithRevision(t *testing.T) {
 	f := newEvolveFixture()
 	f.addCandidate(21, "另一种说法", "HNSW 用分层图做近似最近邻检索。", 0.82)
@@ -483,6 +483,43 @@ func TestEvolveProcessorRecordsOutdatedFromUpdateRelation(t *testing.T) {
 	payload := ParseEvolutionPayload(alert.Payload)
 	require.Equal(t, model.EvolutionActionMarkOutdated, payload.SuggestedAction)
 	require.Len(t, payload.Evidence, 2)
+}
+
+// 强候选不受候选门槛约束：updates 是用户确认过的显式信号，即使向量相似度为 0
+// 也必须送进模型，否则「本条更新了对方」这条事实会被相似度噪声挡掉。
+// 它只接受过时结论，模型给出重复或冲突一律丢弃。
+func TestEvolveProcessorKeepsUpdateRelationBelowGateAndDropsOtherTypes(t *testing.T) {
+	for _, score := range []float64{0.0, 0.5} {
+		f := newEvolveFixture()
+		f.addCandidate(21, "被更新的旧文", "旧版本的结论。", score)
+		f.relations.rows = []repository.RelationRecord{{
+			KnowledgeRelation: model.KnowledgeRelation{
+				SourceID: 10, TargetID: 21, RelationType: model.RelationTypeUpdates, Status: model.RelationConfirmed,
+			},
+			CounterpartID: 21,
+		}}
+		f.client.judgements = []EvolveJudgement{
+			f.duplicateJudgement(21, "旧版本的结论"),
+			{
+				TargetID: 21,
+				Type:     model.EvolutionAlertTypeConflict,
+				Reason:   "两条知识给出互斥结论。",
+				Evidence: []EvolutionEvidence{
+					{KnowledgeID: 10, Quote: "同一段正文"},
+					{KnowledgeID: 21, Quote: "旧版本的结论"},
+				},
+				Severity: model.EvolutionSeverityStrong,
+			},
+		}
+
+		_, err := f.processor.Process(context.Background(), f.task)
+
+		require.NoError(t, err)
+		require.Len(t, f.client.candidates, 1, "相似度 %.1f 的强候选仍应送模型", score)
+		require.Equal(t, EvolveOriginUpdateRelation, f.client.candidates[0].Origin)
+		require.Equal(t, uint(21), f.client.candidates[0].KnowledgeID)
+		require.Empty(t, f.alerts.upserted, "强候选只接受过时结论，重复与冲突都应丢弃")
+	}
 }
 
 // 弱信号（向量近邻）判过时必须有双方原文对照：只有一侧引文就不落库。

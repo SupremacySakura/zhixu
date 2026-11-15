@@ -530,10 +530,7 @@ func mustEvolution(user *model.UserModel, dataDir, outDir, mode string, cfg *con
 		fatal(fmt.Errorf("未知 --mode %q，只支持 pairwise 或 collect", mode))
 	}
 	// 把相似度与阈值判断附在结果上：端到端漏检时，能直接看出是模型判错还是根本没进判定。
-	for i := range outcomes {
-		outcomes[i].Similarity = similarities[outcomes[i].SID]
-		outcomes[i].ThresholdNote = thresholdNote(outcomes[i].Expected, outcomes[i].Similarity, gate)
-	}
+	annotateThresholds(outcomes, similarities, mode, gate)
 
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		fatal(err)
@@ -550,6 +547,26 @@ func mustEvolution(user *model.UserModel, dataDir, outDir, mode string, cfg *con
 	writeText(filepath.Join(outDir, "evolution-"+mode+"-summary.md"), table)
 	fmt.Println(table)
 }
+
+// annotateThresholds 给每条样本附上实测相似度与进入判定的说明。
+//
+// 两种模式的注记口径不同：collect 走真实门槛，相似度低于门槛确实没进判定；
+// pairwise 固定以 0.95 送模型，真实相似度再低也已经判定过了，照抄 collect 的
+// 「未进入模型判定」会把报告写反。
+func annotateThresholds(outcomes []pairOutcome, similarities map[string]float64, mode string, gate float64) {
+	for i := range outcomes {
+		outcomes[i].Similarity = similarities[outcomes[i].SID]
+		if mode == "pairwise" {
+			outcomes[i].ThresholdNote = fmt.Sprintf(
+				"pairwise 固定以 %.2f 送入模型判定，不受候选门槛 %.2f 影响", pairwiseGate, gate)
+			continue
+		}
+		outcomes[i].ThresholdNote = thresholdNote(outcomes[i].Expected, outcomes[i].Similarity, gate)
+	}
+}
+
+// pairwiseGate 是 pairwise 模式绕开候选门槛时固定传入的相似度。
+const pairwiseGate = 0.95
 
 // effectiveGate 读取用户实际配置的演化候选门槛，与生产链路使用同一个回落规则。
 // 评测结果里的 threshold_note 必须对应线上真正生效的门槛，否则重算数字会与用户看到的行为脱节。
@@ -677,7 +694,7 @@ func judgePairs(user *model.UserModel, pairs []pairRecord, cfg *config.Config) [
 			trigger.Title, excerpt(trigger.Content),
 			[]service.EvolveCandidate{{
 				KnowledgeID: candidate.ID, Title: candidate.Title,
-				Excerpt: excerpt(candidate.Content), Score: 0.95, Origin: service.EvolveOriginVectorNeighbor,
+				Excerpt: excerpt(candidate.Content), Score: pairwiseGate, Origin: service.EvolveOriginVectorNeighbor,
 			}})
 		outcome := pairOutcome{
 			SID: pair.SID, PairType: pair.PairType, Expected: pair.Expected,
@@ -906,7 +923,11 @@ func gridReport(outcomes []pairOutcome) string {
 	}
 	var best []result
 	bestCorrect := -1
-	for gate := 0.50; gate <= 0.95+1e-9; gate += 0.01 {
+	// 搜索整个配置允许区间（0.45–1），否则最优值落在边界外时会被漏掉。
+	// 步长 0.01 与配置的 0.05 步进不对齐是有意的：报告要看的是曲线形状。
+	// 用整数步进再除以 100，避免 0.45+0.01 的浮点累加让 0.47 这类门槛被跳过。
+	for step := 45; step <= 100; step++ {
+		gate := float64(step) / 100
 		correct := estimatedCorrect(outcomes, gate)
 		if correct > bestCorrect {
 			bestCorrect = correct
@@ -917,7 +938,7 @@ func gridReport(outcomes []pairOutcome) string {
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "网格搜索范围：候选门槛 0.50–0.95，步长 0.01。\n\n")
+	fmt.Fprintf(&b, "网格搜索范围：候选门槛 0.45–1.00，步长 0.01（覆盖配置允许的整个区间）。\n\n")
 	fmt.Fprintf(&b, "最优估计准确率 %.3f（%d/%d），达到该准确率的门槛共 %d 个。\n\n",
 		ratio(bestCorrect, len(outcomes)), bestCorrect, len(outcomes), len(best))
 	b.WriteString("| 候选门槛 | 估计准确率 |\n")
@@ -986,12 +1007,23 @@ func distributionOverlap(outcomes []pairOutcome) string {
 	dup, dupOK := ranges["duplicate"]
 	conflict, conflictOK := ranges["conflict"]
 	if dupOK && conflictOK {
-		if conflict[0] < dup[0] && conflict[1] > dup[1] {
-			fmt.Fprintf(&b, "\n重复区间 [%.3f, %.3f] 被冲突区间 [%.3f, %.3f] 完整包含，"+
-				"两者在相似度维度上不可分。任何按相似度分派类型的规则只要低到能覆盖全部重复样本，"+
-				"就会把落在其上方的冲突样本误判成重复，反之亦然。"+
-				"因此类型由模型判定，相似度只负责筛选候选。\n",
+		// 只要两个闭区间有交集就不可分：按分数切一刀必然切掉某一类的样本。
+		// 严格包含只是重叠的一种（重复区间被冲突区间包住），部分重叠与反向包含同理。
+		separated := conflict[1] < dup[0] || dup[1] < conflict[0]
+		if !separated {
+			relation := fmt.Sprintf("重复区间 [%.3f, %.3f] 与冲突区间 [%.3f, %.3f] 区间重叠",
 				dup[0], dup[1], conflict[0], conflict[1])
+			if conflict[0] < dup[0] && conflict[1] > dup[1] {
+				relation = fmt.Sprintf("重复区间 [%.3f, %.3f] 被冲突区间 [%.3f, %.3f] 完整包含",
+					dup[0], dup[1], conflict[0], conflict[1])
+			} else if dup[0] < conflict[0] && dup[1] > conflict[1] {
+				relation = fmt.Sprintf("冲突区间 [%.3f, %.3f] 被重复区间 [%.3f, %.3f] 完整包含",
+					conflict[0], conflict[1], dup[0], dup[1])
+			}
+			fmt.Fprintf(&b, "\n%s，"+
+				"两者在相似度维度上不可分。任何按相似度分派类型的规则只要低到能覆盖全部重复样本，"+
+				"就会把落在区间内的冲突样本误判成重复，反之亦然。"+
+				"因此类型由模型判定，相似度只负责筛选候选。\n", relation)
 		} else {
 			b.WriteString("\n重复与冲突区间存在可分间隙，但类型由模型判定，相似度只负责筛选候选。\n")
 		}
