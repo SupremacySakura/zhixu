@@ -513,6 +513,9 @@ type pairOutcome struct {
 	Similarity float64 `json:"similarity"`
 	// ThresholdNote 说明相似度是否足以让候选进入模型判定。
 	ThresholdNote string `json:"threshold_note"`
+	// DirectionMatch 表示这条结论来自样本标注的方向（trigger 检查 candidate）。
+	// false 且 Judged=true 说明只有反向结论，本方向没有产出判定。
+	DirectionMatch bool   `json:"direction_match"`
 	Note          string `json:"note"`
 }
 
@@ -725,38 +728,97 @@ func collectAlerts(user *model.UserModel, pairs []pairRecord) []pairOutcome {
 	if err := database.DB.Where("user_id = ?", user.ID).Find(&alerts).Error; err != nil {
 		fatal(err)
 	}
-	byPair := map[string]string{}
+	return collectOutcomes(alerts, pairs)
+}
+
+// collectOutcomes 把提醒行按样本对取数。
+//
+// 取数的单位是「结论」而不是「提醒行」：一条提醒可能承载两个方向的判定，每个结论用
+// 自己的 TriggerID 表达方向。因此这里不再依赖 SubjectIDs 的顺序——那个顺序只说明最近
+// 一次检查是谁触发的，不能代表每条结论的方向。
+//
+// 同一对知识的结论按标注方向优先取：本方向有结论就用它，没有才回落到反向结论，
+// 并记在 DirectionMatch 上，让读者能区分「本方向判错」与「只有反向结论」。
+func collectOutcomes(alerts []model.EvolutionAlert, pairs []pairRecord) []pairOutcome {
+	// 有序方向键 "<触发>-<候选>" -> 该方向的结论类型。键保留顺序：方向正是要区分的东西。
+	byDirection := map[string]string{}
 	for _, alert := range alerts {
 		ids := alert.SubjectIDList()
 		if len(ids) != 2 {
 			continue
 		}
-		key := pairKey(ids[0], ids[1])
-		// 同一对可能有多条不同类型的提醒，重复优先与生产中一致。
-		if current, ok := byPair[key]; !ok || alertPriority(string(alert.AlertType)) < alertPriority(current) {
-			byPair[key] = string(alert.AlertType)
+		for _, direction := range alertDirections(alert, ids) {
+			key := fmt.Sprintf("%d-%d", direction.triggerID, direction.candidateID)
+			// 同一方向出现多种结论时重复优先，与生产收敛的优先级一致。
+			if current, ok := byDirection[key]; !ok ||
+				alertPriority(string(direction.alertType)) < alertPriority(current) {
+				byDirection[key] = string(direction.alertType)
+			}
 		}
 	}
 	outcomes := make([]pairOutcome, 0, len(pairs))
 	for _, pair := range pairs {
-		predicted, ok := byPair[pairKey(pair.TriggerID, pair.CandidateID)]
-		if !ok {
-			predicted = "none"
+		forwardKey := fmt.Sprintf("%d-%d", pair.TriggerID, pair.CandidateID)
+		reverseKey := fmt.Sprintf("%d-%d", pair.CandidateID, pair.TriggerID)
+		predicted, judged, directionMatch := "none", false, false
+		if value, ok := byDirection[forwardKey]; ok {
+			predicted, judged, directionMatch = value, true, true
+		} else if value, ok := byDirection[reverseKey]; ok {
+			// 只有反向结论：本方向没产出判定，但用户确实会看到一条提醒。
+			predicted, judged = value, true
 		}
 		outcomes = append(outcomes, pairOutcome{
 			SID: pair.SID, PairType: pair.PairType, Expected: pair.Expected,
-			Predicted: predicted, Judged: ok,
+			Predicted: predicted, Judged: judged, DirectionMatch: directionMatch,
 			TriggerID: pair.TriggerID, CandidateID: pair.CandidateID, Note: pair.Note,
 		})
 	}
 	return outcomes
 }
 
-func pairKey(a, b uint) string {
-	if a > b {
-		a, b = b, a
+// alertDirection 是一条结论的方向：以谁为本次检查的知识、比对了谁、得出什么类型。
+type alertDirection struct {
+	triggerID   uint
+	candidateID uint
+	alertType   model.EvolutionAlertType
+}
+
+// alertDirections 列出提醒里每个结论的方向。
+//
+// 优先按结论集合逐条取；历史载荷只有顶层字段时回退到「两侧顺序即方向」，
+// 否则迁移前的提醒会被当成「没产生提醒」，让重跑后的评测凭空多出一批漏报。
+func alertDirections(alert model.EvolutionAlert, ids []uint) []alertDirection {
+	payload := service.ParseEvolutionPayload(alert.Payload)
+	out := make([]alertDirection, 0, len(payload.Conclusions)+1)
+	for _, conclusion := range payload.Conclusions {
+		if conclusion.TriggerID == 0 || !conclusion.Type.Valid() {
+			continue
+		}
+		candidateID := otherSubject(ids, conclusion.TriggerID)
+		if candidateID == 0 {
+			continue
+		}
+		out = append(out, alertDirection{
+			triggerID: conclusion.TriggerID, candidateID: candidateID, alertType: conclusion.Type,
+		})
 	}
-	return fmt.Sprintf("%d-%d", a, b)
+	if len(out) > 0 {
+		return out
+	}
+	if payload.Type.Valid() {
+		out = append(out, alertDirection{triggerID: ids[0], candidateID: ids[1], alertType: payload.Type})
+	}
+	return out
+}
+
+// otherSubject 返回知识对里另一侧的知识 ID；两侧都不是它时返回 0（脏数据）。
+func otherSubject(ids []uint, id uint) uint {
+	for _, candidate := range ids {
+		if candidate != id {
+			return candidate
+		}
+	}
+	return 0
 }
 
 func alertPriority(alertType string) int {
@@ -838,6 +900,25 @@ func evolutionTable(outcomes []pairOutcome, gate *float64) string {
 	if gate != nil {
 		fmt.Fprintf(&b, "\n总体准确率 %.3f（%d/%d，候选门槛 %.2f），产生提醒的样本 %d/%d。\n",
 			ratio(correct, len(outcomes)), correct, len(outcomes), *gate, judged, len(outcomes))
+		// 反向结论单独计数：这些样本本方向没产出判定，是另一侧检查顺带得出的。
+		// 把它们算作「判对」会高估端到端能力，所以必须给出剔除后的严格口径。
+		reverseOnly, reverseOnlyCorrect := 0, 0
+		for _, outcome := range outcomes {
+			if outcome.Judged && !outcome.DirectionMatch {
+				reverseOnly++
+				if outcome.Predicted == outcome.Expected {
+					reverseOnlyCorrect++
+				}
+			}
+		}
+		if reverseOnly > 0 {
+			fmt.Fprintf(&b, "其中 %d 条结论来自反向检查（本方向未产出提醒），正确 %d 条；"+
+				"剔除后准确率 %.3f（%d/%d）。\n",
+				reverseOnly, reverseOnlyCorrect,
+				ratio(correct-reverseOnlyCorrect, len(outcomes)-reverseOnly),
+				correct-reverseOnlyCorrect, len(outcomes)-reverseOnly)
+		}
+		b.WriteString(collectProvenanceNote)
 	} else {
 		fmt.Fprintf(&b, "\n总体准确率 %.3f（%d/%d），产生提醒的样本 %d/%d。\n",
 			ratio(correct, len(outcomes)), correct, len(outcomes), judged, len(outcomes))
@@ -913,6 +994,15 @@ const legacyDefaultGate = 0.80
 // 模型判定没有重跑。缺了这句，读者会把估计值当成实测值。
 const recomputeNote = "数字来自既有采集明细按新规则重算，模型判定未重跑；" +
 	"「估计准确率」假设进入判定的候选都能被模型判对，是上界而非实测。"
+
+// collectProvenanceNote 说明 collect 的取数口径已经改变，旧报告里的数字不可直接对比。
+//
+// 提醒按知识对收敛后，同一对知识只有一条提醒、可承载两个方向的结论，取数单位从「提醒行」
+// 变成「结论」。这让分母与「产生提醒的样本」的计数都发生变化，因此旧口径下的准确率、
+// 严格口径与证据可定位率都需要重跑后更新，不能只把新数字填进旧表格。
+const collectProvenanceNote = "取数口径已改为按结论集合：同一对知识只计一次，" +
+	"方向取自结论自身而非提醒行的两侧顺序。与按提醒行取数的旧口径不可直接对比，" +
+	"准确率、严格口径与证据可定位率均需以本次结果重新誊写。"
 
 // gridReport 穷举单一候选门槛，给出估计准确率的上限与分布重叠检查。
 // 估计口径假设进入判定的候选模型都能判对，模型本身的效果由 pairwise 实测。
