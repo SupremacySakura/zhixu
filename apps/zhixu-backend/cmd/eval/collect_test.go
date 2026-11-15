@@ -219,7 +219,10 @@ func TestEvolveCandidateCapMatchesAIServiceContract(t *testing.T) {
 // 因此：要么不截断（把上限交给收敛），要么截断值不小于 Go 的上限。
 func TestEvolveAlertCapDoesNotTruncateBeforeConvergence(t *testing.T) {
 	source := evolveSource(t)
-	match := regexp.MustCompile(`out\.length\s*===\s*(\d+)`).FindStringSubmatch(source)
+	// 只认「按上限截断」这一形态：判等后立即 break。清洗阶段还有一处
+	// `out.length === 0` 是「一条都没解析出来」的合法性判断，与截断无关，
+	// 若一并匹配会把它当成「按 0 条截断」而误报。
+	match := regexp.MustCompile(`out\.length\s*===\s*(\d+)\s*\)\s*(?:\{\s*)?break`).FindStringSubmatch(source)
 	if match == nil {
 		// 清洗阶段不截断：上限完全由 Go 侧收敛决定，这是符合预期的形态。
 		return
