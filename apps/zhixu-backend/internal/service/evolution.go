@@ -403,8 +403,13 @@ func (s *EvolutionService) effectFor(ctx context.Context, action model.Evolution
 			if strings.TrimSpace(payload.RevisedTitle) == "" || strings.TrimSpace(payload.RevisedContent) == "" {
 				return fmt.Errorf("%w: 该提醒没有可采纳的修订稿", ErrEvolutionInvalid)
 			}
-			// 修订稿写在触发侧的知识上：它是本次检查的对象，被比对的一条只是参照。
-			if _, err := s.Reviser.AcceptRevision(ctx, alert.UserID, ids[0], payload.RevisedTitle, payload.RevisedContent); err != nil {
+			// 修订稿写在较新的一侧：模型给的稿子通常是「以新修旧」，落到触发侧会在
+			// 反向检查时用旧内容覆盖新内容。取不到知识时退回触发侧，保持旧行为。
+			target := ids[0]
+			if newer, ok := s.newerSubject(ctx, alert.UserID, ids); ok {
+				target = newer
+			}
+			if _, err := s.Reviser.AcceptRevision(ctx, alert.UserID, target, payload.RevisedTitle, payload.RevisedContent); err != nil {
 				return evolutionEffectError(err)
 			}
 			return nil
@@ -464,6 +469,40 @@ func outdatedSubject(alert *model.EvolutionAlert) (uint, error) {
 		return 0, err
 	}
 	return ids[1], nil
+}
+
+// newerSubject 取提醒涉及的两条知识里更新时间较晚的一条，用于决定修订稿的落点。
+// 时间相同时取 ID 较大的一侧，保证同一对知识从任一方向检查都落到同一条上。
+//
+// 用更新时间而不是创建时间：知识被编辑后创建时间不变，据此判断新旧会得出相反的结论。
+// 读取失败时返回 false，由调用方退回触发侧——判定不了新旧不该让裁决直接失败。
+func (s *EvolutionService) newerSubject(ctx context.Context, userID uint, ids []uint) (uint, bool) {
+	if s.Knowledge == nil || len(ids) < 2 {
+		return 0, false
+	}
+	items, err := s.Knowledge.ListByIDs(ctx, userID, ids)
+	if err != nil {
+		return 0, false
+	}
+	byID := make(map[uint]model.KnowledgeItem, len(items))
+	for _, item := range items {
+		byID[item.ID] = item
+	}
+	first, firstOK := byID[ids[0]]
+	second, secondOK := byID[ids[1]]
+	if !firstOK || !secondOK {
+		return 0, false
+	}
+	if first.UpdatedAt.After(second.UpdatedAt) {
+		return first.ID, true
+	}
+	if second.UpdatedAt.After(first.UpdatedAt) {
+		return second.ID, true
+	}
+	if first.ID > second.ID {
+		return first.ID, true
+	}
+	return second.ID, true
 }
 
 // recordResolve 写一条裁决操作日志；日志失败不影响裁决结果。
