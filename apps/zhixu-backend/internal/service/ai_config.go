@@ -58,6 +58,8 @@ type DefaultsInput struct {
 	// predating them can still save model defaults without resetting retrieval.
 	RagTopK         *int     `json:"rag_top_k"`
 	RagMinScore     *float64 `json:"rag_min_score"`
+	// Nil EvolveCandidateMinScore keeps the stored gate, same as the retrieval fields.
+	EvolveCandidateMinScore *float64 `json:"evolve_candidate_min_score"`
 	ExpectedVersion uint64   `json:"expected_version"`
 	ConfirmReindex  bool     `json:"confirm_reindex"`
 }
@@ -388,6 +390,10 @@ func (s *AIConfigService) SaveDefaults(ctx context.Context, user uint, input Def
 	if input.RagMinScore != nil && (*input.RagMinScore < RagMinScoreFloor || *input.RagMinScore > 1) {
 		return nil, configInvalid(fmt.Sprintf("相似度阈值需在 %g–1 之间", RagMinScoreFloor))
 	}
+	if input.EvolveCandidateMinScore != nil &&
+		(*input.EvolveCandidateMinScore < EvolveCandidateMinScoreFloor || *input.EvolveCandidateMinScore > 1) {
+		return nil, configInvalid(fmt.Sprintf("演化候选门槛需在 %g–1 之间", EvolveCandidateMinScoreFloor))
+	}
 	state, err := s.Store.Mutate(ctx, user, func(state *repository.AIConfigState) error {
 		if input.ExpectedVersion != state.Settings.ConfigVersion {
 			return configConflict("配置已变更，请刷新后重试")
@@ -399,6 +405,9 @@ func (s *AIConfigService) SaveDefaults(ctx context.Context, user uint, input Def
 		}
 		if input.RagMinScore != nil {
 			state.Settings.RagMinScore = *input.RagMinScore
+		}
+		if input.EvolveCandidateMinScore != nil {
+			state.Settings.EvolveCandidateMinScore = *input.EvolveCandidateMinScore
 		}
 		if err := checkDefaults(state, true); err != nil {
 			return err

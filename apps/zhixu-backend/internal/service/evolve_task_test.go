@@ -134,6 +134,7 @@ type evolveFixture struct {
 	searcher  *evolveSearcherFake
 	relations *evolveRelationFake
 	client    *evolveClientFake
+	settings  *embeddingConfigFake
 	task      *model.AiTask
 }
 
@@ -155,16 +156,25 @@ func newEvolveFixture() *evolveFixture {
 		searcher:  &evolveSearcherFake{},
 		relations: &evolveRelationFake{},
 		client:    &evolveClientFake{},
+		settings: &embeddingConfigFake{state: &repository.AIConfigState{
+			Settings: model.UserAISettings{EvolveCandidateMinScore: EvolveCandidateMinScoreDefault},
+		}},
 	}
 	f.processor = &EvolveProcessor{
 		Knowledge: knowledge, Alerts: f.alerts, Chat: f.resolver, Embedding: f.resolver,
 		Embedder: f.embedder, Vectors: f.searcher, Relations: f.relations, Client: f.client,
+		Settings: f.settings,
 	}
 	f.task = &model.AiTask{
 		ID: 3, UserID: 2, TaskType: model.AiTaskTypeEvolve, TargetID: 10,
 		Status: model.AiTaskRunning, Payload: string(payload),
 	}
 	return f
+}
+
+// setGate 把用户保存的演化候选门槛写进设置 fake。
+func (f *evolveFixture) setGate(gate float64) {
+	f.settings.state.Settings.EvolveCandidateMinScore = gate
 }
 
 // addCandidate 在 fake 里追加一条未归档知识，并让它以给定相似度被向量召回。
@@ -359,7 +369,7 @@ func TestEvolveProcessorIgnoresWeakCandidates(t *testing.T) {
 // 门槛之上的候选全部送模型，门槛本身取闭区间。
 func TestEvolveProcessorSendsAllCandidatesAboveGate(t *testing.T) {
 	f := newEvolveFixture()
-	f.addCandidate(21, "刚好过门槛", "HNSW", EvolveCandidateMinScore)
+	f.addCandidate(21, "刚好过门槛", "HNSW", EvolveCandidateMinScoreDefault)
 	f.addCandidate(22, "明显高于门槛", "HNSW 与 IVF", 0.72)
 	f.client.judgements = []EvolveJudgement{
 		f.duplicateJudgement(21, "HNSW"),
@@ -373,6 +383,52 @@ func TestEvolveProcessorSendsAllCandidatesAboveGate(t *testing.T) {
 	require.Len(t, f.client.candidates, 2)
 	require.Len(t, f.alerts.upserted, 2)
 	require.Contains(t, string(payload), "\"alert_count\":2")
+}
+
+// 门槛取自用户设置：调高后原本能进入判定的近邻被挡在外面。
+func TestEvolveProcessorUsesConfiguredCandidateGate(t *testing.T) {
+	f := newEvolveFixture()
+	f.setGate(0.9)
+	f.addCandidate(21, "低于自定义门槛", "HNSW", 0.85)
+	f.addCandidate(22, "达到自定义门槛", "HNSW 与 IVF", 0.9)
+	f.client.judgements = []EvolveJudgement{f.duplicateJudgement(22, "HNSW")}
+
+	payload, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.client.candidates, 1)
+	require.Equal(t, uint(22), f.client.candidates[0].KnowledgeID)
+	require.Contains(t, string(payload), "\"alert_count\":1")
+}
+
+// 设置行还没有这个字段（零值）时回落到默认门槛，而不是把 0 当门槛全放进来。
+func TestEvolveProcessorFallsBackToDefaultGate(t *testing.T) {
+	f := newEvolveFixture()
+	f.setGate(0)
+	f.addCandidate(21, "默认门槛之下", "HNSW", 0.62)
+	f.addCandidate(22, "默认门槛之上", "HNSW 与 IVF", 0.66)
+	f.client.judgements = []EvolveJudgement{f.duplicateJudgement(22, "HNSW")}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+
+	require.NoError(t, err)
+	require.Len(t, f.client.candidates, 1)
+	require.Equal(t, uint(22), f.client.candidates[0].KnowledgeID)
+}
+
+// 越界值同样回落默认，不把无效配置当门槛使用。
+func TestEvolveProcessorFallsBackWhenGateOutOfRange(t *testing.T) {
+	for _, gate := range []float64{0.1, 1.5} {
+		f := newEvolveFixture()
+		f.setGate(gate)
+		f.addCandidate(21, "默认门槛之下", "HNSW", 0.62)
+
+		_, err := f.processor.Process(context.Background(), f.task)
+
+		require.NoError(t, err)
+		require.Empty(t, f.client.candidates, "门槛 %v 越界时应回落默认 0.65", gate)
+		require.Equal(t, 0, f.client.calls)
+	}
 }
 
 // updates 关系指向的目标是强候选：它只接受过时结论，重复结论一律丢弃。
