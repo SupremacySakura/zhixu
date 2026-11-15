@@ -138,3 +138,27 @@ func TestEnsureQueryIndexes(t *testing.T) {
 		})
 	}
 }
+
+// 保留行的选择：仍待办的优先于已裁决的，同为待办时取最新（ID 最大）。
+func TestChooseSurvivingAlertPrefersOpenThenNewest(t *testing.T) {
+	resolved := model.EvolutionAlert{ID: 9, Status: model.EvolutionAlertResolved}
+	pending := model.EvolutionAlert{ID: 4, Status: model.EvolutionAlertPending}
+	deferred := model.EvolutionAlert{ID: 6, Status: model.EvolutionAlertDeferred}
+
+	assert.Equal(t, uint(4), chooseSurvivingAlert([]model.EvolutionAlert{resolved, pending}).ID,
+		"待办优先，即使它更旧")
+	assert.Equal(t, uint(6), chooseSurvivingAlert([]model.EvolutionAlert{pending, deferred}).ID,
+		"同为待办视野时取最新的一条")
+	assert.Equal(t, uint(9), chooseSurvivingAlert([]model.EvolutionAlert{
+		{ID: 3, Status: model.EvolutionAlertResolved}, resolved,
+	}).ID, "都已裁决时取最新的一条")
+}
+
+// 历史回填的索引变更：唯一索引建在 pair_key 上，旧索引要显式删除。
+func TestEvolutionPairMigrationTargetsPairKey(t *testing.T) {
+	require.Len(t, evolutionPairMigrationDDL, 2)
+	assert.Contains(t, evolutionPairMigrationDDL[0].ddl, "UNIQUE INDEX")
+	assert.Contains(t, evolutionPairMigrationDDL[0].ddl, "`pair_key`")
+	assert.Equal(t, "uniq_evolution_alert_dedupe", evolutionLegacyIndex,
+		"旧唯一索引名要写对，否则删不掉，新索引会因为历史重复行建不起来")
+}

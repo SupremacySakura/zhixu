@@ -63,17 +63,39 @@ type evolveAlertFake struct {
 	upserted []model.EvolutionAlert
 	outcome  repository.EvolutionUpsertOutcome
 	err      error
+	// stored 模拟数据库里的那一行：同一知识对第二次写入时，fake 也要能把它交给合并函数，
+	// 否则「两个方向只落一条」这条行为在单元测试里根本跑不到。
+	stored map[string]model.EvolutionAlert
 }
 
-func (f *evolveAlertFake) Upsert(_ context.Context, alert *model.EvolutionAlert) (repository.EvolutionUpsertOutcome, error) {
+func (f *evolveAlertFake) Upsert(_ context.Context, alert *model.EvolutionAlert, merge model.EvolutionMergeFunc) (repository.EvolutionUpsertOutcome, error) {
 	if f.err != nil {
 		return "", f.err
 	}
-	f.upserted = append(f.upserted, *alert)
-	if f.outcome == "" {
-		return repository.EvolutionAlertCreated, nil
+	if f.outcome != "" {
+		f.upserted = append(f.upserted, *alert)
+		return f.outcome, nil
 	}
-	return f.outcome, nil
+	if f.stored == nil {
+		f.stored = map[string]model.EvolutionAlert{}
+	}
+	var existing *model.EvolutionAlert
+	if stored, ok := f.stored[alert.PairKey]; ok {
+		copied := stored
+		existing = &copied
+	}
+	merged, outcome := merge(existing, alert)
+	if merged != nil && outcome != repository.EvolutionAlertSuppressed {
+		merged.ID = alert.ID
+		if existing != nil {
+			merged.ID = existing.ID
+		} else {
+			merged.ID = uint(len(f.stored) + 1)
+		}
+		f.stored[alert.PairKey] = *merged
+		f.upserted = append(f.upserted, *merged)
+	}
+	return outcome, nil
 }
 
 // evolveRelationFake 返回已建立的关系；只有「本条更新了对方」的方向会成为强候选。
@@ -892,4 +914,70 @@ func TestEvolveProcessorSkipsEmptyContent(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Empty(t, f.alerts.upserted)
+}
+
+// 同一对知识从两个方向各检查一次，最终只有一条提醒：这是收敛的核心行为。
+// 先 A 检查 B（过时），再 B 检查 A（冲突），两条结论并进同一行，主结论取冲突。
+func TestEvolveProcessorConvergesBothDirectionsToOneAlert(t *testing.T) {
+	f := newEvolveFixture()
+	// 两条内容不同、指纹不同，才能走到模型判定而不是精确重复的提前返回。
+	f.knowledge.items[10].Content = "项目当前使用 Vite 5 构建前端。"
+	f.knowledge.items[10].ContentHash = "hash-trigger"
+	f.knowledge.items[11].Content = "项目已升级到 Vite 7。"
+	f.knowledge.items[11].ContentHash = "hash-candidate"
+	// 直接追加向量命中，不重建知识条目：addCandidate 会把版本重置成 1，撞上版本栅栏。
+	f.searcher.matches = append(f.searcher.matches, VectorMatch{KnowledgeID: 11, Score: 0.95})
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 11, Type: model.EvolutionAlertTypeOutdated, Reason: "本次知识给出了更新的版本。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 10, Quote: "Vite 5"},
+			{KnowledgeID: 11, Quote: "Vite 7"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+	require.NoError(t, err)
+	require.Len(t, f.alerts.upserted, 1)
+
+	// 反向：以 11 为触发知识去检查 10，模型给出冲突。
+	f.searcher.matches = nil
+	f.searcher.matches = append(f.searcher.matches, VectorMatch{KnowledgeID: 10, Score: 0.95})
+	f.client.judgements = []EvolveJudgement{{
+		TargetID: 10, Type: model.EvolutionAlertTypeConflict, Reason: "两条知识对版本给出互斥结论。",
+		Evidence: []EvolutionEvidence{
+			{KnowledgeID: 11, Quote: "Vite 7"},
+			{KnowledgeID: 10, Quote: "Vite 5"},
+		},
+		Severity: model.EvolutionSeverityStrong,
+	}}
+	reverse := &model.AiTask{
+		ID: 4, UserID: 2, TaskType: model.AiTaskTypeEvolve, TargetID: 11,
+		Status: model.AiTaskRunning, Payload: `{"knowledge_id":11,"base_version":5}`,
+	}
+
+	_, err = f.processor.Process(context.Background(), reverse)
+	require.NoError(t, err)
+
+	require.Len(t, f.alerts.stored, 1, "同一对知识只允许一行提醒")
+	for _, alert := range f.alerts.stored {
+		require.Equal(t, model.EvolutionAlertTypeConflict, alert.AlertType, "冲突优先于过时")
+		payload := ParseEvolutionPayload(alert.Payload)
+		require.Len(t, payload.Conclusions, 2, "两个方向的结论都要留下")
+	}
+}
+
+// 正文未改时重复检查同一对知识：不新增行，也不改变已有提醒的状态。
+func TestEvolveProcessorDoesNotDuplicateWhenNothingChanged(t *testing.T) {
+	f := newEvolveFixture()
+	f.addCandidate(21, "另一篇", "HNSW 用分层图做近似最近邻检索。", 0.93)
+	f.client.judgements = []EvolveJudgement{f.duplicateJudgement(21, "近似最近邻检索")}
+
+	_, err := f.processor.Process(context.Background(), f.task)
+	require.NoError(t, err)
+	require.Len(t, f.alerts.stored, 1)
+
+	_, err = f.processor.Process(context.Background(), f.task)
+	require.NoError(t, err)
+	require.Len(t, f.alerts.stored, 1, "重复检查不该产生第二行")
 }

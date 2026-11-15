@@ -16,18 +16,14 @@ import (
 // ErrEvolutionConflict 表示提醒状态已被改动（期望状态校验失败或已被他人裁决）。
 var ErrEvolutionConflict = errors.New("evolution alert state conflict")
 
-// EvolutionUpsertOutcome 描述一次提醒写入的结果。
-type EvolutionUpsertOutcome string
+// 处置结果定义在 model 里：合并纯函数也要用它，两边必须是同一个类型。
+type EvolutionUpsertOutcome = model.EvolutionUpsertOutcome
 
 const (
-	// EvolutionAlertCreated 新建了一条待处理提醒。
-	EvolutionAlertCreated EvolutionUpsertOutcome = "created"
-	// EvolutionAlertRefreshed 同指纹已有待处理提醒，只刷新了更新时间。
-	EvolutionAlertRefreshed EvolutionUpsertOutcome = "refreshed"
-	// EvolutionAlertRevived 同指纹提醒处于「暂不处理」，因重新检查或知识版本变化回到待处理。
-	EvolutionAlertRevived EvolutionUpsertOutcome = "revived"
-	// EvolutionAlertSuppressed 同指纹提醒已处理或已忽略，抑制本次提醒。
-	EvolutionAlertSuppressed EvolutionUpsertOutcome = "suppressed"
+	EvolutionAlertCreated    = model.EvolutionAlertCreated
+	EvolutionAlertRefreshed  = model.EvolutionAlertRefreshed
+	EvolutionAlertRevived    = model.EvolutionAlertRevived
+	EvolutionAlertSuppressed = model.EvolutionAlertSuppressed
 )
 
 // EvolutionAlertTypeCount 是摘要接口的一行分组计数。
@@ -89,50 +85,61 @@ func (r *EvolutionAlertRepository) Get(ctx context.Context, userID, id uint) (*m
 	return &alert, err
 }
 
-func (r *EvolutionAlertRepository) findByDedupeKey(ctx context.Context, userID uint, key string) (*model.EvolutionAlert, error) {
+func (r *EvolutionAlertRepository) findByPairKey(ctx context.Context, userID uint, key string) (*model.EvolutionAlert, error) {
 	var alert model.EvolutionAlert
-	err := r.DB.WithContext(ctx).Where("user_id = ? AND dedupe_key = ?", userID, key).Take(&alert).Error
+	err := r.DB.WithContext(ctx).Where("user_id = ? AND pair_key = ?", userID, key).Take(&alert).Error
 	return &alert, err
 }
 
-// Upsert 按指纹幂等写入一条提醒。指纹带唯一索引且终态不清空，因此同证据只会有一行：
-// 待处理只刷新时间；暂不处理回到待处理；已处理/已忽略保持终态并抑制本次提醒。
-func (r *EvolutionAlertRepository) Upsert(ctx context.Context, alert *model.EvolutionAlert) (EvolutionUpsertOutcome, error) {
-	existing, err := r.findByDedupeKey(ctx, alert.UserID, alert.DedupeKey)
+// Upsert 按知识对幂等写入一条提醒：一对知识只有一行，双向检查落在同一行上。
+//
+// 收敛规则不在仓储里，而是调用 model.EvolutionMergeFunc（服务层注入的纯函数），
+// 这样合并语义可以用表驱动测试覆盖，不必靠拼 SQL 断言。这里只负责读、调、写，
+// 以及唯一索引冲突后的回读重试。
+func (r *EvolutionAlertRepository) Upsert(ctx context.Context, alert *model.EvolutionAlert, merge model.EvolutionMergeFunc) (EvolutionUpsertOutcome, error) {
+	existing, err := r.findByPairKey(ctx, alert.UserID, alert.PairKey)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", err
 	}
 	if err == nil {
-		return r.refresh(ctx, existing)
+		return r.applyMerge(ctx, existing, alert, merge)
 	}
 	if err := r.DB.WithContext(ctx).Create(alert).Error; err != nil {
 		// 并发写入命中唯一索引：回读旧行按刷新处理，对上层表现为幂等。
 		if !isDuplicateEvolutionAlert(err) {
 			return "", err
 		}
-		existing, lookupErr := r.findByDedupeKey(ctx, alert.UserID, alert.DedupeKey)
+		existing, lookupErr := r.findByPairKey(ctx, alert.UserID, alert.PairKey)
 		if lookupErr != nil {
 			return "", lookupErr
 		}
-		return r.refresh(ctx, existing)
+		return r.applyMerge(ctx, existing, alert, merge)
 	}
 	return EvolutionAlertCreated, nil
 }
 
-func (r *EvolutionAlertRepository) refresh(ctx context.Context, existing *model.EvolutionAlert) (EvolutionUpsertOutcome, error) {
-	if !existing.Status.Open() {
+// applyMerge 调用合并函数并把结果写回；合并函数返回 nil 表示本次抑制，不写库。
+func (r *EvolutionAlertRepository) applyMerge(ctx context.Context, existing, incoming *model.EvolutionAlert, merge model.EvolutionMergeFunc) (EvolutionUpsertOutcome, error) {
+	if merge == nil {
+		return "", errors.New("evolution alert merge function is required")
+	}
+	merged, outcome := merge(existing, incoming)
+	if merged == nil || outcome == EvolutionAlertSuppressed {
 		return EvolutionAlertSuppressed, nil
 	}
-	updates := map[string]any{"updated_at": time.Now()}
-	outcome := EvolutionAlertRefreshed
-	if existing.Status == model.EvolutionAlertDeferred {
-		// 复活条件只可能由「知识版本变化后重新检查」或「手动重新检查」触发，
-		// 两者都会走到这里，因此同指纹再次命中即回到待处理。
-		updates["status"] = model.EvolutionAlertPending
-		updates["resolved_at"] = nil
-		updates["resolved_action"] = ""
-		updates["resolution_note"] = ""
-		outcome = EvolutionAlertRevived
+	// 合并结果落在原行上：ID 与创建时间保持不变，裁决历史因此不会丢。
+	updates := map[string]any{
+		"alert_type":      merged.AlertType,
+		"status":          merged.Status,
+		"severity":        merged.Severity,
+		"subject_ids":     merged.SubjectIDs,
+		"pair_versions":   merged.PairVersions,
+		"payload":         merged.Payload,
+		"dedupe_key":      merged.DedupeKey,
+		"resolved_at":     merged.ResolvedAt,
+		"resolved_action": merged.ResolvedAction,
+		"resolution_note": merged.ResolutionNote,
+		"updated_at":      time.Now(),
 	}
 	if err := r.DB.WithContext(ctx).Model(&model.EvolutionAlert{}).
 		Where("id = ? AND user_id = ?", existing.ID, existing.UserID).Updates(updates).Error; err != nil {

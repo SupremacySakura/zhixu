@@ -75,6 +75,19 @@ type EvolutionPayload struct {
 	SuggestedAction model.EvolutionAction    `json:"suggested_action"`
 	RevisedTitle    string                   `json:"revised_title,omitempty"`
 	RevisedContent  string                   `json:"revised_content,omitempty"`
+	// Conclusions 是这条提醒承载的全部结论。顶层字段始终跟随主结论（按重复 → 冲突 → 过时
+	// 收敛），因此只读顶层字段的旧前端与旧评测仍能拿到一条完整结论；结论集合供详情页展示
+	// 另一侧的判定。
+	Conclusions []EvolutionConclusion `json:"conclusions,omitempty"`
+}
+
+// encodeEvolutionPayload 把载荷序列化；失败时返回空对象，调用方据此丢弃整条提醒。
+func encodeEvolutionPayload(payload EvolutionPayload) string {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "{}"
+	}
+	return string(body)
 }
 
 // ParseEvolutionPayload 解析载荷；脏数据返回空载荷，不让列表整体失败。

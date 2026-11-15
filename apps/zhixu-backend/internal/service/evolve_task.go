@@ -50,8 +50,9 @@ type evolveSettingsReader interface {
 }
 
 // evolveAlertStore 写入提醒（*repository.EvolutionAlertRepository 满足）。
+// merge 是同一知识对的收敛规则，由处理器传入，仓储只负责读写。
 type evolveAlertStore interface {
-	Upsert(context.Context, *model.EvolutionAlert) (repository.EvolutionUpsertOutcome, error)
+	Upsert(context.Context, *model.EvolutionAlert, model.EvolutionMergeFunc) (repository.EvolutionUpsertOutcome, error)
 }
 
 // evolveCandidateItem 是一条候选的完整上下文：判定要用来源分派允许类型，
@@ -151,7 +152,7 @@ func (p *EvolveProcessor) Process(ctx context.Context, task *model.AiTask) (json
 	alerts := p.buildAlerts(item, candidates, judgements)
 	created := 0
 	for i := range alerts {
-		outcome, err := p.Alerts.Upsert(ctx, &alerts[i])
+		outcome, err := p.Alerts.Upsert(ctx, &alerts[i], MergeEvolutionAlert)
 		if err != nil {
 			return nil, err
 		}
@@ -384,6 +385,17 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 	}
 	// 建议动作跟着「修订稿是否留下」走：修订稿被丢弃后还推荐采纳修订，用户点下去只会拿到 400。
 	payload.SuggestedAction = evolveSuggestedAction(payload)
+	// 结论集合里先只放本次判定的一条；另一侧的判定会在反向检查命中同一知识对时并进来。
+	payload.Conclusions = []EvolutionConclusion{{
+		Type:            judgement.Type,
+		TriggerID:       trigger.ID,
+		Reason:          judgement.Reason,
+		Evidence:        evidence,
+		SuggestedAction: payload.SuggestedAction,
+		Severity:        severity,
+		RevisedTitle:    payload.RevisedTitle,
+		RevisedContent:  payload.RevisedContent,
+	}}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return model.EvolutionAlert{}, false
@@ -394,10 +406,15 @@ func (p *EvolveProcessor) buildAlert(trigger *model.KnowledgeItem, candidate evo
 		Status:    model.EvolutionAlertPending,
 		Severity:  severity,
 		Payload:   string(body),
-		// 指纹按排序后的 ID 计算：同一对知识无论从哪一侧发起检查都是同一条提醒。
+		// 提醒身份是知识对：无论从哪一侧发起检查都落在同一行。
+		PairKey: EvolutionPairKey(trigger.ID, candidate.item.ID),
+		// 证据指纹只区分「同一证据刷新」与「新证据」，不再决定身份。
 		DedupeKey: EvolutionDedupeKey(judgement.Type, []uint{trigger.ID, candidate.item.ID}, evidence),
 	}
 	if err := alert.SetSubjectIDs([]uint{trigger.ID, candidate.item.ID}); err != nil {
+		return model.EvolutionAlert{}, false
+	}
+	if err := alert.SetPairVersions(map[uint]uint{trigger.ID: trigger.Version, candidate.item.ID: candidate.item.Version}); err != nil {
 		return model.EvolutionAlert{}, false
 	}
 	return alert, true
@@ -459,13 +476,22 @@ func (p *EvolveProcessor) recordDuplicate(ctx context.Context, trigger, duplicat
 		return false, nil
 	}
 	subjectIDs := []uint{trigger.ID, duplicate.ID}
-	body, err := json.Marshal(EvolutionPayload{
+	payload := EvolutionPayload{
 		Type:   model.EvolutionAlertTypeDuplicate,
 		Reason: "两条知识的正文完全一致（正文指纹相同），可能是重复导入或重复创建。",
 		// 证据顺序与 subject 顺序对齐：第 0 条对应本次触发的知识。
 		Evidence:        evidence,
 		SuggestedAction: model.EvolutionActionArchiveOne,
-	})
+	}
+	payload.Conclusions = []EvolutionConclusion{{
+		Type:            model.EvolutionAlertTypeDuplicate,
+		TriggerID:       trigger.ID,
+		Reason:          payload.Reason,
+		Evidence:        evidence,
+		SuggestedAction: payload.SuggestedAction,
+		Severity:        model.EvolutionSeverityReview,
+	}}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return false, err
 	}
@@ -476,12 +502,16 @@ func (p *EvolveProcessor) recordDuplicate(ctx context.Context, trigger, duplicat
 		// 精确重复是确定性判定，没有模型复核的空间，固定按「复核」展示。
 		Severity:  model.EvolutionSeverityReview,
 		Payload:   string(body),
+		PairKey:   EvolutionPairKey(trigger.ID, duplicate.ID),
 		DedupeKey: EvolutionDedupeKey(model.EvolutionAlertTypeDuplicate, subjectIDs, evidence),
 	}
 	if err := alert.SetSubjectIDs(subjectIDs); err != nil {
 		return false, err
 	}
-	outcome, err := p.Alerts.Upsert(ctx, alert)
+	if err := alert.SetPairVersions(map[uint]uint{trigger.ID: trigger.Version, duplicate.ID: duplicate.Version}); err != nil {
+		return false, err
+	}
+	outcome, err := p.Alerts.Upsert(ctx, alert, MergeEvolutionAlert)
 	if err != nil {
 		return false, err
 	}
